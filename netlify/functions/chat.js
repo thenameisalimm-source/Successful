@@ -4,6 +4,12 @@
 
 const FALLBACK_MODELS = [];
 
+// [ADDED] Valid models the frontend model selector can choose from.
+// If the incoming `model` field matches one of these, it is used as the
+// preferred model. Any unrecognised value falls back to gemini-2.5-flash.
+const SELECTABLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
+// [END ADDED]
+
 exports.handler = async function (event) {
   // ── CORS preflight ──────────────────────────────────────────────
   if (event.httpMethod === 'OPTIONS') {
@@ -61,8 +67,11 @@ exports.handler = async function (event) {
   }
 
   // Build model queue: preferred first, then fallbacks
-  const preferred = model && FALLBACK_MODELS.includes(model) ? model : 'gemini-2.5-flash';
+  // [MODIFIED] Check against SELECTABLE_MODELS so both 'gemini-2.5-flash' and
+  // 'gemini-2.5-pro' are honoured. Unrecognised values fall back to gemini-2.5-flash.
+  const preferred = model && SELECTABLE_MODELS.includes(model) ? model : 'gemini-2.5-flash';
   const modelQueue = [preferred, ...FALLBACK_MODELS.filter((m) => m !== preferred)];
+  // [END MODIFIED]
 
   let lastResult = null;
 
