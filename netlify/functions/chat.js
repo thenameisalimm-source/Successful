@@ -24,6 +24,7 @@ exports.handler = async function (event) {
 
   // ── Read API key from environment ───────────────────────────────
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
+  const GROQ_KEY = process.env.GROQ_API_KEY;
   if (!GEMINI_KEY) {
     console.error('GEMINI_API_KEY environment variable is not set');
     return json(500, {
@@ -130,6 +131,44 @@ async function callGemini(model, body, apiKey) {
       data: {
         error: { code: 503, status: 'NETWORK_ERROR', message: err.message },
       },
+    };
+  }
+}
+
+async function callGroq(message, apiKey) {
+  try {
+    const res = await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'user',
+              content: message
+            }
+          ]
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    return {
+      status: res.status,
+      data
+    };
+  } catch (err) {
+    return {
+      status: 500,
+      data: {
+        error: err.message
+      }
     };
   }
 }
