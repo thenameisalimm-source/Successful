@@ -2274,5 +2274,14 @@ function initParticles() {
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function setText(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
 </script>
+  
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(() => console.log('Service Worker registered'))
+    .catch(err => console.log('SW registration failed', err));
+}
+</script>
+  
 </body>
 </html>
