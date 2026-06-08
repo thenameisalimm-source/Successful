@@ -110,10 +110,24 @@ exports.handler = async function (event) {
   // Gemini failed, try Groq
   console.log('Trying Groq fallback...');
 if (GROQ_KEY) {
-    const groqResult = await callGroq(
-        geminiBody.contents?.[0]?.parts?.[0]?.text || '',
-        GROQ_KEY
-    );
+    // Build a proper messages array from the full geminiBody contents,
+    // converting Gemini roles ('model') to OpenAI roles ('assistant').
+    // Also prepend the system instruction if present.
+    const groqMessages = [];
+    if (geminiBody.system_instruction?.parts?.[0]?.text) {
+        groqMessages.push({
+            role: 'system',
+            content: geminiBody.system_instruction.parts[0].text
+        });
+    }
+    (geminiBody.contents || []).forEach(function(c) {
+        groqMessages.push({
+            role: c.role === 'model' ? 'assistant' : 'user',
+            content: c.parts?.[0]?.text || ''
+        });
+    });
+
+    const groqResult = await callGroq(groqMessages, GROQ_KEY);
 
     if (groqResult.status === 200) {
         return json(200, {
@@ -165,7 +179,7 @@ async function callGemini(model, body, apiKey) {
   }
 }
 
-async function callGroq(message, apiKey) {
+async function callGroq(messages, apiKey) {
   try {
     const res = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -177,12 +191,7 @@ async function callGroq(message, apiKey) {
         },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          messages: [
-            {
-              role: 'user',
-              content: message
-            }
-          ]
+          messages: messages
         })
       }
     );
