@@ -2,7 +2,10 @@
 // ALEEM AI — Secure Gemini API proxy
 // The API key never leaves this server-side function.
 
-const FALLBACK_MODELS = [];
+const FALLBACK_MODELS = [ 
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite'
+];
 
 exports.handler = async function (event) {
   // ── CORS preflight ──────────────────────────────────────────────
