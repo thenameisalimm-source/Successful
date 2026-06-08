@@ -1932,7 +1932,7 @@ async function callGemini() {
 
   var typId = addTyping('ALEEM AI is thinking…');
 
-  var preferred   = S.model || 'gemini-2.5-flash';
+  var preferred   = S.model || 'gemini-2.5-flash-lite';
   var modelQueue  = [preferred].concat(FALLBACK_MODELS.filter(function(m){ return m !== preferred; }));
 
   var lastErr = null;
