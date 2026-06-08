@@ -10,6 +10,17 @@ const FALLBACK_MODELS = [];
 const SELECTABLE_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
 // [END ADDED]
 
+// [ADDED] Check whether a geminiBody contains any inline image data.
+// Used to skip the Groq fallback for vision requests (Groq does not
+// support inline image data in the same way as Gemini Vision).
+function hasInlineImage(geminiBody) {
+  if (!geminiBody || !geminiBody.contents) return false;
+  return geminiBody.contents.some(function(c) {
+    return (c.parts || []).some(function(p) { return !!p.inline_data; });
+  });
+}
+// [END ADDED]
+
 exports.handler = async function (event) {
   // ── CORS preflight ──────────────────────────────────────────────
   if (event.httpMethod === 'OPTIONS') {
@@ -109,6 +120,19 @@ exports.handler = async function (event) {
 
   // Gemini failed, try Groq
   console.log('Trying Groq fallback...');
+
+// [ADDED] Skip Groq fallback for vision requests — Groq cannot handle
+// inline base64 image data. Return a user-friendly error instead.
+if (hasInlineImage(geminiBody)) {
+  return json(lastResult?.status || 503, {
+    error: {
+      code: 503,
+      message: 'Image analysis requires Gemini Vision. Gemini is currently unavailable — please try again in a moment.'
+    }
+  });
+}
+// [END ADDED]
+
 if (GROQ_KEY) {
     // Build a proper messages array from the full geminiBody contents,
     // converting Gemini roles ('model') to OpenAI roles ('assistant').
@@ -121,10 +145,16 @@ if (GROQ_KEY) {
         });
     }
     (geminiBody.contents || []).forEach(function(c) {
-        groqMessages.push({
-            role: c.role === 'model' ? 'assistant' : 'user',
-            content: c.parts?.[0]?.text || ''
-        });
+        // [ADDED] Skip any parts that contain inline image data (not supported by Groq)
+        var textParts = (c.parts || []).filter(function(p) { return !p.inline_data && p.text; });
+        var textContent = textParts.map(function(p) { return p.text; }).join(' ');
+        if (textContent) {
+            groqMessages.push({
+                role: c.role === 'model' ? 'assistant' : 'user',
+                content: textContent
+            });
+        }
+        // [END ADDED]
     });
 
     const groqResult = await callGroq(groqMessages, GROQ_KEY);
