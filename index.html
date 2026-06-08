@@ -1785,6 +1785,8 @@ function addMsg(role, text) {
   var t   = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   S.messages.push({ role: role, text: text, time: t });
 
+  localStorage.setItem('aleem_chat', JSON.stringify(S.messages));
+
   var id   = 'msg' + Date.now() + Math.random().toString(36).slice(2);
   var area = document.getElementById('chatMessages');
   var div  = document.createElement('div');
