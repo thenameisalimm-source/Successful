@@ -92,7 +92,7 @@ exports.handler = async function (event) {
       errStatus === 'UNAUTHENTICATED' ||
       (errCode === 429 && (errMsg.includes('limit: 0') || errMsg.includes('free_tier')));
 
-    if (isFatal) {
+    if (isFatal && !GROQ_KEY) {
       // No point trying other models for auth/key errors
       return json(result.status, result.data);
     }
@@ -102,6 +102,7 @@ exports.handler = async function (event) {
   }
 
   // Gemini failed, try Groq
+  console.log('Trying Groq fallback...');
 if (GROQ_KEY) {
     const groqResult = await callGroq(
         geminiBody.contents?.[0]?.parts?.[0]?.text || '',
