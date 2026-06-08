@@ -101,11 +101,34 @@ exports.handler = async function (event) {
     console.log(`Model ${m} returned ${result.status}, trying next fallback…`);
   }
 
-  // All models exhausted
-  return json(lastResult?.status || 503, lastResult?.data || {
-    error: { code: 503, message: 'All Gemini models are currently unavailable.' },
-  });
-};
+  // Gemini failed, try Groq
+if (GROQ_KEY) {
+    const groqResult = await callGroq(
+        geminiBody.contents?.[0]?.parts?.[0]?.text || '',
+        GROQ_KEY
+    );
+
+    if (groqResult.status === 200) {
+        return json(200, {
+            candidates: [{
+                content: {
+                    parts: [{
+                        text: groqResult.data.choices[0].message.content
+                    }]
+                }
+            }],
+            _model_used: 'groq'
+        });
+    }
+}
+
+// All models exhausted
+return json(lastResult?.status || 503, lastResult?.data || {
+    error: {
+        code: 503,
+        message: 'Gemini and Groq are currently unavailable.'
+    }
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
