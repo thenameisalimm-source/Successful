@@ -3,7 +3,9 @@
 // The API key never leaves this server-side function.
 
 const FALLBACK_MODELS = [
-  'gemini 2.5 Flash',
+  'gemini-2.5-flash',
+   'gemini-2.5-pro',
+   'gemini-2.5-flash-lite',
 ];
 
 exports.handler = async function (event) {
