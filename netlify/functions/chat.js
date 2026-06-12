@@ -61,6 +61,19 @@ exports.handler = async function (event) {
     return json(result.status, result.data);
   }
 
+  // ── Action: "groq direct" ───────────────────────────────────────
+  if (model === 'groq') {
+    if (!GROQ_KEY) return json(500, { error: { message: 'Groq API key not configured on server.' } });
+    const groqResult = await callGroq(body.groqMessages || [], GROQ_KEY);
+    if (groqResult.status === 200) {
+      return json(200, {
+        candidates: [{ content: { parts: [{ text: groqResult.data.choices[0].message.content }] } }],
+        _model_used: 'groq'
+      });
+    }
+    return json(groqResult.status, { error: { message: (groqResult.data.error && groqResult.data.error.message) || 'Groq request failed.' } });
+  }
+
   // ── Action: "chat" (default) ────────────────────────────────────
   if (!geminiBody) {
     return json(400, { error: 'Missing geminiBody in request' });
@@ -229,4 +242,5 @@ function json(statusCode, body) {
 }
   
 };
-  
+
+        
