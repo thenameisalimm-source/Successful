@@ -98,7 +98,7 @@ exports.handler = async function (event) {
       errStatus === 'UNAUTHENTICATED' ||
       (errCode === 429 && (errMsg.includes('limit: 0') || errMsg.includes('free_tier')));
 
-    if (isFatal && !GROQ_KEY) {
+    if (isFatal) {
       // No point trying other models for auth/key errors
       return json(result.status, result.data);
     }
