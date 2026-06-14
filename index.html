@@ -4536,11 +4536,13 @@ function speakEl(id) {
 
 // [ADDED] Voice Personality presets — control rate/pitch only (voice itself
 // is chosen separately by language detection). Independent of AI Personality.
+// [REBALANCED] Values tightened toward natural human-like ranges per
+// requested targets — previous Energetic/Calm extremes sounded unnatural.
 const VOICE_PERSONALITIES = {
-  friendly:     { rateMul: 1.05, pitch: 1.05 },
+  friendly:     { rateMul: 1.03, pitch: 1.05 },
   professional: { rateMul: 1.0,  pitch: 1.0  },
-  energetic:    { rateMul: 1.18, pitch: 1.1  },
-  calm:         { rateMul: 0.88, pitch: 0.95 },
+  energetic:    { rateMul: 1.08, pitch: 1.10 },
+  calm:         { rateMul: 0.95, pitch: 0.95 },
   assistant:    { rateMul: 1.0,  pitch: 1.0  },
 };
 
@@ -4556,40 +4558,71 @@ function detectSpeechLang(t) {
     if (/[\u0933]|मराठी/.test(t)) return 'mr-IN';
     return 'hi-IN';
   }
-  // Urdu / Arabic script
-  if (/[\u0600-\u06FF]/.test(t)) return 'ur-PK';
+  // Urdu / Arabic script — prefer ur-IN per requirements, with ur-PK as a
+  // secondary candidate handled in pickVoiceForLang's fallback chain.
+  if (/[\u0600-\u06FF]/.test(t)) return 'ur-IN';
   // Default to English
   return 'en-US';
 }
 
 // [ADDED] Pick the best available SpeechSynthesisVoice for a target language.
 // Falls back to closest Indian voice, then any voice, then undefined (default).
+// [IMPROVED] Some platforms expose an "hi-IN"-tagged voice that is actually
+// an English engine doing approximate Hindi pronunciation. To avoid that,
+// for Indian-language targets we first look for a voice whose NAME clearly
+// identifies it as a native voice for that language (e.g. "Google हिन्दी",
+// "Hindi", "Lekha", "Marathi", "Urdu"), before falling back to a plain
+// lang-code match.
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return null;
 
-  // 1. Exact match (e.g. "hi-IN")
+  var primary = lang.split('-')[0].toLowerCase();
+
+  // Name patterns that indicate a genuinely native voice for each language,
+  // checked before relying on (sometimes inaccurate) lang codes.
+  var nativeNamePatterns = {
+    hi: /हिन्दी|hindi/i,
+    mr: /मराठी|marathi/i,
+    ur: /اردو|urdu/i,
+  };
+
+  // 1. Native-name match for the primary language (most reliable signal
+  //    that the voice will actually speak with correct pronunciation).
+  if (nativeNamePatterns[primary]) {
+    var byName = voices.find(function(v) { return v.name && nativeNamePatterns[primary].test(v.name); });
+    if (byName) return byName;
+  }
+
+  // 2. Exact lang match (e.g. "hi-IN")
   var exact = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
   if (exact) return exact;
 
-  // 2. Same primary language, any region (e.g. "hi-*")
-  var primary = lang.split('-')[0].toLowerCase();
+  // 3. Same primary language, any region (e.g. "hi-*")
   var sameLang = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
   if (sameLang) return sameLang;
 
-  // 3. Closest matching Indian voice as a fallback for Indian languages
+  // 3b. Urdu secondary region fallback (ur-PK) if ur-IN isn't available.
+  if (primary === 'ur') {
+    var urPk = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
+    if (urPk) return urPk;
+  }
+
+  // 4. Closest matching Indian voice as a fallback for Indian languages
   if (primary === 'hi' || primary === 'mr' || primary === 'ur' || primary === 'bn' || primary === 'ta' || primary === 'te' || primary === 'gu' || primary === 'pa' || primary === 'kn' || primary === 'ml') {
     var indianVoice = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
       || voices.find(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
     if (indianVoice) return indianVoice;
   }
 
-  // 4. English fallback
+  // 5. English fallback — prefer en-US / en-GB as specified, then any English.
+  var enPreferred = voices.find(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
+  if (enPreferred) return enPreferred;
   var en = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
   if (en) return en;
 
-  // 5. Default voice (browser default)
+  // 6. Default voice (browser default)
   return voices[0] || null;
 }
 
@@ -4598,20 +4631,29 @@ function speakText(t) {
   window.speechSynthesis.cancel();
   var u = new SpeechSynthesisUtterance(t);
 
-  // [ADDED] Voice Personality preset (rate/pitch base)
+  // [ADDED/REBALANCED] Voice Personality preset — rate/pitch are now used as
+  // direct absolute values (matching the requested targets: Professional and
+  // Assistant = 1.0 rate, previously these were 0.95 due to a base-rate
+  // multiplier that made every personality slightly slower than intended).
   var vp = VOICE_PERSONALITIES[S.voicePersonality] || VOICE_PERSONALITIES.assistant;
-  var baseRate = 0.95;
-  u.rate   = baseRate * vp.rateMul;
+  u.rate   = vp.rateMul;
   u.pitch  = vp.pitch;
   u.volume = 0.85;
 
-  // [ADDED] Language-aware voice selection — detect reply language and pick
-  // the best matching installed voice so Hindi/Marathi/Urdu replies don't
-  // get spoken with an English/American accent.
+  // [ADDED/IMPROVED] Language-aware voice selection — detect reply language
+  // and pick the best matching installed voice so Hindi/Marathi/Urdu replies
+  // don't get spoken with an English/American accent. If a matching voice is
+  // found, use ITS lang tag (so the engine applies that voice's own
+  // pronunciation rules rather than forcing a target lang onto a mismatched
+  // voice, which can make Hindi text sound like an English voice guessing).
   var lang = detectSpeechLang(t);
-  u.lang = lang;
   var voice = pickVoiceForLang(lang);
-  if (voice) u.voice = voice;
+  if (voice) {
+    u.voice = voice;
+    u.lang  = voice.lang || lang;
+  } else {
+    u.lang = lang;
+  }
 
   window.speechSynthesis.speak(u);
 }
