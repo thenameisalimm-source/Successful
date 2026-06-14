@@ -4092,8 +4092,22 @@ function showActiveModelUsed(usedModel) {
   var preferred = S.model || 'gemini-2.5-flash-lite';
   if (!usedModel || usedModel === preferred) return;
 
+  // [MODIFIED] Only set the dropdown's value if an <option> for usedModel
+  // actually exists (e.g. 'groq'). Models with no matching option (e.g.
+  // 'groq-vision', the automatic image-analysis fallback) have no
+  // selectable entry, so assigning sel.value would silently fail and leave
+  // the dropdown showing blank. In that case, leave the dropdown showing
+  // the user's selected preference and rely on the toast below to convey
+  // which model actually generated this response.
   var sel = document.getElementById('modelSelect');
-  if (sel) sel.value = usedModel;
+  if (sel) {
+    var hasOption = false;
+    for (var oi = 0; oi < sel.options.length; oi++) {
+      if (sel.options[oi].value === usedModel) { hasOption = true; break; }
+    }
+    if (hasOption) sel.value = usedModel;
+  }
+  // [END MODIFIED]
 
   var fromLabel = MODEL_LABELS[preferred] || preferred;
   var toLabel   = MODEL_LABELS[usedModel] || usedModel;
