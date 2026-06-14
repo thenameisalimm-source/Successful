@@ -2242,6 +2242,20 @@
           </select>
         </div>
         <!-- [END ADDED] -->
+
+        <!-- [ADDED] Voice Personality selector — separate from AI Personality;
+             controls SpeechSynthesisUtterance rate/pitch/voice. Saved to localStorage. -->
+        <div class="personality-selector-row">
+          <span class="personality-selector-label">🎙️ Voice Personality:</span>
+          <select id="voicePersonalitySelect">
+            <option value="friendly">😊 Friendly</option>
+            <option value="professional">💼 Professional</option>
+            <option value="energetic">⚡ Energetic</option>
+            <option value="calm">😌 Calm</option>
+            <option value="assistant">🤖 Assistant</option>
+          </select>
+        </div>
+        <!-- [END ADDED] -->
       </div>
     </section>
 
@@ -2759,6 +2773,7 @@ const S = {
   messages:    [],
   model:       'gemini-2.5-flash',
   personality: 'friendly',
+  voicePersonality: 'assistant',
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -2838,6 +2853,7 @@ function loadStorage() {
   // to match the two valid model selector options.
   S.model       = ls('aleem_model') || 'gemini-2.5-flash';
   S.personality = ls('aleem_pers') || 'friendly';
+  S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -2868,11 +2884,17 @@ function loadStorage() {
   var pSel = document.getElementById('personalitySelect');
   if (pSel) pSel.value = S.personality;
   // [END ADDED]
+
+  // [ADDED] Restore the saved voice personality into its dropdown after DOM is ready
+  var vpSel = document.getElementById('voicePersonalitySelect');
+  if (vpSel) vpSel.value = S.voicePersonality;
+  // [END ADDED]
 }
 
 function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
+  lss('aleem_voice_pers', S.voicePersonality);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
   lss('aleem_theme',  S.theme);
   lss('aleem_total',  S.totalQ);
@@ -3069,7 +3091,22 @@ function bindAllEvents() {
   }
   // [END ADDED]
 
-  // ── Dashboard fact button ─────────────────────────────────────────
+  // [ADDED] Voice Personality selector — updates S.voicePersonality and persists.
+  // Independent from AI Personality; only affects speech rate/pitch/voice.
+  var voicePersonalitySelect = document.getElementById('voicePersonalitySelect');
+  if (voicePersonalitySelect) {
+    voicePersonalitySelect.addEventListener('change', function(e) {
+      S.voicePersonality = e.target.value;
+      persist();
+      var vpLabels = {
+        friendly: '😊 Friendly', professional: '💼 Professional',
+        energetic: '⚡ Energetic', calm: '😌 Calm', assistant: '🤖 Assistant'
+      };
+      toast('🎙️ Voice: ' + (vpLabels[S.voicePersonality] || S.voicePersonality));
+      dbg('voicePersonalitySelect change → ' + S.voicePersonality);
+    });
+  }
+  // [END ADDED]
   var newFactBtn = document.getElementById('newFactBtn');
   if (newFactBtn) newFactBtn.addEventListener('click', function(e) {
     dbg('newFactBtn click'); setFact();
@@ -4398,12 +4435,95 @@ function speakEl(id) {
 }
 
 // ── VOICE ─────────────────────────────────────────────────────────
+
+// [ADDED] Voice Personality presets — control rate/pitch only (voice itself
+// is chosen separately by language detection). Independent of AI Personality.
+const VOICE_PERSONALITIES = {
+  friendly:     { rateMul: 1.05, pitch: 1.05 },
+  professional: { rateMul: 1.0,  pitch: 1.0  },
+  energetic:    { rateMul: 1.18, pitch: 1.1  },
+  calm:         { rateMul: 0.88, pitch: 0.95 },
+  assistant:    { rateMul: 1.0,  pitch: 1.0  },
+};
+
+// [ADDED] Detect the dominant script/language of a text string so the
+// right speech-synthesis voice/lang can be chosen automatically.
+// Returns a BCP-47-ish language tag used to match available voices.
+function detectSpeechLang(t) {
+  if (!t) return 'en-US';
+  // Devanagari script → Hindi or Marathi (both use Devanagari).
+  if (/[\u0900-\u097F]/.test(t)) {
+    // Marathi-specific characters/markers are rare; default Devanagari to Hindi
+    // unless common Marathi-only conjuncts/words are detected.
+    if (/[\u0933]|मराठी/.test(t)) return 'mr-IN';
+    return 'hi-IN';
+  }
+  // Urdu / Arabic script
+  if (/[\u0600-\u06FF]/.test(t)) return 'ur-PK';
+  // Default to English
+  return 'en-US';
+}
+
+// [ADDED] Pick the best available SpeechSynthesisVoice for a target language.
+// Falls back to closest Indian voice, then any voice, then undefined (default).
+function pickVoiceForLang(lang) {
+  if (!('speechSynthesis' in window)) return null;
+  var voices = window.speechSynthesis.getVoices();
+  if (!voices || !voices.length) return null;
+
+  // 1. Exact match (e.g. "hi-IN")
+  var exact = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
+  if (exact) return exact;
+
+  // 2. Same primary language, any region (e.g. "hi-*")
+  var primary = lang.split('-')[0].toLowerCase();
+  var sameLang = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
+  if (sameLang) return sameLang;
+
+  // 3. Closest matching Indian voice as a fallback for Indian languages
+  if (primary === 'hi' || primary === 'mr' || primary === 'ur' || primary === 'bn' || primary === 'ta' || primary === 'te' || primary === 'gu' || primary === 'pa' || primary === 'kn' || primary === 'ml') {
+    var indianVoice = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
+      || voices.find(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
+    if (indianVoice) return indianVoice;
+  }
+
+  // 4. English fallback
+  var en = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
+  if (en) return en;
+
+  // 5. Default voice (browser default)
+  return voices[0] || null;
+}
+
 function speakText(t) {
   if (!S.voiceOn || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   var u = new SpeechSynthesisUtterance(t);
-  u.rate = 0.95; u.pitch = 1; u.volume = 0.85;
+
+  // [ADDED] Voice Personality preset (rate/pitch base)
+  var vp = VOICE_PERSONALITIES[S.voicePersonality] || VOICE_PERSONALITIES.assistant;
+  var baseRate = 0.95;
+  u.rate   = baseRate * vp.rateMul;
+  u.pitch  = vp.pitch;
+  u.volume = 0.85;
+
+  // [ADDED] Language-aware voice selection — detect reply language and pick
+  // the best matching installed voice so Hindi/Marathi/Urdu replies don't
+  // get spoken with an English/American accent.
+  var lang = detectSpeechLang(t);
+  u.lang = lang;
+  var voice = pickVoiceForLang(lang);
+  if (voice) u.voice = voice;
+
   window.speechSynthesis.speak(u);
+}
+
+// [ADDED] Some browsers populate the voices list asynchronously; ensure it's
+// ready so language-aware voice selection works on the very first call.
+if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged === null) {
+  window.speechSynthesis.onvoiceschanged = function() {
+    window.speechSynthesis.getVoices();
+  };
 }
 
 function toggleVoice() {
