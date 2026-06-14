@@ -4071,8 +4071,16 @@ var MODEL_LABELS = {
   'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
   'gemini-2.5-flash': 'Gemini 2.5 Flash',
   'gemini-2.5-pro': 'Gemini 2.5 Pro',
-  'groq': 'Groq (text only)'
+  'groq': 'Groq (text only)',
+  // [ADDED] Label for the Groq Llama 4 Scout image-analysis fallback,
+  // shown via showActiveModelUsed() when it produces the response.
+  'groq-vision': 'Groq Llama 4 Scout (Vision fallback)'
 };
+
+// [ADDED] Groq vision fallback model — used ONLY when every Gemini image
+// model in modelQueue has failed AND the current turn includes image(s).
+// Uses the existing Groq API key/integration via the same Netlify function.
+var GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 // [ADDED] Temporarily updates the model dropdown's displayed value to show
 // which model actually generated the current response, WITHOUT touching
@@ -4456,8 +4464,18 @@ async function callGemini(imgsData) {
 
   // [ADDED] Final automatic fallback: if every Gemini model failed
   // (Flash Lite -> Flash, per modelQueue), try Groq before giving up.
+  //
+  // [ADDED] If the current turn includes image(s) and Gemini image analysis
+  // failed, try the Groq Llama 4 Scout VISION fallback first (using the
+  // existing Groq API key/integration). Only if that also fails do we drop
+  // to the existing text-only Groq fallback (callGroqDirect), which cannot
+  // see images.
   if (S.model !== 'groq') {
     setConnStatus('retrying', 'Generating…');
+    if (imgs && imgs.length) {
+      var visionHandled = await callGroqVisionFallback(imgs);
+      if (visionHandled) return;
+    }
     await callGroqDirect();
     return;
   }
@@ -4528,7 +4546,112 @@ async function callGroqDirect() {
   }
 }
 
-// ── AUTO-SAVE CONVERSATION ────────────────────────────────────────
+// ── GROQ VISION FALLBACK (Llama 4 Scout) ─────────────────────────
+// [ADDED] Used ONLY when Gemini image analysis (Flash Lite -> Flash) has
+// failed for the current turn AND the turn includes image(s). Uses the
+// SAME existing Groq API key/integration (server-side, via NETLIFY_FN) —
+// no new provider/key/account is introduced.
+//
+// imgs: array of { dataUrl, mimeType } for the current turn's image(s).
+//
+// Returns true  -> a response was successfully produced and rendered
+//                  (caller should stop, do not fall through to text-only Groq)
+// Returns false -> Groq Vision failed too; caller should fall back to the
+//                  existing text-only callGroqDirect()
+async function callGroqVisionFallback(imgs) {
+  S.busy = true;
+  setConnStatus('busy', 'Thinking…');
+  var typId = addTyping('ALEEM AI is thinking…');
+
+  // Build chat-style messages identical in spirit to callGroqDirect(),
+  // but the final user message becomes multimodal content blocks
+  // (text + image_url) per Groq's OpenAI-compatible vision format.
+  var msgs = S.messages.slice(-20);
+  var groqMessages = [];
+  var memCtxGroq = buildMemoryContext ? buildMemoryContext() : '';
+  var sys = PERSONALITIES[S.personality].sys + memCtxGroq;
+  if (sys) groqMessages.push({ role: 'system', content: sys });
+
+  // Find the index of the last user message (the one that should carry images)
+  var lastUserIdx = -1;
+  for (var li = msgs.length - 1; li >= 0; li--) {
+    if (msgs[li].role === 'user') { lastUserIdx = li; break; }
+  }
+
+  msgs.forEach(function(m, idx) {
+    var role = (m.role === 'ai') ? 'assistant' : 'user';
+
+    if (idx === lastUserIdx && imgs && imgs.length) {
+      // Multimodal content: text part + one or more image_url parts
+      var content = [];
+      content.push({ type: 'text', text: m.text || 'Please analyse this image and describe what you see.' });
+      imgs.forEach(function(imgItem) {
+        if (imgItem && typeof imgItem.dataUrl === 'string' &&
+            imgItem.dataUrl.startsWith('data:') &&
+            imgItem.dataUrl.indexOf(',') !== -1 &&
+            imgItem.dataUrl.split(',')[1].length > 0) {
+          content.push({ type: 'image_url', image_url: { url: imgItem.dataUrl } });
+        }
+      });
+      groqMessages.push({ role: role, content: content });
+    } else {
+      groqMessages.push({ role: role, content: m.text || '' });
+    }
+  });
+
+  try {
+    var res = await fetch(NETLIFY_FN, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model: 'groq-vision',
+        groqModel: GROQ_VISION_MODEL,
+        groqMessages: groqMessages
+      })
+    });
+    var data = await res.json();
+
+    // Accept either Gemini-shaped (candidates[...]) or OpenAI-shaped
+    // (choices[...]) responses from the Netlify function, since the
+    // function may normalise the Groq response either way.
+    var reply = null;
+    if (data && data.candidates && data.candidates[0] &&
+        data.candidates[0].content && data.candidates[0].content.parts &&
+        data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
+      reply = data.candidates[0].content.parts[0].text;
+    } else if (data && data.choices && data.choices[0] &&
+               data.choices[0].message && data.choices[0].message.content) {
+      reply = data.choices[0].message.content;
+    }
+
+    if (res.ok && reply) {
+      rmEl(typId);
+      showActiveModelUsed('groq-vision');
+      var bubId = addMsg('ai', reply, true);
+      setConnStatus('online', 'Online');
+      typeMessage(bubId, reply, function() {
+        autoSaveConversation();
+        S.busy = false;
+        if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0,480));
+      });
+      return true;
+    }
+
+    // Groq Vision failed (error payload, non-OK status, or no usable reply) —
+    // let the caller fall back to the existing text-only Groq path.
+    console.warn('[ALEEM-GROQ-VISION-FALLBACK] Groq Vision failed, falling back to text-only Groq:',
+      JSON.stringify(data, null, 2));
+    rmEl(typId);
+    return false;
+
+  } catch (netErr) {
+    console.warn('[ALEEM-GROQ-VISION-FALLBACK] Network error, falling back to text-only Groq:', netErr.message);
+    rmEl(typId);
+    return false;
+  }
+}
+
+
 // Called after every AI reply. Creates a new history entry the first time,
 // then updates the same entry (matched by id) on every subsequent exchange
 // so one chat session = one history card (not a new card per message).
