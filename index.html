@@ -4278,17 +4278,29 @@ async function callGemini(imgsData) {
 
   var lastErr = null;
 
+  // [ADDED] Tracks whether the "Trying fallback / Retry" status text is
+  // currently visible in the typing bubble. Used so we can guarantee it is
+  // cleared the instant a model succeeds — even if it was shown moments
+  // earlier while the next attempt's request was in flight.
+  var fallbackStatusShown = false;
+
   for (var mi = 0; mi < modelQueue.length; mi++) {
     var model = modelQueue[mi];
 
     for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       var isFirstTry = (mi === 0 && attempt === 1);
+      // [REQUIREMENT 1/4] This status text is ONLY shown for mi >= 1 or
+      // attempt > 1 — i.e. ONLY after a previous attempt has already been
+      // confirmed to fail (via `break`/`continue` below, which only happen
+      // after inspecting a real API response). It is never shown before the
+      // very first request's result is known.
       if (!isFirstTry) {
         var statusMsg = attempt > 1
           ? 'Retry ' + attempt + '/' + MAX_RETRIES + ' with ' + model + '…'
           : 'Trying fallback: ' + model + '…';
         updateTypingStatus(typId, statusMsg);
         setConnStatus('retrying', attempt > 1 ? 'Retry ' + attempt + '/' + MAX_RETRIES : 'Fallback…');
+        fallbackStatusShown = true;
       }
 
       try {
@@ -4304,6 +4316,13 @@ async function callGemini(imgsData) {
         var hasCandidates   = !!(data && data.candidates && data.candidates.length);
 
         if (res.ok && !hasErrorPayload && hasCandidates) {
+          // [REQUIREMENT 2/3] Success — immediately clear any fallback/retry
+          // status text before removing the typing bubble, so it can never
+          // remain visible (even momentarily) once a model has succeeded.
+          if (fallbackStatusShown) {
+            updateTypingStatus(typId, '');
+            fallbackStatusShown = false;
+          }
           rmEl(typId);
           var reply = (data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text)
             || 'Sorry, I could not generate a response. Please try again.';
