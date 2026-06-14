@@ -2925,33 +2925,84 @@ function persist() {
   // Persist history with full base64 image data so images survive reloads.
   // _live is a runtime-only flag — strip it before writing so a reload never
   // inherits a stale "live" marker and misroutes the next session's save.
-  // If the payload exceeds localStorage quota, fall back to a text-only copy
-  // so conversation text always survives even when images cannot be stored.
+  //
+  // [MODIFIED] If the full payload (with all images) exceeds localStorage
+  // quota, previously this fell back to stripping images from EVERY
+  // conversation in history — including the current/most-recent one whose
+  // images the user just uploaded and expects to survive a reload.
+  //
+  // Fix: only drop images from the OLDEST conversations, one at a time,
+  // retrying the save after each removal, until it fits (or until images
+  // have been stripped from everything except the most recent conversation).
+  // Text is never dropped at any stage. This keeps the images that matter
+  // most (the current/recent chat) intact for as long as possible.
+  // [ADDED] Each message stores the same image data twice in memory —
+  // once in `imgs` (array, current format) and once in `img` (legacy
+  // single-image field, kept for in-session backward compatibility).
+  // Persisting both doubles the base64 payload size for every image,
+  // making localStorage quota overflow roughly twice as likely as
+  // necessary. loadConv() already prefers `imgs` and only reads `img` as
+  // a fallback when `imgs` is absent, so it's safe to omit the redundant
+  // `img` copy at persistence time only (in-memory S.messages is untouched).
   var histToStore = S.history.map(function(conv) {
-    var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages };
+    var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages.map(function(m) {
+      if (m.imgs && m.imgs.length) {
+        return { role: m.role, text: m.text, time: m.time, imgs: m.imgs, img: null };
+      }
+      return m;
+    }) };
     // deliberately omit _live
     return c;
   });
+  // [END ADDED]
+
+  function stripImagesFromConv(conv) {
+    return {
+      id: conv.id, title: conv.title, date: conv.date,
+      messages: conv.messages.map(function(m) {
+        if (!m.imgs || !m.imgs.length) return m;
+        return { role: m.role, text: m.text, time: m.time, imgs: [], img: null };
+      })
+    };
+  }
+
   try {
     lss('aleem_hist', JSON.stringify(histToStore));
   } catch(e) {
-    try {
-      var histNoImgs = histToStore.map(function(conv) {
-        return {
-          id: conv.id, title: conv.title, date: conv.date,
-          messages: conv.messages.map(function(m) {
-            if (!m.imgs || !m.imgs.length) return m;
-            return { role: m.role, text: m.text, time: m.time, imgs: [], img: null };
-          })
-        };
-      });
-      lss('aleem_hist', JSON.stringify(histNoImgs));
-    } catch(e2) {
-      // Last resort: write an empty history directly, bypassing lss,
-      // so the entry is cleared rather than left with a corrupt/stale value.
-      try { localStorage.setItem('aleem_hist', '[]'); } catch(e3) {}
+    // Work on a copy so we never mutate S.history / S.messages in memory —
+    // only the persisted representation is degraded, the live session
+    // keeps its images for display/export within this tab.
+    var working = histToStore.slice();
+    var saved = false;
+
+    // Strip images from the oldest entries first (end of array, since
+    // history is unshifted — newest is index 0), one conversation at a
+    // time, leaving at least the single most recent conversation untouched.
+    for (var di = working.length - 1; di >= 1 && !saved; di--) {
+      working[di] = stripImagesFromConv(working[di]);
+      try {
+        lss('aleem_hist', JSON.stringify(working));
+        saved = true;
+      } catch(eRetry) {
+        // still too big — continue stripping the next-oldest conversation
+      }
+    }
+
+    if (!saved) {
+      // As a last resort, also strip images from the most recent
+      // conversation (index 0) so text history is preserved.
+      try {
+        if (working.length) working[0] = stripImagesFromConv(working[0]);
+        lss('aleem_hist', JSON.stringify(working));
+        saved = true;
+      } catch(e2) {
+        // Final fallback: write an empty history directly, bypassing lss,
+        // so the entry is cleared rather than left with a corrupt/stale value.
+        try { localStorage.setItem('aleem_hist', '[]'); } catch(e3) {}
+      }
     }
   }
+  // [END MODIFIED]
   lss('aleem_typing_anim', S.typingAnim ? 'on' : 'off');
   lss('aleem_auto_scroll', S.autoScroll ? 'on' : 'off');
 }
