@@ -5161,6 +5161,114 @@ function memPreFilter(msg) {
   return false; // passes filter — proceed to LLM analysis
 }
 
+// ── DETERMINISTIC PATTERN-BASED EXTRACTOR ─────────────────────────
+// [ADDED] Fast, fully client-side, regex-based extraction for obvious
+// personal preferences/facts — runs BEFORE the LLM-based extractor and,
+// when it matches, is used instead of it (no extra API call needed).
+// Returns an array in the SAME shape as the LLM extractor:
+//   [{ category, subject, value, text, confidence }]
+// or [] if nothing obvious matched (caller should then fall back to the
+// LLM-based analyseAndSaveMemory path for more complex cases).
+function extractMemoriesDeterministic(msg) {
+  var t = msg.trim();
+  // Strip a single trailing sentence-ending punctuation mark for matching,
+  // but keep using the original `t` for anything that needs full context.
+  var clean = t.replace(/[.!?]+$/, '').trim();
+  var results = [];
+
+  function cap(v) {
+    return v.replace(/\s+/g, ' ').trim();
+  }
+  function add(category, subject, value) {
+    value = cap(value);
+    if (!value || value.length < 2 || value.length > 80) return;
+    results.push({
+      category: category,
+      subject: subject,
+      value: value,
+      text: 'The user\'s ' + subject + ' is ' + value + '.',
+      confidence: 0.95
+    });
+  }
+  function addVerbPhrase(category, subject, value, text) {
+    results.push({ category: category, subject: subject, value: cap(value), text: text, confidence: 0.9 });
+  }
+
+  // "My favourite/favorite <thing> is <value>"
+  var favMatch = clean.match(/^my\s+favou?rite\s+([a-z\s]+?)\s+is\s+(.+)$/i);
+  if (favMatch) {
+    var thing = cap(favMatch[1]).toLowerCase();
+    var val   = favMatch[2];
+    // Special-case "sport" -> sport category, everything else -> favorite
+    var category = /sport/.test(thing) ? 'sport' : 'favorite';
+    add(category, 'favourite ' + thing, val);
+    return results;
+  }
+
+  // "My favourite/favorite <thing>" without "is" but with a value after a colon (rare) — skip, too ambiguous.
+
+  // "<Someone> is my inspiration"
+  var inspoMatch1 = clean.match(/^(.+?)\s+is\s+my\s+inspiration$/i);
+  if (inspoMatch1) {
+    add('inspiration', 'inspiration', inspoMatch1[1]);
+    return results;
+  }
+
+  // "My inspiration is <Someone>"
+  var inspoMatch2 = clean.match(/^my\s+inspiration\s+is\s+(.+)$/i);
+  if (inspoMatch2) {
+    add('inspiration', 'inspiration', inspoMatch2[1]);
+    return results;
+  }
+
+  // "I admire <Someone/Something>"
+  var admireMatch = clean.match(/^i\s+admire\s+(.+)$/i);
+  if (admireMatch) {
+    var who = cap(admireMatch[1]);
+    results.push({
+      category: 'inspiration',
+      subject: 'inspiration',
+      value: who,
+      text: 'The user admires ' + who + '.',
+      confidence: 0.92
+    });
+    return results;
+  }
+
+  // "I love <thing>" / "I really love <thing>"
+  var loveMatch = clean.match(/^i\s+(?:really\s+)?love\s+(.+)$/i);
+  if (loveMatch) {
+    var loved = cap(loveMatch[1]);
+    var lower = loved.toLowerCase();
+    // Common sports -> sport category with a normalized subject
+    var sportsList = ['football','soccer','cricket','basketball','tennis','badminton','hockey','baseball','volleyball','rugby','golf','boxing','swimming','running','cycling'];
+    if (sportsList.indexOf(lower) !== -1) {
+      addVerbPhrase('sport', 'favourite sport', loved, 'The user loves ' + loved + '.');
+    } else {
+      addVerbPhrase('interest', 'interest: ' + lower, loved, 'The user loves ' + loved + '.');
+    }
+    return results;
+  }
+
+  // "I prefer <thing>"
+  var preferMatch = clean.match(/^i\s+prefer\s+(.+)$/i);
+  if (preferMatch) {
+    var pref = cap(preferMatch[1]);
+    addVerbPhrase('preference', 'preference', pref, 'The user prefers ' + pref + '.');
+    return results;
+  }
+
+  // "I am learning <thing>" / "I'm learning <thing>"
+  var learnMatch = clean.match(/^i(?:'m| am)\s+learning\s+(.+)$/i);
+  if (learnMatch) {
+    var subj = cap(learnMatch[1]);
+    addVerbPhrase('goal', 'learning goal', subj, 'The user is learning ' + subj + '.');
+    return results;
+  }
+
+  return results; // no obvious match — caller falls back to LLM extraction
+}
+
 // ── STRICT EXTRACTION PROMPT ──────────────────────────────────────
 function buildMemoryAnalysisPrompt(userMessage) {
   return 'You are a strict personal-memory extraction engine for an AI assistant, similar to ChatGPT-style memory. ' +
@@ -5208,6 +5316,54 @@ function buildMemoryAnalysisPrompt(userMessage) {
 }
 
 // ── ANALYSE & AUTO-SAVE MEMORY ────────────────────────────────────
+// [ADDED] Shared saving loop used by BOTH the deterministic extractor and
+// the LLM-based extractor. `memories` is an array of
+// { category, subject, value, text, confidence } candidates. Applies the
+// same confidence/length/hedging gates and saves via saveMemoryToFirestore.
+// Returns the number of memories actually saved/updated.
+async function saveCandidateMemories(memories) {
+  var saved = 0;
+  for (var i = 0; i < memories.length; i++) {
+    if (saved >= MEM_CONFIG.MAX_PER_MESSAGE) break;
+
+    var mem = memories[i];
+    if (!mem || !mem.text || !mem.category) continue;
+
+    // Enforce confidence threshold
+    var conf = parseFloat(mem.confidence);
+    if (isNaN(conf) || conf < MEM_CONFIG.CONFIDENCE_THRESHOLD) continue;
+
+    // Normalise category
+    if (!MEM_CATEGORIES[mem.category]) mem.category = 'other';
+
+    // text must be specific enough (no vague generalisations)
+    var txt = (mem.text || '').trim();
+    if (txt.length < 15 || txt.length > 300) continue;
+    // Reject hedged or vague phrases
+    if (/(seems|might|possibly|perhaps|probably|may like|could be|appears to)/i.test(txt)) continue;
+
+    var subject = (mem.subject || '').trim();
+    var value   = (mem.value   || '').trim();
+
+    var didSave = await saveMemoryToFirestore({
+      category:   mem.category,
+      subject:    subject,
+      value:      value,
+      text:       txt,
+      confidence: conf,
+      createdAt:  Date.now(),
+      updatedAt:  Date.now(),
+    });
+    if (didSave) saved++;
+  }
+
+  if (saved > 0) {
+    var ind = document.getElementById('memSavingIndicator');
+    if (ind) { ind.classList.add('show'); setTimeout(function(){ ind.classList.remove('show'); }, 2200); }
+  }
+  return saved;
+}
+
 async function analyseAndSaveMemory(userMessage) {
   // Gate 1: signed in and DB ready
   if (!MEM.db || !MEM.uid) return;
@@ -5218,6 +5374,19 @@ async function analyseAndSaveMemory(userMessage) {
   // Gate 3: fast JS pre-filter (no LLM call wasted)
   if (memPreFilter(userMessage)) return;
 
+  // [ADDED] Gate 3.5: deterministic pattern-based extraction — PRIMARY path.
+  // Handles obvious cases ("My favourite X is Y", "I admire X", "I love X",
+  // "X is my inspiration", "I prefer X", "I am learning X") instantly and
+  // entirely client-side, with no extra API call. If it finds something,
+  // save it and skip the LLM-based extraction below.
+  var detMemories = extractMemoriesDeterministic(userMessage);
+  if (detMemories.length > 0) {
+    await saveCandidateMemories(detMemories);
+    return;
+  }
+
+  // FALLBACK PATH: LLM-based extraction for more complex/ambiguous cases
+  // that the deterministic patterns above didn't match.
   try {
     var response = await fetch('/.netlify/functions/chat', {
       method:  'POST',
@@ -5246,49 +5415,13 @@ async function analyseAndSaveMemory(userMessage) {
     try { memories = JSON.parse(raw); } catch(e) { return; }
     if (!Array.isArray(memories) || memories.length === 0) return;
 
-    // Gate 4: confidence threshold + per-message cap
-    var saved = 0;
-    for (var i = 0; i < memories.length; i++) {
-      if (saved >= MEM_CONFIG.MAX_PER_MESSAGE) break;
+    // Gate 4-6 (confidence threshold, per-message cap, text length/hedging)
+    // are now applied inside the shared saveCandidateMemories() helper,
+    // which also handles subject/value pass-through and the saving
+    // indicator -- identical behavior to before, just de-duplicated with
+    // the deterministic extractor's path above.
+    await saveCandidateMemories(memories);
 
-      var mem = memories[i];
-      if (!mem || !mem.text || !mem.category) continue;
-
-      // Enforce confidence threshold
-      var conf = parseFloat(mem.confidence);
-      if (isNaN(conf) || conf < MEM_CONFIG.CONFIDENCE_THRESHOLD) continue;
-
-      // Normalise category
-      if (!MEM_CATEGORIES[mem.category]) mem.category = 'other';
-
-      // Gate 5: text must be specific enough (no vague generalisations)
-      var txt = mem.text.trim();
-      if (txt.length < 15 || txt.length > 300) continue;
-      // Reject hedged or vague phrases
-      if (/(seems|might|possibly|perhaps|probably|may like|could be|appears to)/i.test(txt)) continue;
-
-      // [ADDED] subject/value used for conflict detection + the
-      // user-facing "💾 Memory saved: ..." transparency notice.
-      var subject = (mem.subject || '').trim();
-      var value   = (mem.value   || '').trim();
-
-      var didSave = await saveMemoryToFirestore({
-        category:   mem.category,
-        subject:    subject,
-        value:      value,
-        text:       txt,
-        confidence: conf,
-        createdAt:  Date.now(),
-        updatedAt:  Date.now(),
-      });
-      if (didSave) saved++;
-    }
-
-    // Show saving indicator only if something was actually saved
-    if (saved > 0) {
-      var ind = document.getElementById('memSavingIndicator');
-      if (ind) { ind.classList.add('show'); setTimeout(function(){ ind.classList.remove('show'); }, 2200); }
-    }
 
   } catch(e) {
     // Silent fail — memory system must never break the chat
