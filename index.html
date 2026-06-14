@@ -4295,11 +4295,9 @@ async function callGemini(imgsData) {
       // after inspecting a real API response). It is never shown before the
       // very first request's result is known.
       if (!isFirstTry) {
-        var statusMsg = attempt > 1
-          ? 'Retry ' + attempt + '/' + MAX_RETRIES + ' with ' + model + '…'
-          : 'Trying fallback: ' + model + '…';
+        var statusMsg = '✨ Generating response…';
         updateTypingStatus(typId, statusMsg);
-        setConnStatus('retrying', attempt > 1 ? 'Retry ' + attempt + '/' + MAX_RETRIES : 'Fallback…');
+        setConnStatus('retrying', 'Generating…');
         fallbackStatusShown = true;
       }
 
@@ -4354,7 +4352,7 @@ async function callGemini(imgsData) {
         if (isRetryable(res.status, data)) {
           if (attempt < MAX_RETRIES && shouldRetrySameModel(res.status, data)) {
             var delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
-            updateTypingStatus(typId, 'Server busy — waiting ' + Math.round(delay/1000) + 's before retry ' + (attempt+1) + '/' + MAX_RETRIES + '…');
+            updateTypingStatus(typId, '🧠 ALEEM AI is thinking…');
             await sleep(delay);
             continue;
           }
@@ -4378,7 +4376,7 @@ async function callGemini(imgsData) {
         lastErr = { type:'network', label:'Network Error', text: netErr.message };
         if (attempt < MAX_RETRIES) {
           var netDelay = RETRY_BASE_MS * attempt;
-          updateTypingStatus(typId, 'Network issue — retrying in ' + Math.round(netDelay/1000) + 's…');
+          updateTypingStatus(typId, '🧠 ALEEM AI is thinking…');
           await sleep(netDelay);
         }
       }
@@ -4390,7 +4388,7 @@ async function callGemini(imgsData) {
   // [ADDED] Final automatic fallback: if every Gemini model failed
   // (Flash Lite -> Flash, per modelQueue), try Groq before giving up.
   if (S.model !== 'groq') {
-    setConnStatus('retrying', 'Switching to Groq…');
+    setConnStatus('retrying', 'Generating…');
     await callGroqDirect();
     return;
   }
