@@ -565,6 +565,16 @@
     flex: 1; /* push footer down */
   }
 
+  #page-history.active {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 57px);
+}
+
+#page-history .pg-body {
+  flex: 1;
+}
+
   @keyframes pgIn { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
 
   /* ================================================================
