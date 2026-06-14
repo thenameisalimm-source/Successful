@@ -2702,7 +2702,13 @@
 // Spanish, Portuguese, etc.), matching the existing Marathi behavior as the
 // quality benchmark for all languages. This does not alter personality tone,
 // role, or any other behavior.
-const LANGUAGE_INSTRUCTION = ' Always detect the language the user is writing in, even if they are using Romanized/English-letter spelling of another language (for example Hindi written as "Aap kaise ho?" or Marathi written as "Tuje nav ka aahe?"). Reply in that same language, written in its native/official script (e.g. Devanagari for Hindi and Marathi, Urdu script for Urdu, Spanish for Spanish, Portuguese for Portuguese, Arabic script for Arabic, etc.), the same way you already do for Marathi. If the user writes in English, reply in English. Never switch the reply to English just because the user used English letters, unless the user is actually writing in English or explicitly asks for an English reply.';
+const LANGUAGE_INSTRUCTION = ' For EVERY reply, decide the response language based ONLY on the user\'s CURRENT message — never on earlier messages in the conversation. Default to English. Only switch to another language (Hindi, Marathi, Urdu, Spanish, Portuguese, Arabic, etc.) if the user\'s CURRENT message is CLEARLY written in that language, including Romanized/English-letter spelling of it (for example Hindi written as "Aap kaise ho?" or Marathi written as "Tuje nav ka aahe?"). When you do switch, reply in that language\'s native/official script (e.g. Devanagari for Hindi and Marathi, Urdu script for Urdu, Spanish for Spanish, Portuguese for Portuguese, Arabic script for Arabic, etc.), the same way you already do for Marathi. If the user\'s current message is in English — even if a previous message was in another language — reply in English. Do not infer or carry over a language from earlier turns; re-evaluate the language fresh for every single message.';
+
+// [ADDED] Memory-honesty instruction — prevents the AI from fabricating or
+// claiming to "remember" facts about the user that were not actually saved
+// and injected into this prompt via the LONG-TERM MEMORY section. If that
+// section is absent or empty, the AI has no stored memory of the user.
+const MEMORY_HONESTY_INSTRUCTION = ' Regarding memory: only treat information as "remembered" about the user if it explicitly appears in a "--- LONG-TERM MEMORY (what you know about this user) ---" section included in this prompt. If that section is missing, empty, or does not contain a fact, do NOT claim to remember it, do NOT say things like "I remember you told me..." or "as you mentioned before..." about that fact, and do NOT invent details about the user\'s name, preferences, history, or past conversations. If asked what you remember and there is no LONG-TERM MEMORY section (or it is empty), honestly say you don\'t have any saved memories about them yet. Only bring up a stored memory when it is actually relevant to the current message — do not recite memories unprompted. The LONG-TERM MEMORY section always reflects the user\'s most up-to-date facts (newer facts have already replaced older conflicting ones), so always treat it as current and never mention an older value that the user has since changed.';
 
 // [ADDED] Shared identity instruction appended to every personality's system
 // prompt. Ensures the AI always identifies ITSELF as "ALEEM AI" — never as
@@ -2711,11 +2717,11 @@ const LANGUAGE_INSTRUCTION = ' Always detect the language the user is writing in
 const IDENTITY_INSTRUCTION = ' Your own name is "ALEEM AI" — that is who you are. Aleem Sudamaniya is your creator/founder/developer, NOT your name. If the user asks your name (in any language, e.g. "What is your name?", "आपका नाम क्या है?", "तुझे नाव काय आहे?"), always answer that your name is ALEEM AI (e.g. "My name is ALEEM AI.", "मेरा नाम ALEEM AI है।", "माझे नाव ALEEM AI आहे."). You may optionally add that you were created by Aleem Sudamaniya, but never say that Aleem Sudamaniya is your own name or refer to yourself by that name.';
 
 const PERSONALITIES = {
-  friendly:  { label: '😊 Friendly',       sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION },
-  teacher:   { label: '👨‍🏫 Teacher',        sys: 'You are ALEEM AI in Teacher mode, created by Aleem Sudamaniya. Explain every concept step by step in an educational style. Use clear examples, analogies, and break down complex ideas so anyone can understand. Encourage curiosity and deeper learning.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION },
-  coding:    { label: '💻 Coding Expert',   sys: 'You are ALEEM AI in Coding Expert mode, created by Aleem Sudamaniya. Focus on programming and software development. Include relevant code examples, snippets, and explanations whenever useful. Cover all languages and tech stacks with precision.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION },
-  writer:    { label: '✍️ Writer',           sys: 'You are ALEEM AI in Writer mode, created by Aleem Sudamaniya. Use a detailed, eloquent writing style. Help craft better articles, essays, stories, and creative content. Pay close attention to structure, word choice, and narrative flow.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION },
-  motivator: { label: '🚀 Motivator',       sys: 'You are ALEEM AI in Motivator mode, created by Aleem Sudamaniya. Give positive, encouraging, and uplifting responses. Inspire action, build confidence, and always highlight the person\'s potential. Use energetic and empowering language.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION },
+  friendly:  { label: '😊 Friendly',       sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  teacher:   { label: '👨‍🏫 Teacher',        sys: 'You are ALEEM AI in Teacher mode, created by Aleem Sudamaniya. Explain every concept step by step in an educational style. Use clear examples, analogies, and break down complex ideas so anyone can understand. Encourage curiosity and deeper learning.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  coding:    { label: '💻 Coding Expert',   sys: 'You are ALEEM AI in Coding Expert mode, created by Aleem Sudamaniya. Focus on programming and software development. Include relevant code examples, snippets, and explanations whenever useful. Cover all languages and tech stacks with precision.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  writer:    { label: '✍️ Writer',           sys: 'You are ALEEM AI in Writer mode, created by Aleem Sudamaniya. Use a detailed, eloquent writing style. Help craft better articles, essays, stories, and creative content. Pay close attention to structure, word choice, and narrative flow.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  motivator: { label: '🚀 Motivator',       sys: 'You are ALEEM AI in Motivator mode, created by Aleem Sudamaniya. Give positive, encouraging, and uplifting responses. Inspire action, build confidence, and always highlight the person\'s potential. Use energetic and empowering language.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
 };
 // ── [END ADDED] ───────────────────────────────────────────────────
 
@@ -5085,12 +5091,18 @@ window.__aleemSetMemoryDB = function(db, uid) {
 
 // ── CATEGORY DEFINITIONS ──────────────────────────────────────────
 var MEM_CATEGORIES = {
-  identity:   { label: 'Identity',    icon: '👤' },
-  preference: { label: 'Preference',  icon: '❤️'  },
-  goal:       { label: 'Goal',        icon: '🎯'  },
-  project:    { label: 'Project',     icon: '🚀'  },
-  interest:   { label: 'Interest',    icon: '✨'  },
-  other:      { label: 'Other',       icon: '📝'  },
+  identity:    { label: 'Identity',    icon: '👤' },
+  preference:  { label: 'Preference',  icon: '❤️'  },
+  goal:        { label: 'Goal',        icon: '🎯'  },
+  project:     { label: 'Project',     icon: '🚀'  },
+  interest:    { label: 'Interest',    icon: '✨'  },
+  // [ADDED] New categories per "Smart Memory Enhancement" spec — kept
+  // alongside existing categories for backward compatibility with any
+  // memories already saved under the old category set.
+  favorite:    { label: 'Favorites',    icon: '⭐' },
+  inspiration: { label: 'Inspirations', icon: '🌟' },
+  sport:       { label: 'Sports',       icon: '⚽' },
+  other:       { label: 'Other',       icon: '📝'  },
 };
 
 // ── MEMORY ANALYSIS PROMPT ────────────────────────────────────────
@@ -5144,36 +5156,45 @@ function memPreFilter(msg) {
 
 // ── STRICT EXTRACTION PROMPT ──────────────────────────────────────
 function buildMemoryAnalysisPrompt(userMessage) {
-  return 'You are a strict personal-memory extraction engine for an AI assistant. ' +
-    'Your ONLY job is to identify facts about THIS USER that would still be useful in a future conversation weeks or months from now. ' +
+  return 'You are a strict personal-memory extraction engine for an AI assistant, similar to ChatGPT-style memory. ' +
+    'Your ONLY job is to identify meaningful, long-term facts about THIS USER — personal preferences, recurring interests, favourites, inspirations, goals — that would still be useful in a future conversation weeks or months from now. ' +
     '' +
-    'SAVE — only if explicitly stated by the user about themselves:\n' +
-    '  • Name, age, occupation, location, nationality\n' +
-    '  • Long-term hobbies or passions they mention (e.g. "I love cricket", "I play guitar")\n' +
-    '  • Explicit preferences they state ("I prefer Python", "I hate spicy food")\n' +
-    '  • Active ongoing projects or goals they describe\n' +
-    '  • Important personal relationships (family, profession role)\n' +
-    '  • Skills or expertise they claim\n' +
+    'SAVE — only if explicitly stated by the user about themselves. Examples that SHOULD be saved:\n' +
+    '  • "My favourite footballer is Cristiano Ronaldo." -> favorite, subject "favourite footballer", value "Cristiano Ronaldo"\n' +
+    '  • "I admire Cristiano Ronaldo." -> inspiration, subject "inspiration", value "Cristiano Ronaldo"\n' +
+    '  • "Cristiano Ronaldo is my inspiration." -> inspiration, subject "inspiration", value "Cristiano Ronaldo"\n' +
+    '  • "My favourite cricket player is Virat Kohli." -> favorite, subject "favourite cricket player", value "Virat Kohli"\n' +
+    '  • "My favourite color is blue." -> favorite, subject "favourite color", value "blue"\n' +
+    '  • "I love football." -> sport, subject "favourite sport", value "football"\n' +
+    '  • "I prefer dark mode." -> preference, subject "app theme preference", value "dark mode"\n' +
+    '  • "I am learning programming." -> goal, subject "learning goal", value "programming"\n' +
+    '  • "My favourite team is Real Madrid." -> favorite, subject "favourite team", value "Real Madrid"\n' +
+    '  • Name, age, occupation, location, nationality -> identity\n' +
+    '  • Active ongoing projects they describe -> project\n' +
+    '  • General long-term hobbies/passions not covered above -> interest\n' +
     '' +
-    'DO NOT SAVE any of these — return [] immediately:\n' +
-    '  • Random facts the user is asking about (not their own info)\n' +
+    'DO NOT SAVE — return [] for messages like these:\n' +
+    '  • "Hello", "How are you?", "What\'s the weather?" (greetings/small talk/questions with no personal disclosure)\n' +
+    '  • "I ate pizza today." (one-time, temporary, not a long-term fact)\n' +
+    '  • Random one-time conversations or temporary requests\n' +
     '  • One-time task requests ("translate this", "write a poem about X")\n' +
     '  • Questions, even with personal context ("what exercises help bad knees?")\n' +
     '  • Emotional states that are temporary ("I am stressed today")\n' +
     '  • Conversational filler (thanks, ok, sure, yes, no)\n' +
     '  • Anything inferred or implied — only EXPLICIT self-disclosures\n' +
-    '  • Anything that could be a question the user is asking the AI\n' +
     '' +
     'STRICT RULES:\n' +
     '  1. Max 2 memories per message.\n' +
-    '  2. Each memory must be a single, specific, factual sentence in third person.\n' +
-    '     Good: "The user is a software engineer at a startup."\n' +
+    '  2. Each memory must be a single, specific, factual sentence in third person for "text".\n' +
+    '     Good: "The user\'s favourite footballer is Cristiano Ronaldo."\n' +
     '     Bad:  "The user seems to like technology."\n' +
-    '  3. Include a confidence score (0.0–1.0). Only include items you are very sure about.\n' +
-    '  4. If in doubt, return []. False negatives are fine. False positives are harmful.\n' +
+    '  3. ALSO provide "subject" — a short, normalized topic key for this fact (e.g. "favourite footballer", "favourite color", "app theme preference"), used to detect when a NEWER fact should replace an OLDER one on the same subject.\n' +
+    '  4. ALSO provide "value" — the short specific value itself (e.g. "Cristiano Ronaldo", "blue", "dark mode"), used for a user-facing save notice.\n' +
+    '  5. Include a confidence score (0.0-1.0). Only include items you are very sure about.\n' +
+    '  6. If in doubt, return []. False negatives are fine. False positives are harmful.\n' +
     '' +
     'Return ONLY a raw JSON array, no markdown, no explanation:\n' +
-    '[{"category":"identity|preference|goal|project|interest|other","text":"...","confidence":0.95}]\n' +
+    '[{"category":"identity|preference|goal|project|interest|favorite|inspiration|sport|other","subject":"...","value":"...","text":"...","confidence":0.95}]\n' +
     'Or if nothing qualifies: []\n' +
     '' +
     'User message to analyse: ' + userMessage;
@@ -5239,14 +5260,21 @@ async function analyseAndSaveMemory(userMessage) {
       // Reject hedged or vague phrases
       if (/(seems|might|possibly|perhaps|probably|may like|could be|appears to)/i.test(txt)) continue;
 
-      await saveMemoryToFirestore({
+      // [ADDED] subject/value used for conflict detection + the
+      // user-facing "💾 Memory saved: ..." transparency notice.
+      var subject = (mem.subject || '').trim();
+      var value   = (mem.value   || '').trim();
+
+      var didSave = await saveMemoryToFirestore({
         category:   mem.category,
+        subject:    subject,
+        value:      value,
         text:       txt,
         confidence: conf,
         createdAt:  Date.now(),
         updatedAt:  Date.now(),
       });
-      saved++;
+      if (didSave) saved++;
     }
 
     // Show saving indicator only if something was actually saved
@@ -5262,15 +5290,84 @@ async function analyseAndSaveMemory(userMessage) {
 }
 
 // ── FIRESTORE CRUD ────────────────────────────────────────────────
-async function saveMemoryToFirestore(memData) {
-  if (!MEM.db || !MEM.uid) return;
+// [ADDED] User-transparency notice: shows a small toast when a new memory
+// is actually stored (or an existing one is replaced with a newer value),
+// e.g. "💾 Memory saved: Favourite footballer = Cristiano Ronaldo".
+// Only called from saveMemoryToFirestore on a genuine save/update.
+function showMemorySavedNotice(memData) {
   try {
-    // Deduplicate: avoid saving very similar memories
+    var subject = (memData.subject || '').trim();
+    var value   = (memData.value   || '').trim();
+    var label;
+    if (subject && value) {
+      // Title-case the subject for a friendlier display, e.g.
+      // "favourite footballer" -> "Favourite Footballer"
+      var niceSubject = subject.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+      label = niceSubject + ' = ' + value;
+    } else {
+      // Fall back to the raw memory text if subject/value weren't provided.
+      label = memData.text;
+    }
+    toast('💾 Memory saved: ' + label);
+  } catch(e) {
+    // Never let the notice break memory saving.
+  }
+}
+
+// [MODIFIED] Now returns true/false (whether a memory was actually
+// created or updated) so the caller can show the transparency notice
+// only on a real save. Also detects conflicting facts on the same
+// "subject" (e.g. "favourite footballer") and REPLACES the older one
+// with the newer value, instead of accumulating duplicates.
+async function saveMemoryToFirestore(memData) {
+  if (!MEM.db || !MEM.uid) return false;
+  try {
+    var subject = (memData.subject || '').trim().toLowerCase();
+
+    // [ADDED] Conflict detection: same category + same normalized subject
+    // -> treat the new fact as a replacement for the old one (e.g. user's
+    // favourite footballer changed from Messi to Ronaldo).
+    if (subject) {
+      var conflict = MEM.items.find(function(m) {
+        return m.category === memData.category &&
+               (m.subject || '').trim().toLowerCase() === subject;
+      });
+      if (conflict) {
+        // Same value already stored — nothing to do.
+        if (conflict.text.toLowerCase().trim() === memData.text.toLowerCase().trim()) return false;
+
+        var { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var conflictRef = doc(MEM.db, 'users', MEM.uid, 'memories', conflict.id);
+        await updateDoc(conflictRef, {
+          text:       memData.text,
+          subject:    memData.subject,
+          value:      memData.value,
+          confidence: memData.confidence,
+          updatedAt:  memData.updatedAt,
+        });
+        conflict.text       = memData.text;
+        conflict.subject    = memData.subject;
+        conflict.value      = memData.value;
+        conflict.confidence = memData.confidence;
+        conflict.updatedAt  = memData.updatedAt;
+
+        updateMemBadge();
+        if (document.getElementById('page-memories') &&
+            document.getElementById('page-memories').classList.contains('active')) {
+          renderMemories();
+        }
+        showMemorySavedNotice(memData);
+        return true;
+      }
+    }
+
+    // Deduplicate: avoid saving very similar memories (no subject match,
+    // but text is essentially the same fact already stored).
     var similar = MEM.items.find(function(m) {
       return m.category === memData.category &&
              strSimilarity(m.text.toLowerCase(), memData.text.toLowerCase()) > MEM_CONFIG.DEDUP_THRESHOLD;
     });
-    if (similar) return; // already have a near-identical memory
+    if (similar) return false; // already have a near-identical memory
 
     var { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     var colRef = collection(MEM.db, 'users', MEM.uid, 'memories');
@@ -5282,8 +5379,11 @@ async function saveMemoryToFirestore(memData) {
         document.getElementById('page-memories').classList.contains('active')) {
       renderMemories();
     }
+    showMemorySavedNotice(memData);
+    return true;
   } catch(e) {
     console.warn('[ALEEM-MEM] saveMemoryToFirestore error:', e);
+    return false;
   }
 }
 
