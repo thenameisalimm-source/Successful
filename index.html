@@ -3092,8 +3092,7 @@ function bindAllEvents() {
     modelSelect.addEventListener('change', function(e) {
       S.model = e.target.value;
       persist();
-      var labels = { 'gemini-2.5-flash': 'Gemini 2.5 Flash', 'gemini-2.5-pro': 'Gemini 2.5 Pro', 'groq': 'Groq (text only)' };
-      toast('🤖 Model: ' + (labels[S.model] || S.model));
+      toast('🤖 Model: ' + (MODEL_LABELS[S.model] || S.model));
       dbg('modelSelect change → ' + S.model);
     });
   }
@@ -4065,6 +4064,43 @@ var FALLBACK_MODELS = [
   'gemini-2.5-flash',
 ];
 
+// [ADDED] Shared display-name map for model IDs, used both by the model
+// selector's change handler and by the temporary "active model" display
+// when a fallback model actually generates a response.
+var MODEL_LABELS = {
+  'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'groq': 'Groq (text only)'
+};
+
+// [ADDED] Temporarily updates the model dropdown's displayed value to show
+// which model actually generated the current response, WITHOUT touching
+// S.model or persisted preference. If usedModel differs from the user's
+// saved preference, also shows a small toast indicating the switch, and
+// reverts the dropdown back to the saved preference the next time the
+// user sends a message (see restoreSelectedModelDisplay).
+function showActiveModelUsed(usedModel) {
+  var preferred = S.model || 'gemini-2.5-flash-lite';
+  if (!usedModel || usedModel === preferred) return;
+
+  var sel = document.getElementById('modelSelect');
+  if (sel) sel.value = usedModel;
+
+  var fromLabel = MODEL_LABELS[preferred] || preferred;
+  var toLabel   = MODEL_LABELS[usedModel] || usedModel;
+  toast('🔄 Switched from ' + fromLabel + ' to ' + toLabel);
+}
+
+// [ADDED] Restores the model dropdown to reflect the user's saved
+// preference (S.model). Called at the start of each new send so the
+// temporary "active model used" display from the previous response
+// doesn't persist into the next request.
+function restoreSelectedModelDisplay() {
+  var sel = document.getElementById('modelSelect');
+  if (sel) sel.value = S.model || 'gemini-2.5-flash-lite';
+}
+
 var MAX_RETRIES   = 3;
 var RETRY_BASE_MS = 1200;
 
@@ -4293,6 +4329,11 @@ async function callGemini(imgsData) {
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
 
+  // [ADDED] Ensure the model dropdown reflects the user's saved preference
+  // at the start of every new request, clearing any temporary "active
+  // model used" display left over from the previous response.
+  restoreSelectedModelDisplay();
+
   var typId = addTyping('ALEEM AI is thinking…');
 
   var preferred   = S.model || 'gemini-2.5-flash-lite';
@@ -4350,6 +4391,12 @@ async function callGemini(imgsData) {
           // [ADDED] Log exactly which model produced this response, so it's
           // clear whether Flash Lite succeeded or a fallback model was used.
           console.log('[ALEEM MODEL USED]: ' + model);
+
+          // [ADDED] If a fallback model (not the user's saved preference)
+          // generated this response, temporarily reflect that in the model
+          // dropdown and show a toast. The saved preference (S.model) is
+          // left unchanged, so the next message still starts with it.
+          showActiveModelUsed(model);
 
           var bubId = addMsg('ai', reply, true);
           setConnStatus('online', 'Online');
@@ -4456,6 +4503,10 @@ async function callGroqDirect() {
                    data.candidates[0].content && data.candidates[0].content.parts &&
                    data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text)
         || 'Sorry, I could not generate a response. Please try again.';
+      // [ADDED] Groq was used as the final automatic fallback after all
+      // Gemini models failed — reflect that in the model dropdown/toast
+      // without changing the user's saved preference.
+      showActiveModelUsed('groq');
       var bubId = addMsg('ai', reply, true);
       setConnStatus('online', 'Online');
       typeMessage(bubId, reply, function() {
