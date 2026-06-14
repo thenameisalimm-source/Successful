@@ -2849,9 +2849,9 @@ function init() {
 
 // ── LOCAL STORAGE ─────────────────────────────────────────────────
 function loadStorage() {
-  // [MODIFIED] Default changed from 'gemini-2.5-flash-lite' to 'gemini-2.5-flash'
-  // to match the two valid model selector options.
-  S.model       = ls('aleem_model') || 'gemini-2.5-flash';
+  // [MODIFIED] Default changed to 'gemini-2.5-flash-lite' per requested
+  // default model + fallback chain (Flash Lite -> Flash -> Groq).
+  S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
   S.voiceOn     = ls('aleem_voice') !== 'off';
@@ -4039,9 +4039,8 @@ function typeMessage(bubId, rawText, onDone) {
 var NETLIFY_FN = '/.netlify/functions/chat';
 
 var FALLBACK_MODELS = [
-  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-2.5-pro',
+  'gemini-2.5-flash',
 ];
 
 var MAX_RETRIES   = 3;
@@ -4142,12 +4141,18 @@ function buildGeminiBody(imgsData) {
 
 function isRetryable(httpStatus, data) {
   if (httpStatus === 503) return true;
-  if (httpStatus === 429) {
-    var msg = (data && data.error && data.error.message) || '';
-    if (msg.includes('limit: 0') || msg.includes('free_tier')) return false;
-    return true;
-  }
+  if (httpStatus === 429) return true;
   return false;
+}
+
+// [ADDED] For 429s, decide whether retrying the SAME model again makes sense
+// (transient rate limit) or whether we should move straight to the next
+// model in the queue (quota exhausted for this model/project).
+function shouldRetrySameModel(httpStatus, data) {
+  if (httpStatus !== 429) return true;
+  var msg = (data && data.error && data.error.message) || '';
+  if (msg.includes('limit: 0') || msg.includes('free_tier') || msg.includes('FreeTier')) return false;
+  return true;
 }
 
 function classifyGeminiError(httpStatus, data) {
@@ -4170,6 +4175,9 @@ function classifyGeminiError(httpStatus, data) {
   if (code === 429 || errStatus === 'RESOURCE_EXHAUSTED') {
     if (message.includes('limit: 0') || message.includes('free_tier')) {
       return { type:'model_quota', label:'🚫 Model Not Free', text:'This model has 0 free quota. The system will try a fallback automatically.' };
+    }
+    if (message.includes('FreeTier') || message.includes('free_tier_requests')) {
+      return { type:'quota', label:'⚠️ Gemini free quota reached', text:'You have used all available free requests for Gemini 2.5 Flash Lite on this Google project.\nPlease wait for quota reset, use another model, or use a different API project.' };
     }
     return { type:'quota', label:'⏳ Rate Limited', text:'Daily/minute limit hit. Wait a moment.' };
   }
@@ -4289,7 +4297,7 @@ async function callGemini(imgsData) {
         console.error('[ALEEM-GEMINI-ERROR] HTTP ' + res.status + ' (' + model + '):', JSON.stringify(data, null, 2));
 
         if (isRetryable(res.status, data)) {
-          if (attempt < MAX_RETRIES) {
+          if (attempt < MAX_RETRIES && shouldRetrySameModel(res.status, data)) {
             var delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
             updateTypingStatus(typId, 'Server busy — waiting ' + Math.round(delay/1000) + 's before retry ' + (attempt+1) + '/' + MAX_RETRIES + '…');
             await sleep(delay);
@@ -4316,6 +4324,15 @@ async function callGemini(imgsData) {
   }
 
   rmEl(typId);
+
+  // [ADDED] Final automatic fallback: if every Gemini model failed
+  // (Flash Lite -> Flash, per modelQueue), try Groq before giving up.
+  if (S.model !== 'groq') {
+    setConnStatus('retrying', 'Switching to Groq…');
+    await callGroqDirect();
+    return;
+  }
+
   var finalMsg = lastErr
     ? '❌ **' + lastErr.label + ':** ' + lastErr.text + '\n\nAll models tried. Check your connection and try again.' +
       (lastErr.rawStatus !== undefined ? '\n\n' + formatRawGeminiError(lastErr.rawStatus, lastErr.rawData) : '')
