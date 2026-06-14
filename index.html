@@ -5110,7 +5110,11 @@ var MEM_CATEGORIES = {
 // Hard limits applied BEFORE the LLM is even called.
 var MEM_CONFIG = {
   // Minimum message length (chars) to bother analysing.
-  MIN_MSG_LENGTH: 20,
+  // [MODIFIED] Lowered from 20 to 8 to match the call-site gate
+  // (effectiveText.trim().length > 8) — short but meaningful statements
+  // like "I love football" (15 chars) were previously skipped here even
+  // though they passed the call-site check.
+  MIN_MSG_LENGTH: 8,
   // Max memories saved per single message (prevents prompt-injection floods).
   MAX_PER_MESSAGE: 2,
   // Global cap — never store more than this many memories per user.
@@ -5120,7 +5124,10 @@ var MEM_CONFIG = {
   DEDUP_THRESHOLD: 0.82,
   // Confidence threshold. Model must return confidence >= this to save.
   // 0 = save everything the model flags; 1 = only save perfect-confidence items.
-  CONFIDENCE_THRESHOLD: 0.80,
+  // [MODIFIED] Lowered from 0.80 to 0.70 — explicit first-person statements
+  // ("My favourite footballer is X", "I admire Y") are unambiguous and were
+  // being discarded by an overly strict cutoff.
+  CONFIDENCE_THRESHOLD: 0.70,
 };
 
 // ── PRE-FILTER: fast JS rules before touching the LLM ────────────
@@ -5190,8 +5197,8 @@ function buildMemoryAnalysisPrompt(userMessage) {
     '     Bad:  "The user seems to like technology."\n' +
     '  3. ALSO provide "subject" — a short, normalized topic key for this fact (e.g. "favourite footballer", "favourite color", "app theme preference"), used to detect when a NEWER fact should replace an OLDER one on the same subject.\n' +
     '  4. ALSO provide "value" — the short specific value itself (e.g. "Cristiano Ronaldo", "blue", "dark mode"), used for a user-facing save notice.\n' +
-    '  5. Include a confidence score (0.0-1.0). Only include items you are very sure about.\n' +
-    '  6. If in doubt, return []. False negatives are fine. False positives are harmful.\n' +
+    '  5. Include a confidence score (0.0-1.0).\n' +
+    '  6. Clear, explicit first-person statements (e.g. "My favourite X is Y", "I love X", "I admire X", "X is my inspiration") should get HIGH confidence (0.85-1.0) and SHOULD be saved. Only return [] for messages with no genuine personal preference/fact, or for the DO NOT SAVE cases above.\n' +
     '' +
     'Return ONLY a raw JSON array, no markdown, no explanation:\n' +
     '[{"category":"identity|preference|goal|project|interest|favorite|inspiration|sport|other","subject":"...","value":"...","text":"...","confidence":0.95}]\n' +
@@ -5221,7 +5228,7 @@ async function analyseAndSaveMemory(userMessage) {
           system_instruction: { parts: [{ text: 'You are a strict memory extraction engine. Return only raw JSON arrays. Never explain yourself.' }] },
           contents: [{ role: 'user', parts: [{ text: buildMemoryAnalysisPrompt(userMessage) }] }],
           // Low temperature = deterministic, no creative guessing
-          generationConfig: { maxOutputTokens: 300, temperature: 0.05 }
+          generationConfig: { maxOutputTokens: 400, temperature: 0.05 }
         }
       })
     });
