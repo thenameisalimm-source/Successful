@@ -4146,12 +4146,36 @@ function isRetryable(httpStatus, data) {
 }
 
 // [ADDED] For 429s, decide whether retrying the SAME model again makes sense
-// (transient rate limit) or whether we should move straight to the next
-// model in the queue (quota exhausted for this model/project).
+// (transient per-minute rate limit) or whether we should move straight to the
+// next model in the queue (DAILY quota exhausted for this model/project).
+//
+// IMPORTANT: Google's free-tier 429 messages can mention "free_tier"/"FreeTier"
+// for BOTH per-minute rate limits (transient, retry same model) AND per-day
+// quota exhaustion (not transient, fall back to next model). Only the latter
+// should skip retrying the same model — otherwise a normal per-minute limit
+// on Flash Lite gets misread as "Lite failed" and triggers an unnecessary
+// "Trying fallback: gemini-2.5-flash" banner even though Lite would have
+// succeeded on the very next attempt.
 function shouldRetrySameModel(httpStatus, data) {
   if (httpStatus !== 429) return true;
   var msg = (data && data.error && data.error.message) || '';
-  if (msg.includes('limit: 0') || msg.includes('free_tier') || msg.includes('FreeTier')) return false;
+  if (msg.includes('limit: 0')) return false; // model has 0 free quota at all
+
+  // Only treat as "not retryable on same model" when this is specifically a
+  // PER-DAY quota exhaustion (PerDay in the quotaId, or "RequestsPerDay").
+  var details = (data && data.error && data.error.details) || [];
+  for (var i = 0; i < details.length; i++) {
+    var d = details[i];
+    if (d && d['@type'] && d['@type'].indexOf('QuotaFailure') !== -1 && d.violations) {
+      for (var j = 0; j < d.violations.length; j++) {
+        var qid = d.violations[j] && d.violations[j].quotaId || '';
+        if (qid.indexOf('PerDay') !== -1) return false;
+      }
+    }
+  }
+  if (msg.indexOf('PerDay') !== -1 || msg.indexOf('per day') !== -1) return false;
+
+  // Otherwise (e.g. per-minute rate limit) — retry the same model.
   return true;
 }
 
@@ -4272,10 +4296,22 @@ async function callGemini(imgsData) {
         var res  = resp.res;
         var data = resp.data;
 
-        if (res.ok) {
+        // [ADDED] Defensive check: some proxies/functions can return HTTP 200
+        // while the body itself is actually an error object (data.error set,
+        // no candidates). Treat that as a failure for THIS model rather than
+        // silently displaying "Sorry, I could not generate a response."
+        var hasErrorPayload = !!(data && data.error);
+        var hasCandidates   = !!(data && data.candidates && data.candidates.length);
+
+        if (res.ok && !hasErrorPayload && hasCandidates) {
           rmEl(typId);
-          var reply = (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text)
+          var reply = (data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text)
             || 'Sorry, I could not generate a response. Please try again.';
+
+          // [ADDED] Log exactly which model produced this response, so it's
+          // clear whether Flash Lite succeeded or a fallback model was used.
+          console.log('[ALEEM MODEL USED]: ' + model);
+
           var bubId = addMsg('ai', reply, true);
           setConnStatus('online', 'Online');
           typeMessage(bubId, reply, function() {
@@ -4303,6 +4339,13 @@ async function callGemini(imgsData) {
             await sleep(delay);
             continue;
           }
+          // [ADDED] About to give up on this model and move to the next one
+          // in modelQueue (real fallback). Log exactly why, with the model
+          // name, so it's clear this wasn't a false positive.
+          console.warn('[ALEEM-FALLBACK-TRIGGER] Model "' + model + '" failed (HTTP ' + res.status +
+            ', status=' + ((data && data.error && data.error.status) || 'n/a') +
+            '): ' + ((data && data.error && data.error.message) || 'no message') +
+            ' -> falling back to next model in queue.');
           break;
         } else {
           rmEl(typId);
