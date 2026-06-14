@@ -74,6 +74,26 @@ exports.handler = async function (event) {
     return json(groqResult.status, { error: { message: (groqResult.data.error && groqResult.data.error.message) || 'Groq request failed.' } });
   }
 
+  // ── Action: "groq vision" ────────────────────────────────────────
+  // [ADDED] Image-analysis fallback used only when Gemini image models have
+  // failed. Uses the SAME existing GROQ_KEY/integration as the 'groq' branch
+  // above — no new provider/key/account. groqMessages here may contain
+  // multimodal content blocks (text + image_url), which Groq's
+  // OpenAI-compatible vision endpoint accepts unchanged.
+  if (model === 'groq-vision') {
+    if (!GROQ_KEY) return json(500, { error: { message: 'Groq API key not configured on server.' } });
+    const visionModel = body.groqModel || 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const groqResult = await callGroq(body.groqMessages || [], GROQ_KEY, visionModel);
+    if (groqResult.status === 200) {
+      return json(200, {
+        candidates: [{ content: { parts: [{ text: groqResult.data.choices[0].message.content }] } }],
+        _model_used: 'groq-vision'
+      });
+    }
+    return json(groqResult.status, { error: { message: (groqResult.data.error && groqResult.data.error.message) || 'Groq Vision request failed.' } });
+  }
+  // [END ADDED]
+
   // ── Action: "chat" (default) ────────────────────────────────────
   if (!geminiBody) {
     return json(400, { error: 'Missing geminiBody in request' });
@@ -192,7 +212,7 @@ async function callGemini(model, body, apiKey) {
   }
 }
 
-async function callGroq(messages, apiKey) {
+async function callGroq(messages, apiKey, model) {
   try {
     const res = await fetch(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -203,7 +223,10 @@ async function callGroq(messages, apiKey) {
           Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          // [MODIFIED] Optional `model` param so the groq-vision branch can
+          // request Llama 4 Scout while the existing text branch keeps
+          // using llama-3.3-70b-versatile by default (unchanged behaviour).
+          model: model || 'llama-3.3-70b-versatile',
           messages: messages
         })
       }
@@ -243,4 +266,5 @@ function json(statusCode, body) {
   
 };
 
-        
+
+  
