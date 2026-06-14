@@ -4179,6 +4179,18 @@ function classifyGeminiError(httpStatus, data) {
   return { type:'error', label:'❌ Error ' + (code || httpStatus), text: message || 'Unknown API error.' };
 }
 
+// [ADDED] Build a plain-text block showing the exact HTTP status code and
+// the complete raw JSON error body returned by Google, for display in chat.
+function formatRawGeminiError(httpStatus, data) {
+  var raw;
+  try {
+    raw = JSON.stringify(data, null, 2);
+  } catch (e) {
+    raw = String(data);
+  }
+  return '**Raw API response (HTTP ' + httpStatus + '):**\n```\n' + raw + '\n```';
+}
+
 function setConnStatus(state, label) {
   var el  = document.getElementById('connStatus');
   var lbl = document.getElementById('connLabel');
@@ -4267,6 +4279,14 @@ async function callGemini(imgsData) {
         }
 
         lastErr = classifyGeminiError(res.status, data);
+        // [ADDED] Keep the raw HTTP status + raw JSON body attached so the
+        // exact Google error can be shown if all models/retries fail.
+        lastErr.rawStatus = res.status;
+        lastErr.rawData   = data;
+
+        // [ADDED] Log the complete raw JSON error response from Google,
+        // including the exact HTTP status code, for debugging.
+        console.error('[ALEEM-GEMINI-ERROR] HTTP ' + res.status + ' (' + model + '):', JSON.stringify(data, null, 2));
 
         if (isRetryable(res.status, data)) {
           if (attempt < MAX_RETRIES) {
@@ -4278,7 +4298,7 @@ async function callGemini(imgsData) {
           break;
         } else {
           rmEl(typId);
-          addMsg('ai', '❌ **' + lastErr.label + ':** ' + lastErr.text);
+          addMsg('ai', '❌ **' + lastErr.label + ':** ' + lastErr.text + '\n\n' + formatRawGeminiError(res.status, data));
           setConnStatus('error', 'Error');
           S.busy = false;
           return;
@@ -4297,7 +4317,8 @@ async function callGemini(imgsData) {
 
   rmEl(typId);
   var finalMsg = lastErr
-    ? '❌ **' + lastErr.label + ':** ' + lastErr.text + '\n\nAll models tried. Check your connection and try again.'
+    ? '❌ **' + lastErr.label + ':** ' + lastErr.text + '\n\nAll models tried. Check your connection and try again.' +
+      (lastErr.rawStatus !== undefined ? '\n\n' + formatRawGeminiError(lastErr.rawStatus, lastErr.rawData) : '')
     : '❌ All AI models are currently unavailable. Please try again in a moment.';
   addMsg('ai', finalMsg);
   setConnStatus('error', 'Error');
