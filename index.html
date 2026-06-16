@@ -2702,7 +2702,12 @@
 // Spanish, Portuguese, etc.), matching the existing Marathi behavior as the
 // quality benchmark for all languages. This does not alter personality tone,
 // role, or any other behavior.
-const LANGUAGE_INSTRUCTION = ' For EVERY reply, decide the response language based ONLY on the user\'s CURRENT message — never on earlier messages in the conversation. Default to English. Only switch to another language (Hindi, Marathi, Urdu, Spanish, Portuguese, Arabic, etc.) if the user\'s CURRENT message is CLEARLY written in that language, including Romanized/English-letter spelling of it (for example Hindi written as "Aap kaise ho?" or Marathi written as "Tuje nav ka aahe?"). When you do switch, reply in that language\'s native/official script (e.g. Devanagari for Hindi and Marathi, Urdu script for Urdu, Spanish for Spanish, Portuguese for Portuguese, Arabic script for Arabic, etc.), the same way you already do for Marathi. If the user\'s current message is in English — even if a previous message was in another language — reply in English. Do not infer or carry over a language from earlier turns; re-evaluate the language fresh for every single message.';
+// [UPDATED] LANGUAGE_INSTRUCTION is the single source of truth for language
+// behavior across ALL providers (Gemini, Groq, DeepSeek, Cerebras, Cloudflare,
+// and any future model). It is appended to every personality's system prompt,
+// so every provider automatically inherits these rules without any per-provider
+// special-casing. Do not add language rules anywhere else.
+const LANGUAGE_INSTRUCTION = ' LANGUAGE RULES — apply these strictly for EVERY reply, with no exceptions:\n\n1. Detect language from the CURRENT message ONLY — using its vocabulary, grammar, and expressions. Never carry over the language from a previous turn. Never infer language from script alone; many South Asian languages share Latin transliteration.\n\n2. URDU EXPRESSION RECOGNITION — the following expressions are ALWAYS Urdu, regardless of script or spelling. When the user\'s message contains any of them, treat the message as Urdu and reply ONLY in Urdu script (اردو):\n   • Assalamu Alaikum / As-salamu alaykum / Assalam o alaikum / Salaam\n   • Wa Alaikum Assalam / Walaikum assalam\n   • JazakAllah / JazakAllah Khair / Jazakallahu Khairan\n   • Alhamdulillah / Masha Allah / Insha Allah / Subhanallah / Allahu Akbar\n   • Khuda hafiz / Allah hafiz\n   These are Islamic/Urdu greetings — never classify them as Hindi, Arabic, or any other language.\n\n3. Speech recognition often transcribes spoken Hindi, Marathi, or Urdu as Romanized text (Latin letters). Detect the intended language from vocabulary and grammar, not just the alphabet. Romanized Hindi/Marathi/Urdu must be treated as if written in the native script.\n\n4. URDU vs HINDI disambiguation — if the message uses Urdu-specific vocabulary (e.g. aap, hain, hai, kijiye, shukriya, meherbani, zaroor, bilkul, theek hai used in an Urdu register, Islamic expressions), classify it as Urdu and reply in Urdu script (اردو). If it uses Hindi-register vocabulary (e.g. tum, ho, karo, dhanyavaad, accha), classify it as Hindi and reply in Devanagari (हिंदी).\n\n5. Script rules — when you detect a non-English language, reply ONLY in its proper native script. Never Romanize, never mix scripts, never produce Hinglish or Roman Urdu:\n   • Hindi (including Romanized Hindi such as "Aap kaise ho", "Kya hal hai", "Mujhe batao") → reply ONLY in Devanagari (हिंदी).\n   • Marathi (including Romanized Marathi such as "Tuje nav kay aahe", "Kasa aahes", "Mala sangaa") → reply ONLY in Devanagari (मराठी).\n   • Urdu (including Romanized Urdu, Islamic greetings, or Urdu-register vocabulary) → reply ONLY in Urdu script (اردو). NEVER use Devanagari for Urdu.\n   • Spanish → reply in Spanish.\n   • Arabic → reply ONLY in Arabic script.\n   • Portuguese → reply in Portuguese.\n   • All other languages → use that language\'s standard official script.\n\n6. If the current message is in English → reply in English only, regardless of what language was used before.\n\n7. ABSOLUTE PROHIBITION: Never produce Romanized/transliterated output, Hinglish, Roman Urdu, or any mixed-language text — unless the user explicitly writes that way themselves AND explicitly asks you to reply the same way.';
 
 // [ADDED] Memory-honesty instruction — prevents the AI from fabricating or
 // claiming to "remember" facts about the user that were not actually saved
@@ -3645,26 +3650,84 @@ function renderMarkdown(src) {
     }
 
     // Unordered list
+    // [FIX] Same continuation-line fix as ordered list: blank lines or
+    // indented content between bullet items no longer splits them into
+    // multiple <ul> elements.
     if (/^[ \t]*[-*+]\s+/.test(line)) {
       var ulItems = [];
-      while (i < lines.length && /^[ \t]*[-*+]\s+/.test(lines[i])) {
-        var uIndent = lines[i].match(/^([ \t]*)/)[1].length;
-        var uText   = lines[i].replace(/^[ \t]*[-*+]\s+/, '');
-        ulItems.push({ indent: uIndent, text: uText });
-        i++;
+      while (i < lines.length) {
+        var ul_line = lines[i];
+        if (/^[ \t]*[-*+]\s+/.test(ul_line)) {
+          var uIndent = ul_line.match(/^([ \t]*)/)[1].length;
+          var uText   = ul_line.replace(/^[ \t]*[-*+]\s+/, '');
+          ulItems.push({ indent: uIndent, text: uText });
+          i++;
+          // Collect continuation lines belonging to this item
+          while (i < lines.length) {
+            var ucont = lines[i];
+            if (/^[ \t]*[-*+]\s+/.test(ucont)) break;
+            if (/^[ \t]*\d+[.)]\s+/.test(ucont)) break;
+            if (/^\x00CODEBLOCK\d+\x00$/.test(ucont.trim())) break;
+            if (/^(#{1,6}\s|&gt;\s?|[-*_]{3,}\s*$)/.test(ucont.trim())) break;
+            if (ucont.trim() !== '' &&
+                !/^[ \t]/.test(ucont) &&
+                i > 0 && lines[i - 1] !== undefined && lines[i - 1].trim() === '') {
+              break;
+            }
+            if (ucont.trim() !== '') {
+              ulItems[ulItems.length - 1].text += '\n' + ucont;
+            }
+            i++;
+          }
+        } else {
+          break;
+        }
       }
       output.push(buildList('ul', ulItems));
       continue;
     }
 
     // Ordered list
+    // [FIX] The old collector stopped the moment it hit a non-numbered line
+    // (sub-bullets, blank lines, continuation text). This caused each numbered
+    // item to become a separate <ol>, so every item rendered as "1." instead
+    // of 1, 2, 3... The fix: after each numbered item, keep scanning past
+    // continuation lines (sub-bullets, blank lines, wrapped text) until we
+    // see the next numbered item or a hard block-break.
     if (/^[ \t]*\d+[.)]\s+/.test(line)) {
       var olItems = [];
-      while (i < lines.length && /^[ \t]*\d+[.)]\s+/.test(lines[i])) {
-        var oIndent = lines[i].match(/^([ \t]*)/)[1].length;
-        var oText   = lines[i].replace(/^[ \t]*\d+[.)]\s+/, '');
-        olItems.push({ indent: oIndent, text: oText });
-        i++;
+      while (i < lines.length) {
+        var ol_line = lines[i];
+        // Next numbered item — start a new list entry
+        if (/^[ \t]*\d+[.)]\s+/.test(ol_line)) {
+          var oIndent = ol_line.match(/^([ \t]*)/)[1].length;
+          var oText   = ol_line.replace(/^[ \t]*\d+[.)]\s+/, '');
+          olItems.push({ indent: oIndent, text: oText });
+          i++;
+          // Collect continuation lines belonging to this item
+          while (i < lines.length) {
+            var cont_line = lines[i];
+            // Next numbered item — outer loop handles it
+            if (/^[ \t]*\d+[.)]\s+/.test(cont_line)) break;
+            // Hard block-level breaks
+            if (/^\x00CODEBLOCK\d+\x00$/.test(cont_line.trim())) break;
+            if (/^(#{1,6}\s|&gt;\s?|[-*_]{3,}\s*$)/.test(cont_line.trim())) break;
+            // Non-indented non-blank line after a blank line = new paragraph
+            if (cont_line.trim() !== '' &&
+                !/^[ \t]/.test(cont_line) &&
+                !/^[ \t]*[-*+]\s/.test(cont_line) &&
+                i > 0 && lines[i - 1] !== undefined && lines[i - 1].trim() === '') {
+              break;
+            }
+            // Fold non-blank continuation into last item
+            if (cont_line.trim() !== '') {
+              olItems[olItems.length - 1].text += '\n' + cont_line;
+            }
+            i++;
+          }
+        } else {
+          break; // non-numbered, non-continuation line — end list
+        }
       }
       output.push(buildList('ol', olItems));
       continue;
@@ -3856,17 +3919,23 @@ function syntaxHighlight(code, lang) {
 
 // Apply inline Markdown formatting to a string (assumes HTML-escaped input)
 function applyInline(s) {
+  // [FIX] Use [^\n]+ instead of [\s\S]+ for all inline patterns so they
+  // never span across line breaks. This prevents bold/italic markers from
+  // accidentally consuming content across multiple lines or eating each other.
   // Bold+italic: ***text*** or ___text___
-  s = s.replace(/\*\*\*([\s\S]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  s = s.replace(/___([\s\S]+?)___/g,        '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*\*([^\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/___([^\n]+?)___/g,        '<strong><em>$1</em></strong>');
   // Bold: **text** or __text__
-  s = s.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([\s\S]+?)__/g,      '<strong>$1</strong>');
-  // Italic: *text* or _text_
-  s = s.replace(/\*([\s\S]+?)\*/g, '<em>$1</em>');
-  s = s.replace(/\b_([\s\S]+?)_\b/g, '<em>$1</em>');
+  s = s.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^\n]+?)__/g,      '<strong>$1</strong>');
+  // Italic: *text* — must not be surrounded by spaces on both sides (avoids
+  // matching stray asterisks in math or bullet continuation text).
+  s = s.replace(/\*([^\n*]+?)\*/g, '<em>$1</em>');
+  // Italic: _text_ — no \b requirement; just avoid underscores inside words
+  // (e.g. snake_case) by requiring non-word char or start/end around the _
+  s = s.replace(/(^|[^\w])_([^\n_]+?)_(?=[^\w]|$)/g, '$1<em>$2</em>');
   // Strikethrough: ~~text~~
-  s = s.replace(/~~([\s\S]+?)~~/g, '<del>$1</del>');
+  s = s.replace(/~~([^\n]+?)~~/g, '<del>$1</del>');
   // Links: [text](url)
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, text, url) {
     var safeUrl = url.replace(/"/g,'&quot;');
