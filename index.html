@@ -2265,6 +2265,19 @@
           </select>
         </div>
         <!-- [END ADDED] -->
+
+        <!-- [DEBUG] Voice diagnostic panel — shows available voices and gender classification -->
+        <div id="voiceDebugPanel" style="display:none; margin-top:10px; padding:12px 14px; background:rgba(0,0,0,0.35); border:1px solid rgba(99,179,237,0.25); border-radius:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-2); max-height:260px; overflow-y:auto; text-align:left; line-height:1.7;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <strong style="color:var(--a1);">🔍 Voice Diagnostic</strong>
+            <button onclick="document.getElementById('voiceDebugPanel').style.display='none'" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:0.8rem;">✕</button>
+          </div>
+          <div id="voiceDebugContent">Running…</div>
+        </div>
+        <div style="text-align:center;margin-top:6px;">
+          <button onclick="runVoiceDiagnostic()" style="background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.28);border-radius:7px;color:var(--a1);font-size:0.72rem;padding:4px 12px;cursor:pointer;font-family:var(--font-body);">🔍 Run Voice Diagnostic</button>
+        </div>
+        <!-- [END DEBUG] -->
       </div>
     </section>
 
@@ -5012,6 +5025,65 @@ function pickVoiceForLang(lang) {
 
   // 6. Default voice (browser default)
   return voices[0] || null;
+}
+
+// [DEBUG] Voice diagnostic — lists all available voices, classifies each by
+// gender using the same regex as matchesGender(), shows which voice would be
+// selected for English with the current S.voiceGender setting, and logs
+// whether matchesGender() is returning true/false for each candidate.
+function runVoiceDiagnostic() {
+  var panel   = document.getElementById('voiceDebugPanel');
+  var content = document.getElementById('voiceDebugContent');
+  if (!panel || !content) return;
+  panel.style.display = 'block';
+  content.innerHTML   = 'Loading voices…';
+
+  function doRun() {
+    var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    if (!voices || !voices.length) {
+      content.innerHTML = '⚠️ No voices returned by speechSynthesis.getVoices(). Browser may not support TTS or voices not yet loaded.';
+      return;
+    }
+
+    var maleNames   = /\b(male|david|james|daniel|mark|ryan|jorge|diego|luca|henrik|stefan|yuri|rishi)\b/i;
+    var femaleNames = /\b(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)\b/i;
+
+    var currentGender = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
+    var selectedVoice = pickVoiceForLang('en-US');
+
+    var lines = [];
+    lines.push('<b>Current voiceGender setting:</b> <span style="color:var(--a3)">' + currentGender + '</span>');
+    lines.push('<b>Voice selected for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? selectedVoice.name + ' [' + selectedVoice.lang + ']' : 'NONE') + '</span>');
+    lines.push('<b>matchesGender() result for selected:</b> ' + (selectedVoice ? (function(){
+      var n = selectedVoice.name.toLowerCase();
+      if (currentGender === 'auto') return '<span style="color:var(--a3)">auto (no filter)</span>';
+      if (currentGender === 'male')   return maleNames.test(n) && !femaleNames.test(n) ? '<span style="color:var(--a3)">✅ MALE MATCHED</span>' : '<span style="color:#f87171;">❌ NOT matched — fell back to no-filter</span>';
+      if (currentGender === 'female') return femaleNames.test(n) && !maleNames.test(n) ? '<span style="color:var(--a3)">✅ FEMALE MATCHED</span>' : '<span style="color:#f87171;">❌ NOT matched — fell back to no-filter</span>';
+    })() : 'N/A'));
+    lines.push('');
+    lines.push('<b>All ' + voices.length + ' voices on this device:</b>');
+
+    voices.forEach(function(v, i) {
+      var n = (v.name || '').toLowerCase();
+      var isMale   = maleNames.test(n)   && !femaleNames.test(n);
+      var isFemale = femaleNames.test(n) && !maleNames.test(n);
+      var tag = isMale   ? '<span style="color:#60a5fa;">[MALE]</span>'
+              : isFemale ? '<span style="color:#f472b6;">[FEMALE]</span>'
+              :            '<span style="color:var(--text-3);">[UNKNOWN]</span>';
+      var isSelected = selectedVoice && selectedVoice.name === v.name ? ' ◀ <b style="color:var(--a1)">SELECTED</b>' : '';
+      lines.push((i + 1) + '. ' + escHtml(v.name) + ' <span style="color:var(--text-3)">(' + escHtml(v.lang) + ')</span> ' + tag + isSelected);
+    });
+
+    content.innerHTML = lines.join('<br>');
+  }
+
+  // Voices may load async — wait up to 1s if list is empty
+  var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  if (voices && voices.length) {
+    doRun();
+  } else {
+    setTimeout(doRun, 800);
+  }
 }
 
 function speakText(t) {
