@@ -2255,6 +2255,15 @@
             <option value="assistant">🤖 Assistant</option>
           </select>
         </div>
+        <!-- [ADDED] Voice Gender selector -->
+        <div class="personality-selector-row">
+          <span class="personality-selector-label">⚧️ Voice Gender:</span>
+          <select id="voiceGenderSelect">
+            <option value="auto">🔄 Auto</option>
+            <option value="male">🔵 Male</option>
+            <option value="female">🔴 Female</option>
+          </select>
+        </div>
         <!-- [END ADDED] -->
       </div>
     </section>
@@ -2801,6 +2810,7 @@ const S = {
   model:       'gemini-2.5-flash',
   personality: 'friendly',
   voicePersonality: 'assistant',
+  voiceGender: 'auto',
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -2881,6 +2891,7 @@ function loadStorage() {
   S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
+  S.voiceGender = ls('aleem_voice_gender') || 'auto';
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -2915,6 +2926,9 @@ function loadStorage() {
   // [ADDED] Restore the saved voice personality into its dropdown after DOM is ready
   var vpSel = document.getElementById('voicePersonalitySelect');
   if (vpSel) vpSel.value = S.voicePersonality;
+  // Restore voice gender dropdown
+  var vgSel = document.getElementById('voiceGenderSelect');
+  if (vgSel) vgSel.value = S.voiceGender;
   // [END ADDED]
 }
 
@@ -2922,6 +2936,7 @@ function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
   lss('aleem_voice_pers', S.voicePersonality);
+  lss('aleem_voice_gender', S.voiceGender);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
   lss('aleem_theme',  S.theme);
   lss('aleem_total',  S.totalQ);
@@ -3184,6 +3199,19 @@ function bindAllEvents() {
     });
   }
   // [END ADDED]
+
+  // [ADDED] Voice Gender selector — saves preference and updates voice picking.
+  var voiceGenderSelect = document.getElementById('voiceGenderSelect');
+  if (voiceGenderSelect) {
+    voiceGenderSelect.addEventListener('change', function(e) {
+      S.voiceGender = e.target.value;
+      persist();
+      var vgLabels = { auto: '🔄 Auto', male: '🔵 Male', female: '🔴 Female' };
+      toast('🎙️ Voice Gender: ' + (vgLabels[S.voiceGender] || S.voiceGender));
+    });
+  }
+  // [END ADDED]
+
   var newFactBtn = document.getElementById('newFactBtn');
   if (newFactBtn) newFactBtn.addEventListener('click', function(e) {
     dbg('newFactBtn click'); setFact();
@@ -4910,6 +4938,36 @@ function pickVoiceForLang(lang) {
 
   var primary = lang.split('-')[0].toLowerCase();
 
+  // [ADDED] Gender preference from S.voiceGender ('auto'|'male'|'female').
+  // Filters the candidate list before any selection step so the user's chosen
+  // gender is respected. 'auto' applies no filter (original behaviour).
+  // Gender is detected from the voice name — all major browsers (Chrome,
+  // Android, iOS, Edge, Samsung) include "Male"/"Female" in their voice names
+  // (e.g. "Google US English Male", "Google UK English Female",
+  //  "Microsoft David - English (United States)" [male],
+  //  "Samantha" [female on iOS]).
+  // We also catch common male/female name cues for platforms that don't label
+  // explicitly (e.g. known male names: David, James, Daniel, Mark, Ryan;
+  // known female names: Samantha, Victoria, Karen, Moira, Fiona, Zira).
+  var genderPref = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
+  var maleNames   = /(male|david|james|daniel|mark|ryan|jorge|diego|luca|henrik|stefan|yuri|rishi)/i;
+  var femaleNames = /(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)/i;
+
+  function matchesGender(v) {
+    if (genderPref === 'auto') return true;
+    var n = (v.name || '').toLowerCase();
+    if (genderPref === 'male')   return maleNames.test(n)   && !femaleNames.test(n);
+    if (genderPref === 'female') return femaleNames.test(n) && !maleNames.test(n);
+    return true;
+  }
+
+  // Filter helper: tries a find() with gender filter, falls back to no filter
+  // so voice always works even if no gendered voice exists for the language.
+  function findVoice(predicate) {
+    return voices.find(function(v) { return predicate(v) && matchesGender(v); })
+        || voices.find(function(v) { return predicate(v); }); // gender fallback
+  }
+
   // Name patterns that indicate a genuinely native voice for each language,
   // checked before relying on (sometimes inaccurate) lang codes.
   var nativeNamePatterns = {
@@ -4921,35 +4979,35 @@ function pickVoiceForLang(lang) {
   // 1. Native-name match for the primary language (most reliable signal
   //    that the voice will actually speak with correct pronunciation).
   if (nativeNamePatterns[primary]) {
-    var byName = voices.find(function(v) { return v.name && nativeNamePatterns[primary].test(v.name); });
+    var byName = findVoice(function(v) { return v.name && nativeNamePatterns[primary].test(v.name); });
     if (byName) return byName;
   }
 
   // 2. Exact lang match (e.g. "hi-IN")
-  var exact = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
+  var exact = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
   if (exact) return exact;
 
   // 3. Same primary language, any region (e.g. "hi-*")
-  var sameLang = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
+  var sameLang = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
   if (sameLang) return sameLang;
 
   // 3b. Urdu secondary region fallback (ur-PK) if ur-IN isn't available.
   if (primary === 'ur') {
-    var urPk = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
+    var urPk = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
     if (urPk) return urPk;
   }
 
   // 4. Closest matching Indian voice as a fallback for Indian languages
   if (primary === 'hi' || primary === 'mr' || primary === 'ur' || primary === 'bn' || primary === 'ta' || primary === 'te' || primary === 'gu' || primary === 'pa' || primary === 'kn' || primary === 'ml') {
-    var indianVoice = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
-      || voices.find(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
+    var indianVoice = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
+      || findVoice(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
     if (indianVoice) return indianVoice;
   }
 
-  // 5. English fallback — prefer en-US / en-GB as specified, then any English.
-  var enPreferred = voices.find(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
+  // 5. English fallback — prefer en-US / en-GB, then any English.
+  var enPreferred = findVoice(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
   if (enPreferred) return enPreferred;
-  var en = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
+  var en = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
   if (en) return en;
 
   // 6. Default voice (browser default)
