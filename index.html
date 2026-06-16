@@ -2255,13 +2255,13 @@
             <option value="assistant">🤖 Assistant</option>
           </select>
         </div>
-        <!-- [ADDED] Voice Gender selector -->
+        <!-- [REVISED] Voice selector — dynamically populated from device voices.
+             Replaces the regex gender selector which fails on Android Chrome/WebView
+             because Google TTS voice names contain no "Male"/"Female" keyword. -->
         <div class="personality-selector-row">
-          <span class="personality-selector-label">⚧️ Voice Gender:</span>
-          <select id="voiceGenderSelect">
-            <option value="auto">🔄 Auto</option>
-            <option value="male">🔵 Male</option>
-            <option value="female">🔴 Female</option>
+          <span class="personality-selector-label">Voice:</span>
+          <select id="voiceGenderSelect" style="max-width:180px;">
+            <option value="auto">Auto (best match)</option>
           </select>
         </div>
         <!-- [END ADDED] -->
@@ -2823,7 +2823,7 @@ const S = {
   model:       'gemini-2.5-flash',
   personality: 'friendly',
   voicePersonality: 'assistant',
-  voiceGender: 'auto',
+  voiceName: 'auto',   // 'auto' or exact voice.name from device
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -2893,7 +2893,40 @@ function init() {
 
     initSettings();
     initImageUpload();
-    if (S.voiceOn) speakText('Welcome to ALEEM AI, created by Aleem Sudamaniya. How can I help you today?');
+
+    // [FIX] Welcome speech must wait until speechSynthesis voices are loaded.
+    // On Android Chrome/WebView voices load asynchronously; calling speakText()
+    // before getVoices() returns a non-empty list means pickVoiceForLang() can
+    // only return null, so the browser picks a random default voice instead of
+    // the user's chosen one. We gate the greeting on voice availability:
+    // if voices are already loaded (desktop Chrome, iOS) speak immediately;
+    // otherwise wait for onvoiceschanged, with a 3s safety-net fallback so
+    // the greeting always plays even if the event never fires.
+    if (S.voiceOn) {
+      function speakWelcome() {
+        speakText('Welcome to ALEEM AI, created by Aleem Sudamaniya. How can I help you today?');
+      }
+      if (window.speechSynthesis) {
+        var _wv = window.speechSynthesis.getVoices();
+        if (_wv && _wv.length) {
+          speakWelcome(); // voices already ready
+        } else {
+          var _welcomed = false;
+          var _welcomeTimer = setTimeout(function() {
+            if (!_welcomed) { _welcomed = true; speakWelcome(); }
+          }, 3000);
+          var _prevOVC = window.speechSynthesis.onvoiceschanged;
+          window.speechSynthesis.onvoiceschanged = function() {
+            if (_prevOVC) _prevOVC();          // keep populateVoiceSelect wired
+            if (!_welcomed) {
+              _welcomed = true;
+              clearTimeout(_welcomeTimer);
+              speakWelcome();
+            }
+          };
+        }
+      }
+    }
   }, 2400);
 }
 
@@ -2904,7 +2937,7 @@ function loadStorage() {
   S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
-  S.voiceGender = ls('aleem_voice_gender') || 'auto';
+  S.voiceName = ls('aleem_voice_name') || 'auto';
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -2939,17 +2972,51 @@ function loadStorage() {
   // [ADDED] Restore the saved voice personality into its dropdown after DOM is ready
   var vpSel = document.getElementById('voicePersonalitySelect');
   if (vpSel) vpSel.value = S.voicePersonality;
-  // Restore voice gender dropdown
-  var vgSel = document.getElementById('voiceGenderSelect');
-  if (vgSel) vgSel.value = S.voiceGender;
-  // [END ADDED]
+
+  // [REVISED] Populate the named-voice selector dynamically from device voices.
+  function populateVoiceSelect() {
+    var sel = document.getElementById('voiceGenderSelect');
+    if (!sel) return;
+    var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    if (!voices || !voices.length) return;
+    var enVoices = [], otherVoices = [], seen = {};
+    voices.forEach(function(v) {
+      if (!v.name || seen[v.name]) return;
+      seen[v.name] = true;
+      if (v.lang && v.lang.toLowerCase().indexOf('en') === 0) enVoices.push(v);
+      else otherVoices.push(v);
+    });
+    enVoices.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    otherVoices.sort(function(a,b){ return (a.lang+a.name).localeCompare(b.lang+b.name); });
+    while (sel.options.length > 1) sel.remove(1);
+    function addGroup(label, list) {
+      if (!list.length) return;
+      var og = document.createElement('optgroup'); og.label = label;
+      list.forEach(function(v) {
+        var opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = v.name + (v.lang ? ' - ' + v.lang : '');
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    }
+    addGroup('English voices', enVoices);
+    addGroup('Other languages', otherVoices);
+    if (S.voiceName && S.voiceName !== 'auto') sel.value = S.voiceName;
+  }
+  if (window.speechSynthesis) {
+    var _iv = window.speechSynthesis.getVoices();
+    if (_iv && _iv.length) { populateVoiceSelect(); }
+    else { window.speechSynthesis.onvoiceschanged = populateVoiceSelect; }
+  }
+  // [END REVISED]
 }
 
 function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
   lss('aleem_voice_pers', S.voicePersonality);
-  lss('aleem_voice_gender', S.voiceGender);
+  lss('aleem_voice_name', S.voiceName);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
   lss('aleem_theme',  S.theme);
   lss('aleem_total',  S.totalQ);
@@ -3213,17 +3280,17 @@ function bindAllEvents() {
   }
   // [END ADDED]
 
-  // [ADDED] Voice Gender selector — saves preference and updates voice picking.
+  // [REVISED] Named voice selector event handler.
   var voiceGenderSelect = document.getElementById('voiceGenderSelect');
   if (voiceGenderSelect) {
     voiceGenderSelect.addEventListener('change', function(e) {
-      S.voiceGender = e.target.value;
+      S.voiceName = e.target.value;
       persist();
-      var vgLabels = { auto: '🔄 Auto', male: '🔵 Male', female: '🔴 Female' };
-      toast('🎙️ Voice Gender: ' + (vgLabels[S.voiceGender] || S.voiceGender));
+      var label = e.target.options[e.target.selectedIndex].textContent;
+      toast('Voice: ' + label.split(' - ')[0]);
     });
   }
-  // [END ADDED]
+  // [END REVISED]
 
   var newFactBtn = document.getElementById('newFactBtn');
   if (newFactBtn) newFactBtn.addEventListener('click', function(e) {
@@ -4936,155 +5003,102 @@ function detectSpeechLang(t) {
   return 'en-US';
 }
 
-// [ADDED] Pick the best available SpeechSynthesisVoice for a target language.
-// Falls back to closest Indian voice, then any voice, then undefined (default).
-// [IMPROVED] Some platforms expose an "hi-IN"-tagged voice that is actually
-// an English engine doing approximate Hindi pronunciation. To avoid that,
-// for Indian-language targets we first look for a voice whose NAME clearly
-// identifies it as a native voice for that language (e.g. "Google हिन्दी",
-// "Hindi", "Lekha", "Marathi", "Urdu"), before falling back to a plain
-// lang-code match.
+// [REVISED] Pick the best available SpeechSynthesisVoice for a target language.
+// Replaces the regex gender filter which failed on Android Chrome/WebView
+// (Google TTS voices have no "Male"/"Female" in their names).
+// Now respects S.voiceName: if the user picked a voice by name (not 'auto'),
+// that voice is used directly for English utterances.
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return null;
 
   var primary = lang.split('-')[0].toLowerCase();
+  var namePref = (typeof S !== 'undefined' && S.voiceName && S.voiceName !== 'auto') ? S.voiceName : null;
 
-  // [ADDED] Gender preference from S.voiceGender ('auto'|'male'|'female').
-  // Filters the candidate list before any selection step so the user's chosen
-  // gender is respected. 'auto' applies no filter (original behaviour).
-  // Gender is detected from the voice name — all major browsers (Chrome,
-  // Android, iOS, Edge, Samsung) include "Male"/"Female" in their voice names
-  // (e.g. "Google US English Male", "Google UK English Female",
-  //  "Microsoft David - English (United States)" [male],
-  //  "Samantha" [female on iOS]).
-  // We also catch common male/female name cues for platforms that don't label
-  // explicitly (e.g. known male names: David, James, Daniel, Mark, Ryan;
-  // known female names: Samantha, Victoria, Karen, Moira, Fiona, Zira).
-  var genderPref = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
-  var maleNames   = /(male|david|james|daniel|mark|ryan|jorge|diego|luca|henrik|stefan|yuri|rishi)/i;
-  var femaleNames = /(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)/i;
+  function findVoice(predicate) { return voices.find(predicate) || null; }
 
-  function matchesGender(v) {
-    if (genderPref === 'auto') return true;
-    var n = (v.name || '').toLowerCase();
-    if (genderPref === 'male')   return maleNames.test(n)   && !femaleNames.test(n);
-    if (genderPref === 'female') return femaleNames.test(n) && !maleNames.test(n);
-    return true;
+  // Named-voice fast path for English.
+  if (namePref && primary === 'en') {
+    var named = findVoice(function(v) { return v.name === namePref; });
+    if (named) return named;
   }
 
-  // Filter helper: tries a find() with gender filter, falls back to no filter
-  // so voice always works even if no gendered voice exists for the language.
-  function findVoice(predicate) {
-    return voices.find(function(v) { return predicate(v) && matchesGender(v); })
-        || voices.find(function(v) { return predicate(v); }); // gender fallback
-  }
-
-  // Name patterns that indicate a genuinely native voice for each language,
-  // checked before relying on (sometimes inaccurate) lang codes.
-  var nativeNamePatterns = {
-    hi: /हिन्दी|hindi/i,
-    mr: /मराठी|marathi/i,
-    ur: /اردو|urdu/i,
-  };
-
-  // 1. Native-name match for the primary language (most reliable signal
-  //    that the voice will actually speak with correct pronunciation).
-  if (nativeNamePatterns[primary]) {
-    var byName = findVoice(function(v) { return v.name && nativeNamePatterns[primary].test(v.name); });
+  // Native-name patterns for Indian languages (more reliable than lang codes).
+  var nativeNames = { hi: /hindi/i, mr: /marathi/i, ur: /urdu/i };
+  if (nativeNames[primary]) {
+    var byName = findVoice(function(v) { return v.name && nativeNames[primary].test(v.name); });
     if (byName) return byName;
   }
 
-  // 2. Exact lang match (e.g. "hi-IN")
+  // Exact lang match, then same primary language family.
   var exact = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
   if (exact) return exact;
 
-  // 3. Same primary language, any region (e.g. "hi-*")
   var sameLang = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
   if (sameLang) return sameLang;
 
-  // 3b. Urdu secondary region fallback (ur-PK) if ur-IN isn't available.
   if (primary === 'ur') {
     var urPk = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
     if (urPk) return urPk;
   }
 
-  // 4. Closest matching Indian voice as a fallback for Indian languages
-  if (primary === 'hi' || primary === 'mr' || primary === 'ur' || primary === 'bn' || primary === 'ta' || primary === 'te' || primary === 'gu' || primary === 'pa' || primary === 'kn' || primary === 'ml') {
-    var indianVoice = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
-      || findVoice(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
-    if (indianVoice) return indianVoice;
+  if ('hi mr ur bn ta te gu pa kn ml'.indexOf(primary) !== -1) {
+    var ind = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
+           || findVoice(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
+    if (ind) return ind;
   }
 
-  // 5. English fallback — prefer en-US / en-GB, then any English.
-  var enPreferred = findVoice(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
-  if (enPreferred) return enPreferred;
+  // Named voice as last resort for non-English targets.
+  if (namePref) {
+    var nf = findVoice(function(v) { return v.name === namePref; });
+    if (nf) return nf;
+  }
+
+  var enPref = findVoice(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
+  if (enPref) return enPref;
   var en = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
   if (en) return en;
 
-  // 6. Default voice (browser default)
   return voices[0] || null;
 }
 
-// [DEBUG] Voice diagnostic — lists all available voices, classifies each by
-// gender using the same regex as matchesGender(), shows which voice would be
-// selected for English with the current S.voiceGender setting, and logs
-// whether matchesGender() is returning true/false for each candidate.
+// [REVISED] Voice diagnostic — shows full SpeechSynthesisVoice metadata
+// (name, lang, localService, default) and the current S.voiceName preference.
 function runVoiceDiagnostic() {
   var panel   = document.getElementById('voiceDebugPanel');
   var content = document.getElementById('voiceDebugContent');
   if (!panel || !content) return;
   panel.style.display = 'block';
-  content.innerHTML   = 'Loading voices…';
+  content.innerHTML   = 'Loading voices...';
 
   function doRun() {
     var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
     if (!voices || !voices.length) {
-      content.innerHTML = '⚠️ No voices returned by speechSynthesis.getVoices(). Browser may not support TTS or voices not yet loaded.';
+      content.innerHTML = 'No voices returned. TTS unavailable or not yet loaded.';
       return;
     }
-
-    var maleNames   = /\b(male|david|james|daniel|mark|ryan|jorge|diego|luca|henrik|stefan|yuri|rishi)\b/i;
-    var femaleNames = /\b(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)\b/i;
-
-    var currentGender = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
+    var currentName   = (typeof S !== 'undefined' && S.voiceName) ? S.voiceName : 'auto';
     var selectedVoice = pickVoiceForLang('en-US');
-
     var lines = [];
-    lines.push('<b>Current voiceGender setting:</b> <span style="color:var(--a3)">' + currentGender + '</span>');
-    lines.push('<b>Voice selected for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? selectedVoice.name + ' [' + selectedVoice.lang + ']' : 'NONE') + '</span>');
-    lines.push('<b>matchesGender() result for selected:</b> ' + (selectedVoice ? (function(){
-      var n = selectedVoice.name.toLowerCase();
-      if (currentGender === 'auto') return '<span style="color:var(--a3)">auto (no filter)</span>';
-      if (currentGender === 'male')   return maleNames.test(n) && !femaleNames.test(n) ? '<span style="color:var(--a3)">✅ MALE MATCHED</span>' : '<span style="color:#f87171;">❌ NOT matched — fell back to no-filter</span>';
-      if (currentGender === 'female') return femaleNames.test(n) && !maleNames.test(n) ? '<span style="color:var(--a3)">✅ FEMALE MATCHED</span>' : '<span style="color:#f87171;">❌ NOT matched — fell back to no-filter</span>';
-    })() : 'N/A'));
+    lines.push('<b>S.voiceName:</b> <span style="color:var(--a3)">' + escHtml(currentName) + '</span>');
+    lines.push('<b>Picked for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? escHtml(selectedVoice.name) + ' [' + escHtml(selectedVoice.lang) + ']' : 'NONE') + '</span>');
     lines.push('');
-    lines.push('<b>All ' + voices.length + ' voices on this device:</b>');
-
+    lines.push('<b>All ' + voices.length + ' voices:</b>');
     voices.forEach(function(v, i) {
-      var n = (v.name || '').toLowerCase();
-      var isMale   = maleNames.test(n)   && !femaleNames.test(n);
-      var isFemale = femaleNames.test(n) && !maleNames.test(n);
-      var tag = isMale   ? '<span style="color:#60a5fa;">[MALE]</span>'
-              : isFemale ? '<span style="color:#f472b6;">[FEMALE]</span>'
-              :            '<span style="color:var(--text-3);">[UNKNOWN]</span>';
-      var isSelected = selectedVoice && selectedVoice.name === v.name ? ' ◀ <b style="color:var(--a1)">SELECTED</b>' : '';
-      lines.push((i + 1) + '. ' + escHtml(v.name) + ' <span style="color:var(--text-3)">(' + escHtml(v.lang) + ')</span> ' + tag + isSelected);
+      var sel = selectedVoice && selectedVoice.name === v.name ? ' <b style="color:var(--a1)">SELECTED</b>' : '';
+      var pin = v.name === currentName && currentName !== 'auto' ? ' <span style="color:var(--a3)">[PINNED]</span>' : '';
+      var loc = v.localService ? ' [local]' : ' [network]';
+      var def = v.default ? ' <span style="color:var(--a2)">[default]</span>' : '';
+      lines.push((i+1) + '. <b>' + escHtml(v.name) + '</b> (' + escHtml(v.lang) + ')' + loc + def + pin + sel);
     });
-
     content.innerHTML = lines.join('<br>');
   }
 
-  // Voices may load async — wait up to 1s if list is empty
   var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-  if (voices && voices.length) {
-    doRun();
-  } else {
-    setTimeout(doRun, 800);
-  }
+  if (voices && voices.length) { doRun(); } else { setTimeout(doRun, 800); }
 }
+
 
 function speakText(t) {
   if (!S.voiceOn || !('speechSynthesis' in window)) return;
@@ -5118,13 +5132,8 @@ function speakText(t) {
   window.speechSynthesis.speak(u);
 }
 
-// [ADDED] Some browsers populate the voices list asynchronously; ensure it's
-// ready so language-aware voice selection works on the very first call.
-if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged === null) {
-  window.speechSynthesis.onvoiceschanged = function() {
-    window.speechSynthesis.getVoices();
-  };
-}
+// [NOTE] onvoiceschanged is wired in loadStorage() (populateVoiceSelect)
+// and in the init() welcome-speech gate — no additional primer needed here.
 
 function toggleVoice() {
   S.voiceOn = !S.voiceOn;
