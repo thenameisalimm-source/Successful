@@ -2255,16 +2255,12 @@
             <option value="assistant">🤖 Assistant</option>
           </select>
         </div>
-        <!-- Voice gender: pitch-based, works on all platforms including Android.
-             Android Google TTS voices share the same underlying engine regardless
-             of locale name — pitch is the only reliable way to get an audibly
-             different male vs female voice on Android Chrome/WebView. -->
+        <!-- Voice selector: choose actual installed TTS voice by name/locale.
+             Populated dynamically from speechSynthesis.getVoices(). -->
         <div class="personality-selector-row">
-          <span class="personality-selector-label">🎙️ Voice Gender:</span>
-          <select id="voiceGenderSelect">
-            <option value="auto">🔄 Auto</option>
-            <option value="female">🔴 Female</option>
-            <option value="male">🔵 Male</option>
+          <span class="personality-selector-label">🗣️ Voice:</span>
+          <select id="voiceSelect">
+            <option value="">🔄 Default</option>
           </select>
         </div>
         <!-- voiceDebugPanel kept in DOM (hidden) so runVoiceDiagnostic() still works
@@ -2727,7 +2723,7 @@
 // and any future model). It is appended to every personality's system prompt,
 // so every provider automatically inherits these rules without any per-provider
 // special-casing. Do not add language rules anywhere else.
-const LANGUAGE_INSTRUCTION = ' LANGUAGE RULES — apply these strictly for EVERY reply, with no exceptions:\n\n1. Detect language from the CURRENT message ONLY — using its vocabulary, grammar, and expressions. Never carry over the language from a previous turn. Never infer language from script alone; many South Asian languages share Latin transliteration.\n\n2. URDU EXPRESSION RECOGNITION — the following expressions are ALWAYS Urdu, regardless of script or spelling. When the user\'s message contains any of them, treat the message as Urdu and reply ONLY in Urdu script (اردو):\n   • Assalamu Alaikum / As-salamu alaykum / Assalam o alaikum / Salaam\n   • Wa Alaikum Assalam / Walaikum assalam\n   • JazakAllah / JazakAllah Khair / Jazakallahu Khairan\n   • Alhamdulillah / Masha Allah / Insha Allah / Subhanallah / Allahu Akbar\n   • Khuda hafiz / Allah hafiz\n   These are Islamic/Urdu greetings — never classify them as Hindi, Arabic, or any other language.\n\n3. Speech recognition often transcribes spoken Hindi, Marathi, or Urdu as Romanized text (Latin letters). Detect the intended language from vocabulary and grammar, not just the alphabet. Romanized Hindi/Marathi/Urdu must be treated as if written in the native script.\n\n4. URDU vs HINDI disambiguation — if the message uses Urdu-specific vocabulary (e.g. aap, hain, hai, kijiye, shukriya, meherbani, zaroor, bilkul, theek hai used in an Urdu register, Islamic expressions), classify it as Urdu and reply in Urdu script (اردو). If it uses Hindi-register vocabulary (e.g. tum, ho, karo, dhanyavaad, accha), classify it as Hindi and reply in Devanagari (हिंदी).\n\n5. Script rules — when you detect a non-English language, reply ONLY in its proper native script. Never Romanize, never mix scripts, never produce Hinglish or Roman Urdu:\n   • Hindi (including Romanized Hindi such as "Aap kaise ho", "Kya hal hai", "Mujhe batao") → reply ONLY in Devanagari (हिंदी).\n   • Marathi (including Romanized Marathi such as "Tuje nav kay aahe", "Kasa aahes", "Mala sangaa") → reply ONLY in Devanagari (मराठी).\n   • Urdu (including Romanized Urdu, Islamic greetings, or Urdu-register vocabulary) → reply ONLY in Urdu script (اردو). NEVER use Devanagari for Urdu.\n   • Spanish → reply in Spanish.\n   • Arabic → reply ONLY in Arabic script.\n   • Portuguese → reply in Portuguese.\n   • All other languages → use that language\'s standard official script.\n\n6. If the current message is in English → reply in English only, regardless of what language was used before.\n\n7. ABSOLUTE PROHIBITION: Never produce Romanized/transliterated output, Hinglish, Roman Urdu, or any mixed-language text — unless the user explicitly writes that way themselves AND explicitly asks you to reply the same way.';
+const LANGUAGE_INSTRUCTION = ' LANGUAGE RULES — apply these strictly for EVERY reply, with no exceptions:\n\n1. Detect language from the CURRENT message ONLY — using its vocabulary, grammar, and expressions. Never carry over the language from a previous turn. Never infer language from script alone; many South Asian languages share Latin transliteration.\n\n2. URDU EXPRESSION RECOGNITION — the following expressions are ALWAYS Urdu, regardless of script or spelling. When the user\'s message contains any of them, treat the message as Urdu and reply ONLY in Urdu script (اردو):\n   • Assalamu Alaikum / As-salamu alaykum / Assalam o alaikum / Salaam\n   • Wa Alaikum Assalam / Walaikum assalam\n   • JazakAllah / JazakAllah Khair / Jazakallahu Khairan\n   • Alhamdulillah / Masha Allah / Insha Allah / Subhanallah / Allahu Akbar\n   • Khuda hafiz / Allah hafiz\n   These are Islamic/Urdu greetings — never classify them as Hindi, Arabic, or any other language.\n\n3. Speech recognition often transcribes spoken Hindi, Marathi, or Urdu as Romanized text (Latin letters). Detect the intended language from vocabulary and grammar, not just the alphabet. Romanized Hindi/Marathi/Urdu must be treated as if written in the native script.\n\n4. URDU vs HINDI disambiguation — if the message uses Urdu-specific vocabulary (e.g. aap, hain, hai, kijiye, shukriya, meherbani, zaroor, bilkul, theek hai used in an Urdu register, Islamic expressions), classify it as Urdu and reply in Urdu script (اردو). If it uses Hindi-register vocabulary (e.g. tum, ho, karo, dhanyavaad, accha), classify it as Hindi and reply in Devanagari (हिंदी).\n\n5. Script rules — when you detect a non-English language, reply ONLY in its proper native script. Never Romanize, never mix scripts, never produce Hinglish or Roman Urdu:\n   • Hindi (including Romanized Hindi such as "Aap kaise ho", "Kya hal hai", "Mujhe batao") → reply ONLY in Devanagari (हिंदी).\n   • Marathi (including Romanized Marathi such as "Tuje nav kay aahe", "Kasa aahes", "Mala sangaa") → reply ONLY in Devanagari (मराठी).\n   • Gujarati (including Romanized Gujarati such as "Kem cho", "Maru naam X chhe", "Tamne kem chhe", "Shu haal chhe") → reply ONLY in Gujarati script (ગુજરાતી). Examples: "Kem cho?" → "કેમ છો?", "Maru naam Aleem chhe." → "મારું નામ અલીમ છે."\n   • Urdu (including Romanized Urdu, Islamic greetings, or Urdu-register vocabulary) → reply ONLY in Urdu script (اردو). NEVER use Devanagari for Urdu.\n   • Spanish → reply in Spanish.\n   • Arabic → reply ONLY in Arabic script.\n   • Portuguese → reply in Portuguese.\n   • All other languages → use that language\'s standard official script.\n\n6. If the current message is in English → reply in English only, regardless of what language was used before.\n\n7. ABSOLUTE PROHIBITION: Never produce Romanized/transliterated output, Hinglish, Roman Urdu, or any mixed-language text — unless the user explicitly writes that way themselves AND explicitly asks you to reply the same way.';
 
 // [ADDED] Memory-honesty instruction — prevents the AI from fabricating or
 // claiming to "remember" facts about the user that were not actually saved
@@ -2821,7 +2817,7 @@ const S = {
   model:       'gemini-2.5-flash',
   personality: 'friendly',
   voicePersonality: 'assistant',
-  voiceGender: 'auto', // 'auto' | 'female' | 'male' — controls pitch on Android
+  selectedVoiceName: '', // empty = auto (best match); set by voice selector
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -2915,7 +2911,7 @@ function init() {
           }, 3000);
           var _prevOVC = window.speechSynthesis.onvoiceschanged;
           window.speechSynthesis.onvoiceschanged = function() {
-            if (_prevOVC) _prevOVC();          // keep populateVoiceSelect wired
+            if (_prevOVC) _prevOVC();          // keeps populateVoiceSelect wired via loadStorage
             if (!_welcomed) {
               _welcomed = true;
               clearTimeout(_welcomeTimer);
@@ -2935,7 +2931,7 @@ function loadStorage() {
   S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
-  S.voiceGender = ls('aleem_voice_gender') || 'auto';
+  S.selectedVoiceName = ls('aleem_voice_name') || '';
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -2971,16 +2967,22 @@ function loadStorage() {
   var vpSel = document.getElementById('voicePersonalitySelect');
   if (vpSel) vpSel.value = S.voicePersonality;
 
-  // Restore voice gender dropdown
-  var vgSel = document.getElementById('voiceGenderSelect');
-  if (vgSel) vgSel.value = S.voiceGender;
+  // Populate voice dropdown — done now if voices are available, otherwise deferred
+  populateVoiceSelect();
+  if (window.speechSynthesis) {
+    var _prevOVC2 = window.speechSynthesis.onvoiceschanged;
+    window.speechSynthesis.onvoiceschanged = function() {
+      if (_prevOVC2) _prevOVC2();
+      populateVoiceSelect();
+    };
+  }
 }
 
 function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
   lss('aleem_voice_pers', S.voicePersonality);
-  lss('aleem_voice_gender', S.voiceGender);
+  lss('aleem_voice_name', S.selectedVoiceName);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
   lss('aleem_theme',  S.theme);
   lss('aleem_total',  S.totalQ);
@@ -3244,14 +3246,14 @@ function bindAllEvents() {
   }
   // [END ADDED]
 
-  // Voice gender selector — pitch-based, works on all platforms.
-  var voiceGenderSelect = document.getElementById('voiceGenderSelect');
-  if (voiceGenderSelect) {
-    voiceGenderSelect.addEventListener('change', function(e) {
-      S.voiceGender = e.target.value;
+  // Voice selector — lets user pick any available TTS voice by name/locale.
+  var voiceSelect = document.getElementById('voiceSelect');
+  if (voiceSelect) {
+    voiceSelect.addEventListener('change', function(e) {
+      S.selectedVoiceName = e.target.value;
       persist();
-      var vgLabels = { auto: 'Auto', female: 'Female', male: 'Male' };
-      toast('Voice Gender: ' + (vgLabels[S.voiceGender] || S.voiceGender));
+      var label = e.target.options[e.target.selectedIndex] ? e.target.options[e.target.selectedIndex].text : '';
+      toast('🗣️ Voice: ' + (label || 'Default'));
     });
   }
 
@@ -4935,16 +4937,14 @@ function speakEl(id) {
 
 // ── VOICE ─────────────────────────────────────────────────────────
 
-// [ADDED] Voice Personality presets — control rate/pitch only (voice itself
-// is chosen separately by language detection). Independent of AI Personality.
-// [REBALANCED] Values tightened toward natural human-like ranges per
-// requested targets — previous Energetic/Calm extremes sounded unnatural.
+// Voice Personality presets — control rate only. Pitch is always 1.0 (natural).
+// Independent of AI Personality.
 const VOICE_PERSONALITIES = {
-  friendly:     { rateMul: 1.03, pitch: 1.05 },
-  professional: { rateMul: 1.0,  pitch: 1.0  },
-  energetic:    { rateMul: 1.08, pitch: 1.10 },
-  calm:         { rateMul: 0.95, pitch: 0.95 },
-  assistant:    { rateMul: 1.0,  pitch: 1.0  },
+  friendly:     { rateMul: 1.03 },
+  professional: { rateMul: 1.0  },
+  energetic:    { rateMul: 1.08 },
+  calm:         { rateMul: 0.95 },
+  assistant:    { rateMul: 1.0  },
 };
 
 // [ADDED] Detect the dominant script/language of a text string so the
@@ -4952,6 +4952,8 @@ const VOICE_PERSONALITIES = {
 // Returns a BCP-47-ish language tag used to match available voices.
 function detectSpeechLang(t) {
   if (!t) return 'en-US';
+  // Gujarati script (U+0A80–U+0AFF)
+  if (/[\u0A80-\u0AFF]/.test(t)) return 'gu-IN';
   // Devanagari script → Hindi or Marathi (both use Devanagari).
   if (/[\u0900-\u097F]/.test(t)) {
     // Marathi-specific characters/markers are rare; default Devanagari to Hindi
@@ -4962,6 +4964,8 @@ function detectSpeechLang(t) {
   // Urdu / Arabic script — prefer ur-IN per requirements, with ur-PK as a
   // secondary candidate handled in pickVoiceForLang's fallback chain.
   if (/[\u0600-\u06FF]/.test(t)) return 'ur-IN';
+  // Romanized Gujarati detection (common phrases)
+  if (/\b(kem\s+cho|maru\s+naam|tamne\s+kem|shu\s+haal|kem\s+chho|chhe\b|tame\b|aavjo)\b/i.test(t)) return 'gu-IN';
   // Default to English
   return 'en-US';
 }
@@ -4970,84 +4974,56 @@ function detectSpeechLang(t) {
 // Falls back through: native-name match → exact lang → same language family
 // → Indian fallback → English fallback → first available voice.
 //
-// ANDROID PITCH STRATEGY: On Android Chrome/WebView all Google TTS voices
-// ("English United States", "English India", etc.) are locale aliases for the
-// same underlying synthesis engine — selecting a different entry produces no
-// audible difference. The only reliable cross-platform mechanism for a clearly
-// distinct male vs female voice is SpeechSynthesisUtterance.pitch:
-//   female → pitch 1.4  (higher, clearly feminine)
-//   male   → pitch 0.7  (lower, clearly masculine)
-// This is applied in speakText() based on S.voiceGender after voice selection.
-// On desktop Chrome / iOS where true male/female voices exist (e.g. "Google US
-// English Male", "Samantha") we also filter by name so those platforms still
-// use a native-gender voice AND the pitch tweak, giving the best result on
-// every platform with a single code path.
+// VOICE SELECTION STRATEGY: If the user has chosen a specific voice via the
+// Voice selector (S.selectedVoiceName), that voice is always used regardless
+// of language, unless the language is non-English and no suitable voice exists.
+// For language-matched voices we pick purely by locale/name — NO pitch manipulation.
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return null;
 
+  // If user explicitly chose a voice, use it directly.
+  var chosen = (typeof S !== 'undefined' && S.selectedVoiceName) ? S.selectedVoiceName : '';
+  if (chosen) {
+    var explicit = voices.find(function(v) { return v.name === chosen; });
+    if (explicit) return explicit;
+  }
+
   var primary = lang.split('-')[0].toLowerCase();
-  var genderPref = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
-
-  // Desktop Chrome / Edge / Samsung voice names include "Male" / "Female".
-  // iOS has named gendered voices (Samantha = female, Alex = male, etc.).
-  // We match these on platforms that expose them; on Android all return false
-  // so the fallback (first matching lang voice) is used, and pitch handles gender.
-  var maleRx   = /(^|\s)(male|david|james|daniel|mark|ryan|alex|jorge|diego|luca|henrik|stefan|yuri|rishi)(\s|$)/i;
-  var femaleRx = /(^|\s)(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)(\s|$)/i;
-
-  function matchesGender(v) {
-    if (genderPref === 'auto') return true;
-    var n = (v.name || '').toLowerCase();
-    var hasMale   = maleRx.test(n);
-    var hasFemale = femaleRx.test(n);
-    if (genderPref === 'male')   return hasMale && !hasFemale;
-    if (genderPref === 'female') return hasFemale && !hasMale;
-    return true;
-  }
-
-  // Try gender-filtered first, fall back to any matching voice so speech
-  // always works — pitch will still apply the audible gender effect.
-  function findVoice(predicate) {
-    return voices.find(function(v) { return predicate(v) && matchesGender(v); })
-        || voices.find(function(v) { return predicate(v); });
-  }
 
   // Native-name patterns for Indian languages (more reliable than lang codes).
-  var nativeNames = { hi: /hindi/i, mr: /marathi/i, ur: /urdu/i };
+  var nativeNames = { hi: /hindi/i, mr: /marathi/i, ur: /urdu/i, gu: /gujarati/i };
   if (nativeNames[primary]) {
-    var byName = findVoice(function(v) { return v.name && nativeNames[primary].test(v.name); });
+    var byName = voices.find(function(v) { return v.name && nativeNames[primary].test(v.name); });
     if (byName) return byName;
   }
 
-  var exact = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
+  var exact = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
   if (exact) return exact;
 
-  var sameLang = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
+  var sameLang = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
   if (sameLang) return sameLang;
 
   if (primary === 'ur') {
-    var urPk = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
+    var urPk = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
     if (urPk) return urPk;
   }
 
   if ('hi mr ur bn ta te gu pa kn ml'.indexOf(primary) !== -1) {
-    var ind = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
-           || findVoice(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
+    var ind = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
+           || voices.find(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
     if (ind) return ind;
   }
 
-  var enPref = findVoice(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
+  var enPref = voices.find(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
   if (enPref) return enPref;
-  var en = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
+  var en = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
   if (en) return en;
 
   return voices[0] || null;
 }
 
-// Voice diagnostic — callable from browser console: runVoiceDiagnostic()
-// Panel is hidden in production UI; button removed.
 function runVoiceDiagnostic() {
   var panel   = document.getElementById('voiceDebugPanel');
   var content = document.getElementById('voiceDebugContent');
@@ -5061,12 +5037,12 @@ function runVoiceDiagnostic() {
       content.innerHTML = 'No voices returned. TTS unavailable or not yet loaded.';
       return;
     }
-    var gp = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
-    var pitchVal = gp === 'female' ? 1.4 : gp === 'male' ? 0.7 : 1.0;
-    var selectedVoice = pickVoiceForLang('en-US');
+    var chosenName = (typeof S !== 'undefined' && S.selectedVoiceName) ? S.selectedVoiceName : '';
+    var selectedVoice = chosenName
+      ? voices.find(function(v) { return v.name === chosenName; }) || pickVoiceForLang('en-US')
+      : pickVoiceForLang('en-US');
     var lines = [];
-    lines.push('<b>S.voiceGender:</b> <span style="color:var(--a3)">' + escHtml(gp) + '</span>');
-    lines.push('<b>Effective pitch multiplier:</b> <span style="color:var(--a3)">' + pitchVal + '</span>');
+    lines.push('<b>S.selectedVoiceName:</b> <span style="color:var(--a3)">' + escHtml(chosenName || '(auto)') + '</span>');
     lines.push('<b>Voice picked for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? escHtml(selectedVoice.name) + ' [' + escHtml(selectedVoice.lang) + ']' : 'NONE') + '</span>');
     lines.push('');
     lines.push('<b>All ' + voices.length + ' voices:</b>');
@@ -5084,33 +5060,54 @@ function runVoiceDiagnostic() {
 }
 
 
+// Populate the voice <select> with all available TTS voices, grouped by language.
+// Called once on load and again on onvoiceschanged.
+function populateVoiceSelect() {
+  var sel = document.getElementById('voiceSelect');
+  if (!sel || !('speechSynthesis' in window)) return;
+  var voices = window.speechSynthesis.getVoices();
+  if (!voices || !voices.length) return;
+
+  // Sort: English voices first, then by language name, then by voice name
+  var sorted = voices.slice().sort(function(a, b) {
+    var aEn = a.lang && a.lang.toLowerCase().indexOf('en') === 0 ? 0 : 1;
+    var bEn = b.lang && b.lang.toLowerCase().indexOf('en') === 0 ? 0 : 1;
+    if (aEn !== bEn) return aEn - bEn;
+    var langCmp = (a.lang || '').localeCompare(b.lang || '');
+    if (langCmp !== 0) return langCmp;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  // Rebuild options, preserving current selection
+  var current = S.selectedVoiceName || '';
+  sel.innerHTML = '<option value="">🔄 Default (Auto)</option>';
+  sorted.forEach(function(v) {
+    var opt = document.createElement('option');
+    opt.value = v.name;
+    // Friendly label: "English India — Google हिन्दी" style
+    var localLabel = v.name;
+    if (v.lang) localLabel += ' (' + v.lang + ')';
+    if (v.localService) localLabel += ' ★';  // ★ = local/offline voice
+    opt.textContent = localLabel;
+    if (v.name === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
 function speakText(t) {
   if (!S.voiceOn || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   var u = new SpeechSynthesisUtterance(t);
 
-  // [ADDED/REBALANCED] Voice Personality preset — rate/pitch are now used as
-  // direct absolute values (matching the requested targets: Professional and
-  // Assistant = 1.0 rate, previously these were 0.95 due to a base-rate
-  // multiplier that made every personality slightly slower than intended).
+  // Voice Personality preset — rate only; pitch stays at natural 1.0.
   var vp = VOICE_PERSONALITIES[S.voicePersonality] || VOICE_PERSONALITIES.assistant;
   u.rate   = vp.rateMul;
+  u.pitch  = 1.0;   // always natural — no pitch manipulation for gender
   u.volume = 0.85;
 
-  // Gender pitch — applied on top of personality pitch so both settings stack.
-  // This is the primary gender mechanism on Android where all TTS voices share
-  // the same engine. On desktop/iOS a gendered voice is also selected above.
-  var genderPitch = (S.voiceGender === 'female') ? 1.4
-                  : (S.voiceGender === 'male')   ? 0.7
-                  : 1.0;
-  u.pitch = vp.pitch * genderPitch;
-
-  // [ADDED/IMPROVED] Language-aware voice selection — detect reply language
-  // and pick the best matching installed voice so Hindi/Marathi/Urdu replies
-  // don't get spoken with an English/American accent. If a matching voice is
-  // found, use ITS lang tag (so the engine applies that voice's own
-  // pronunciation rules rather than forcing a target lang onto a mismatched
-  // voice, which can make Hindi text sound like an English voice guessing).
+  // Language-aware voice selection — detect reply language and pick the best
+  // matching installed voice so Hindi/Marathi/Urdu/Gujarati replies use the
+  // correct voice automatically.
   var lang = detectSpeechLang(t);
   var voice = pickVoiceForLang(lang);
   if (voice) {
