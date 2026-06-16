@@ -5574,10 +5574,14 @@ function memPreFilter(msg) {
   // personal disclosures in any supported language pass through to analysis.
   var hasFirstPerson =
     /(i |i'm|i am|i've|i have|i do|i like|i love|i hate|i want|i need|my |mine|we |our )/i.test(t) ||
-    /मैं|मेर[ाीे]|मुझे|हमारा|मला|माझ[ाीे]|आवड|पसंद/.test(t) ||
-    /میں|میر[اےی]|مجھے|ہمارا|پسند/.test(t) ||
-    /હું|મારો|મારી|મારું|મને|આપણ|પસંદ/.test(t) ||
-    /\b(mera|meri|mere|mujhe|mala|maza|mazi|maze|main|hum|maru|mari|mare|mane|hu|tamaru|tamari|pasandida|pasand|aavad|avad)\b/i.test(t);
+    // Hindi / Marathi Devanagari — pronouns, possessives, like-words
+    /मैं|मेर[ाीे]|मुझे|हमार[ाी]|मला|माझ[ाीे]|आवड|पसंद|प्रिय|अच्छ[ाी]/.test(t) ||
+    // Urdu Arabic script
+    /میں|میر[اےی]|مجھے|ہمارا|پسند|اچھ[اے]/.test(t) ||
+    // Gujarati script
+    /હું|મારો|મારી|મારું|મને|આપણ|પસંદ|ગમ/.test(t) ||
+    // Romanized — broad set covering all five languages
+    /\b(mera|meri|mere|mujhe|mala|maza|mazi|maze|main|hum|maru|mari|mare|mane|hu|tamaru|tamari|pasandida|pasand|aavad|avad|priya|aahe|ahe|chhe|che|aavdat|avdat|gamay|gamche|acha|accha|haan)\b/i.test(t);
 
   // Pure question — ends with "?" / "؟" and has no personal disclosure.
   var isQuestion = /[?؟]$/.test(t);
@@ -5601,226 +5605,370 @@ function memPreFilter(msg) {
   return false; // passes filter — proceed to LLM analysis
 }
 
-// ── DETERMINISTIC PATTERN-BASED EXTRACTOR ─────────────────
-// Fast, fully client-side, regex-based extraction for obvious personal preferences/facts.
-// Covers English, Hindi, Marathi, Urdu, and Gujarati (both native script and Romanized).
-// Runs BEFORE the LLM-based extractor; when it matches, no API call is needed.
+// ════════════════════════════════════════════════════════════════════
+//  SUBJECT NORMALISATION
+//  Maps any language/script subject token → canonical English key.
+//  This is the KEY to cross-language update/replace: "favourite खेल",
+//  "favourite game", "favourite khel", "favourite રમત" all resolve to
+//  "favourite game" so the conflict-detection in saveMemoryToFirestore
+//  can match them correctly across languages.
+// ════════════════════════════════════════════════════════════════════
+var SUBJECT_CANON = (function() {
+  // [ regex or string, canonical English subject ]
+  var rules = [
+    // ── GAME / SPORT ──────────────────────────────────────────────
+    [/\b(khel|khed|kheL|khelna|khelo|game|sport|खेल|खेळ|رمت|رمت|كھيل|کھیل|ரமத்|رمت|રમત|ゲーム)\b/i, 'favourite game'],
+    // ── COLOUR / COLOR ───────────────────────────────────────────
+    [/\b(rang|color|colour|रंग|رنگ|रन्ग|rang|રંગ|ரங்கு)\b/i, 'favourite colour'],
+    // ── FOOD / DISH ───────────────────────────────────────────────
+    [/\b(khana|khaana|food|dish|meal|खाना|کھانا|ખાવું|ਖਾਣਾ)\b/i, 'favourite food'],
+    // ── MUSIC / SONG ─────────────────────────────────────────────
+    [/\b(gaana|gana|music|song|संगीत|گانا|ਗਾਣਾ|ગીત)\b/i, 'favourite music'],
+    // ── MOVIE / FILM ─────────────────────────────────────────────
+    [/\b(film|movie|cinema|फिल्म|فلم|ફિલ્મ)\b/i, 'favourite movie'],
+    // ── BOOK ──────────────────────────────────────────────────────
+    [/\b(book|kitab|pustak|किताब|کتاب|ਕਿਤਾਬ| પુસ્તક)\b/i, 'favourite book'],
+    // ── SUBJECT / ACADEMIC SUBJECT ───────────────────────────────
+    [/\b(subject|विषय|مضمون|ਵਿਸ਼ਾ|વિષય)\b/i, 'favourite subject'],
+    // ── HOBBY ────────────────────────────────────────────────────
+    [/\b(hobby|hobbies|शौक|شوق|ਸ਼ੌਕ|શોખ)\b/i, 'hobby'],
+    // ── FOOTBALLER / PLAYER ──────────────────────────────────────
+    [/\b(footballer|player|खिलाड़ी|کھلاڑی|ਖਿਡਾਰੀ|ખેlads)\b/i, 'favourite footballer'],
+    // ── ACTOR / ACTRESS ──────────────────────────────────────────
+    [/\b(actor|actress|अभिनेता|اداکار)\b/i, 'favourite actor'],
+    // ── SINGER ───────────────────────────────────────────────────
+    [/\b(singer|गायक|گلوکار)\b/i, 'favourite singer'],
+    // ── NAME ─────────────────────────────────────────────────────
+    [/\b(naam|name|नाम|نام|ਨਾਮ|નામ)\b/i, 'name'],
+    // ── OCCUPATION ───────────────────────────────────────────────
+    [/\b(kaam|kaam dhanda|occupation|job|profession|काम|کام|ਕੰਮ|કામ)\b/i, 'occupation'],
+    // ── LOCATION / CITY ──────────────────────────────────────────
+    [/\b(location|city|place|sheher|shahar|शहर|شہر|ਸ਼ਹਿਰ|શહેર)\b/i, 'location'],
+    // ── GOAL ─────────────────────────────────────────────────────
+    [/\b(goal|lakshya|लक्ष्य|ہدف|ਟੀਚਾ|ध्येय)\b/i, 'goal'],
+  ];
+
+  return function(raw) {
+    var s = (raw || '').trim().toLowerCase();
+    for (var i = 0; i < rules.length; i++) {
+      if (rules[i][0].test(s)) return rules[i][1];
+    }
+    // If the subject already starts with "favourite " keep it; otherwise return as-is
+    return s;
+  };
+})();
+
+// ── DETERMINISTIC PATTERN-BASED EXTRACTOR ─────────────────────────
+// Fast, fully client-side, regex-based extraction for obvious personal
+// preferences/facts.  Covers English, Hindi, Marathi, Urdu, and Gujarati
+// (both native script and Romanized).
 // Returns an array of { category, subject, value, text, confidence } or [].
+// The `subject` is ALWAYS the canonical English key (via SUBJECT_CANON)
+// so cross-language conflict-detection in saveMemoryToFirestore works.
 function extractMemoriesDeterministic(msg) {
   var t = msg.trim();
-  // Strip trailing sentence-ending punctuation (. ! ? । ؟ ।) for cleaner matching.
-  var clean = t.replace(/[\.!?\u0964\u061f\u06D4]+$/, '').trim();
+  // Strip trailing sentence-ending punctuation (. ! ? । ؟ ۔ !) for cleaner matching.
+  var clean = t.replace(/[\.!?\u0964\u061f\u06D4\u0021]+$/, '').trim();
   var results = [];
 
   function cap(v) { return v.replace(/\s+/g, ' ').trim(); }
-  function add(category, subject, value) {
+
+  // Build and push a memory candidate.
+  // rawSubject is the raw matched subject token; it will be canonicalized.
+  function add(category, rawSubject, value, textOverride) {
     value = cap(value);
     if (!value || value.length < 2 || value.length > 120) return;
+    var subject = SUBJECT_CANON(rawSubject);
+    var text = textOverride || ('The user\'s ' + subject + ' is ' + value + '.');
     results.push({ category: category, subject: subject, value: value,
-      text: 'The user\'s ' + subject + ' is ' + value + '.', confidence: 0.95 });
+                   text: text, confidence: 0.95 });
   }
-  function addV(category, subject, value, text) {
+  function addInspire(value, verb) {
     value = cap(value);
     if (!value || value.length < 2 || value.length > 120) return;
-    results.push({ category: category, subject: subject, value: value, text: text, confidence: 0.9 });
+    results.push({ category: 'inspiration', subject: 'inspiration', value: value,
+      text: 'The user ' + (verb || 'admires') + ' ' + value + '.', confidence: 0.92 });
+  }
+  function addInterest(value, verb) {
+    value = cap(value);
+    if (!value || value.length < 2 || value.length > 120) return;
+    var vl = value.toLowerCase();
+    var isSp = !!sportsSet[vl];
+    results.push({
+      category: isSp ? 'sport' : 'interest',
+      subject:  isSp ? 'favourite sport' : 'interest: ' + vl,
+      value:    value,
+      text:     'The user ' + (verb || 'likes') + ' ' + value + '.',
+      confidence: 0.90
+    });
   }
 
-  // Sports lookup used across all language branches
+  // Sports lookup
   var sportsSet = {football:1,soccer:1,cricket:1,basketball:1,tennis:1,badminton:1,
     hockey:1,baseball:1,volleyball:1,rugby:1,golf:1,boxing:1,swimming:1,running:1,
-    cycling:1,chess:1,kabaddi:1,kho:1,wrestling:1,athletics:1};
-  // खेल/रमत word in Devanagari/Gujarati
-  var isSport = function(v) { return !!sportsSet[v.toLowerCase().trim()]; };
+    cycling:1,chess:1,kabaddi:1,kho:1,wrestling:1,athletics:1,
+    // South Asian sport names (Romanized)
+    'kho-kho':1,kabadi:1,kushti:1,shatranj:1,buddhibal:1};
+
+  var m;
 
   // ════════════════════════════════════════════════════════════════
   //  ENGLISH PATTERNS
   // ════════════════════════════════════════════════════════════════
 
-  // "My favourite/favorite <thing> is <value>"
-  var m = clean.match(/^my\s+favou?rite\s+([a-z\s]+?)\s+is\s+(.+)$/i);
+  // "My favourite/favorite/fav <thing> is <value>"
+  m = clean.match(/^my\s+(?:favou?rite|fav(?:ou?rite)?)\s+([a-z][a-z\s]{0,30}?)\s+is\s+(.+)$/i);
   if (m) {
-    var thing = cap(m[1]).toLowerCase(), val = m[2];
-    add(isSport(val) || /sport|game|khe/.test(thing) ? 'sport' : 'favorite', 'favourite ' + thing, val);
+    var rawThing = cap(m[1]), val = cap(m[2]);
+    add(!!sportsSet[val.toLowerCase()] || /sport|game/i.test(rawThing) ? 'sport' : 'favorite',
+        'favourite ' + rawThing.toLowerCase(), val);
     return results;
   }
 
-  // "<Someone> is my inspiration"
+  // "My preferred <thing> is <value>"
+  m = clean.match(/^my\s+preferred\s+([a-z][a-z\s]{0,30}?)\s+is\s+(.+)$/i);
+  if (m) {
+    add('preference', cap(m[1]).toLowerCase(), cap(m[2])); return results;
+  }
+
+  // "My hobby is <value>" / "My hobbies are <value>"
+  m = clean.match(/^my\s+hobb(?:y|ies)\s+(?:is|are)\s+(.+)$/i);
+  if (m) { add('interest', 'hobby', cap(m[1])); return results; }
+
+  // "My goal is <value>" / "My aim is <value>" / "My dream is <value>"
+  m = clean.match(/^my\s+(?:goal|aim|dream|ambition)\s+is\s+(.+)$/i);
+  if (m) { add('goal', 'goal', cap(m[1])); return results; }
+
+  // "<X> is my inspiration" / "My inspiration is <X>"
   m = clean.match(/^(.+?)\s+is\s+my\s+inspiration$/i);
-  if (m) { add('inspiration', 'inspiration', m[1]); return results; }
-
-  // "My inspiration is <Someone>"
+  if (m) { addInspire(cap(m[1]), 'is inspired by'); return results; }
   m = clean.match(/^my\s+inspiration\s+is\s+(.+)$/i);
-  if (m) { add('inspiration', 'inspiration', m[1]); return results; }
+  if (m) { addInspire(cap(m[1]), 'is inspired by'); return results; }
 
-  // "I admire <Someone>"
-  m = clean.match(/^i\s+admire\s+(.+)$/i);
-  if (m) { addV('inspiration','inspiration', m[1], 'The user admires ' + cap(m[1]) + '.'); return results; }
+  // "I admire / look up to <X>"
+  m = clean.match(/^i\s+(?:admire|look\s+up\s+to|idolise|idolize)\s+(.+)$/i);
+  if (m) { addInspire(cap(m[1]), 'admires'); return results; }
 
-  // "I love <thing>" / "I really love <thing>"
-  m = clean.match(/^i\s+(?:really\s+)?love\s+(.+)$/i);
+  // "I love / enjoy / like / really like <thing>"
+  m = clean.match(/^i\s+(?:really\s+)?(?:love|enjoy|like|adore|cherish)\s+(.+)$/i);
+  if (m) { addInterest(cap(m[1]), /love|adore/.test(m[0]) ? 'loves' : 'likes'); return results; }
+
+  // "I prefer <thing>" (standalone preference)
+  m = clean.match(/^i\s+prefer\s+(.+)$/i);
   if (m) {
-    var v = cap(m[1]), vl = v.toLowerCase();
-    addV(isSport(v) ? 'sport' : 'interest', isSport(v) ? 'favourite sport' : 'interest: ' + vl, v, 'The user loves ' + v + '.');
+    var pval = cap(m[1]);
+    results.push({ category: 'preference', subject: 'preference', value: pval,
+      text: 'The user prefers ' + pval + '.', confidence: 0.88 });
     return results;
   }
 
-  // "I prefer <thing>"
-  m = clean.match(/^i\s+prefer\s+(.+)$/i);
-  if (m) { addV('preference','preference', m[1], 'The user prefers ' + cap(m[1]) + '.'); return results; }
+  // "I am learning / studying <thing>"
+  m = clean.match(/^i(?:'m| am)\s+(?:learning|studying)\s+(.+)$/i);
+  if (m) {
+    var lg = cap(m[1]);
+    results.push({ category: 'goal', subject: 'learning goal', value: lg,
+      text: 'The user is learning ' + lg + '.', confidence: 0.90 });
+    return results;
+  }
 
-  // "I am learning / I'm learning <thing>"
-  m = clean.match(/^i(?:'m| am)\s+learning\s+(.+)$/i);
-  if (m) { addV('goal','learning goal', m[1], 'The user is learning ' + cap(m[1]) + '.'); return results; }
-
-  // "My name is <name>" / "I am <name>"
+  // "My name is <Name>" / "I am <Name>" / "I'm <Name>"
   m = clean.match(/^(?:my\s+name\s+is|i\s+am|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/i);
-  if (m && !/learning|studying|working/i.test(m[1])) {
-    add('identity', 'name', m[1]); return results;
+  if (m && !/learning|studying|working|a\s/i.test(m[1])) {
+    add('identity', 'name', cap(m[1])); return results;
   }
 
-  // "I work as / I am a <occupation>"
-  m = clean.match(/^i\s+(?:work\s+as|am\s+a(?:n)?)\s+(.+)$/i);
+  // "I work as / I am a(n) <occupation>"
+  m = clean.match(/^i\s+(?:work\s+as\s+a(?:n)?|am\s+a(?:n)?|work\s+as)\s+(.+)$/i);
   if (m && !/learning|studying/i.test(m[1])) {
-    add('identity', 'occupation', m[1]); return results;
+    add('identity', 'occupation', cap(m[1])); return results;
   }
 
-  // "I live in <place>"
-  m = clean.match(/^i\s+live\s+in\s+(.+)$/i);
-  if (m) { add('identity', 'location', m[1]); return results; }
+  // "I live in / I'm from / I am from <place>"
+  m = clean.match(/^i\s+(?:live\s+in|am\s+from|come\s+from|i'm\s+from)\s+(.+)$/i);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
 
   // ════════════════════════════════════════════════════════════════
   //  ROMANIZED HINDI / MARATHI / URDU / GUJARATI PATTERNS
-  //  (Latin-script transliterations of South Asian languages)
+  //  All pronouns / copulas captured broadly so minor spelling variations
+  //  (hai/hain/he/6e/che/chhe/aahe/ahe) all match.
   // ════════════════════════════════════════════════════════════════
 
-  // "Mera/Meri/Mere/Maru/Mari/Mare pasandida/pasand/aavdta <thing> <value> hai/aahe/chhe"
-  // Covers: "Mera pasandida khel cricket hai" / "Maru pasandida game chess che"
-  m = clean.match(/^(?:mera?|meri|mere|maru|mari|mare|mara)\s+(?:pasandida|pasand|aavdta|avadta|aavadta|priya)\s+(.+?)\s+(\S+)\s+(?:hai|he|aahe|ahe|chhe|che|6e)$/i);
+  // Copula group — matches end of sentence across all Romanized variants
+  var copula = '(?:hai|hain|he|aahe|ahe|chhe|che|6e|aahe|hoon|hun|tha|thi)';
+
+  // Possessive pronouns (my) — all genders, all Romanized variants
+  var myPron = '(?:mera?|meri|mere|maru|mari|mare|mara|maro)';
+
+  // Preference words — pref/like equivalents across languages
+  var prefWord = '(?:pasandida|pasand|aavdta?|avadta?|aavadta?|priya|aavdat|avdat|gamtu|gamay|gamche|gamce)';
+
+  // "Mera/Maru pasandida/priya <thing> <value> hai/che/aahe"
+  // e.g. "Mera pasandida rang blue hai"  /  "Maru pasandida game chess che"
+  m = clean.match(new RegExp('^' + myPron + '\\s+' + prefWord + '\\s+(.+?)\\s+(\\S+)\\s+' + copula + '$', 'i'));
   if (m) {
-    var subj = cap(m[1]).toLowerCase(), val2 = cap(m[2]);
-    add(isSport(val2) || /khel|khed|game|sport/.test(subj) ? 'sport' : 'favorite', 'favourite ' + subj, val2);
+    var rawSubj = cap(m[1]).toLowerCase(), val2 = cap(m[2]);
+    add(!!sportsSet[val2.toLowerCase()] || /khel|khed|game|sport|ramta/.test(rawSubj) ? 'sport' : 'favorite',
+        'favourite ' + rawSubj, val2);
     return results;
   }
 
-  // Shorter: "Maru pasandida <value> chhe" (thing implicit/omitted)
-  m = clean.match(/^(?:meru?|meru|maru|mera?|meri|mere)\s+(?:pasandida|pasand|priya)\s+(.+?)\s+(?:chhe|che|6e|hai|he|aahe)$/i);
+  // Shorter: "Maru pasandida <value> chhe" — thing implicit
+  m = clean.match(new RegExp('^' + myPron + '\\s+' + prefWord + '\\s+(.+?)\\s+' + copula + '$', 'i'));
   if (m) {
     var val3 = cap(m[1]);
-    add(isSport(val3) ? 'sport' : 'favorite', 'favourite', val3);
+    add(!!sportsSet[val3.toLowerCase()] ? 'sport' : 'favorite', 'favourite', val3);
     return results;
   }
 
-  // "Main/Mujhe <thing> pasand hai/aahe" — "I like <thing>"
-  m = clean.match(/^(?:main|mujhe|mala|mane)\s+(.+?)\s+(?:pasand|aavad)\s+(?:hai|he|aahe|ahe|chhe|che)$/i);
-  if (m) {
-    var v2 = cap(m[1]);
-    addV(isSport(v2) ? 'sport' : 'interest', isSport(v2) ? 'favourite sport' : 'interest: ' + v2.toLowerCase(), v2, 'The user likes ' + v2 + '.');
-    return results;
-  }
+  // "Main/Mujhe/Mala/Mane/Mane <thing> pasand/aavad hai/aahe"
+  m = clean.match(/^(?:main|mujhe|mala|mane|mene)\s+(.+?)\s+(?:pasand|aavad|avad|gamtu|gamay)\s+(?:hai|he|aahe|ahe|chhe|che|6e)$/i);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
 
-  // "Mera naam <name> hai/chhe" — "My name is <name>"
-  m = clean.match(/^(?:mera|maru|maro)\s+naam\s+(.+?)\s+(?:hai|he|chhe|che|aahe|6e)$/i);
-  if (m) { add('identity', 'name', m[1]); return results; }
+  // "Mujhe/Mala/Mane <thing> bahut pasand hai" — "really likes"
+  m = clean.match(/^(?:mujhe|mala|mane)\s+(.+?)\s+bahut\s+(?:pasand|aavad|avad)\s+(?:hai|he|aahe|ahe)$/i);
+  if (m) { addInterest(cap(m[1]), 'really likes'); return results; }
 
-  // "Main <name> hun/hoon" — "I am <name>"
+  // "Mera naam <name> hai/chhe"
+  m = clean.match(new RegExp('^(?:mera|maru|maro)\\s+naam\\s+(.+?)\\s+' + copula + '$', 'i'));
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
+
+  // "Main <Name> hun/hoon/hu/chu/chhu"
   m = clean.match(/^main\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:hun|hoon|hu|chu|chhu)$/i);
-  if (m) { add('identity', 'name', m[1]); return results; }
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
 
-  // "Mujhe/Mala/Mane <thing> bahut pasand hai" — "I like <thing> a lot"
-  m = clean.match(/^(?:mujhe|mala|mane)\s+(.+?)\s+bahut\s+pasand\s+(?:hai|he|aahe|ahe)$/i);
-  if (m) {
-    var v3 = cap(m[1]);
-    addV(isSport(v3) ? 'sport' : 'interest', isSport(v3) ? 'favourite sport' : 'interest: ' + v3.toLowerCase(), v3, 'The user really likes ' + v3 + '.');
-    return results;
-  }
+  // "Mera kaam / job / profession <value> hai"
+  m = clean.match(new RegExp('^' + myPron + '\\s+(?:kaam|job|profession|dhanda)\\s+(.+?)\\s+' + copula + '$', 'i'));
+  if (m) { add('identity', 'occupation', cap(m[1])); return results; }
+
+  // "Main <place> mein rehta/rehti/rahta/rahti hun"
+  m = clean.match(/^main\s+(.+?)\s+(?:mein|me)\s+(?:rehta|rehti|rahta|rahti|reh|rah)\s+(?:hun|hu|hoon)$/i);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
 
   // ════════════════════════════════════════════════════════════════
-  //  HINDI / MARATHI DEVANAGARI SCRIPT PATTERNS
+  //  HINDI DEVANAGARI SCRIPT PATTERNS
   // ════════════════════════════════════════════════════════════════
 
-  // "मेरा/मेरी पसंदीदा <thing> ... है" — "My favourite <thing> is <value>"
-  m = clean.match(/^(?:मेर[ाीे]|हमार[ाी])\s+पसंदीदा\s+(.+?)\s+(.+?)\s+है$/);
+  // "मेरा/मेरी/मेरे पसंदीदा/प्रिय <thing> <value> है"
+  m = clean.match(/^(?:मेर[ाीे]|हमार[ाी])\s+(?:पसंदीदा|पसंद(?:ीदा)?|प्रिय)\s+(.+?)\s+(.+?)\s+है$/);
   if (m) {
-    var subj2 = cap(m[1]), val4 = cap(m[2]);
-    add(/खेल|खेलो/.test(subj2) ? 'sport' : 'favorite', 'favourite ' + subj2, val4);
+    var rawS = cap(m[1]), val4 = cap(m[2]);
+    add(/खेल/.test(rawS) ? 'sport' : 'favorite', 'favourite ' + rawS, val4);
     return results;
   }
 
-  // "मुझे <thing> पसंद है" — "I like <thing>"
-  m = clean.match(/^मुझे\s+(.+?)\s+पसंद\s+है$/);
-  if (m) {
-    var v4 = cap(m[1]);
-    addV(isSport(v4) ? 'sport' : 'interest', 'interest: ' + v4, v4, 'The user likes ' + v4 + '.');
-    return results;
-  }
+  // "मुझे <thing> पसंद है" / "मुझे <thing> अच्छा लगता है"
+  m = clean.match(/^मुझे\s+(.+?)\s+(?:पसंद\s+है|अच्छ[ाे]\s+लगत[ाे]\s+है)$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
 
-  // "मेरा नाम <name> है" — "My name is <name>"
+  // "मैं <thing> पसंद करता/करती हूँ"
+  m = clean.match(/^मैं\s+(.+?)\s+पसंद\s+करत[ाी]\s+हूँ$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
+
+  // "मेरा नाम <name> है"
   m = clean.match(/^मेरा\s+नाम\s+(.+?)\s+है$/);
-  if (m) { add('identity', 'name', m[1]); return results; }
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
 
-  // Marathi: "माझा/माझी आवडता <thing> <value> आहे"
-  m = clean.match(/^(?:माझ[ाीे])\s+(?:आवडत[ाीे]|प्रिय)\s+(.+?)\s+(.+?)\s+आहे$/);
+  // "मेरा शौक/हॉबी <value> है"
+  m = clean.match(/^(?:मेर[ाीे])\s+(?:शौक|हॉबी)\s+(.+?)\s+है$/);
+  if (m) { add('interest', 'hobby', cap(m[1])); return results; }
+
+  // "मेरा लक्ष्य <value> है"
+  m = clean.match(/^(?:मेर[ाीे])\s+(?:लक्ष्य|उद्देश्य|सपना)\s+(.+?)\s+है$/);
+  if (m) { add('goal', 'goal', cap(m[1])); return results; }
+
+  // "मैं <place> में रहता/रहती हूँ"
+  m = clean.match(/^मैं\s+(.+?)\s+में\s+रहत[ाी]\s+हूँ$/);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
+
+  // ════════════════════════════════════════════════════════════════
+  //  MARATHI DEVANAGARI PATTERNS
+  // ════════════════════════════════════════════════════════════════
+
+  // "माझा/माझी/माझे आवडता/आवडती/आवडते/प्रिय <thing> <value> आहे"
+  m = clean.match(/^(?:माझ[ाीे])\s+(?:आवडत[ाीे]|प्रिय|पसंत)\s+(.+?)\s+(.+?)\s+आहे$/);
   if (m) {
-    var subj3 = cap(m[1]), val5 = cap(m[2]);
-    add(/खेळ/.test(subj3) ? 'sport' : 'favorite', 'favourite ' + subj3, val5);
+    var rawS2 = cap(m[1]), val5 = cap(m[2]);
+    add(/खेळ/.test(rawS2) ? 'sport' : 'favorite', 'favourite ' + rawS2, val5);
     return results;
   }
 
-  // "मला <thing> आवडते — "I like <thing>" (Marathi)
-  m = clean.match(/^मला\s+(.+?)\s+आवडत[ेे]$/);
-  if (m) {
-    var v5 = cap(m[1]);
-    addV(isSport(v5) ? 'sport' : 'interest', 'interest: ' + v5, v5, 'The user likes ' + v5 + '.');
-    return results;
-  }
+  // "मला <thing> आवडतो/आवडते/आवडती / पसंत आहे"
+  m = clean.match(/^मला\s+(.+?)\s+(?:आवडत[ोेी]|पसंत\s+आहे)$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
+
+  // "माझे नाव <name> आहे"
+  m = clean.match(/^माझे\s+नाव\s+(.+?)\s+आहे$/);
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
+
+  // "माझा छंद <value> आहे"
+  m = clean.match(/^(?:माझ[ाीे])\s+(?:छंद|आवड)\s+(.+?)\s+आहे$/);
+  if (m) { add('interest', 'hobby', cap(m[1])); return results; }
+
+  // "मी <place> मध्ये राहतो/राहते"
+  m = clean.match(/^मी\s+(.+?)\s+(?:मध्ये|मे)\s+राहत[ोे]$/);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
 
   // ════════════════════════════════════════════════════════════════
   //  GUJARATI SCRIPT PATTERNS
+  //  Note: Gujarati copula છે (u+0AA8 u+0AC7) — correctly spelled here.
+  //  Previous code had a malformed ligature াে which never matched.
   // ════════════════════════════════════════════════════════════════
 
-  // "મારી/મારો/મારું પસંદીદા <thing> <value> ાે" — "My favourite <thing> is <value>"
-  m = clean.match(/^(?:માર[ીોું])\s+પસંદીદા\s+(.+?)\s+(.+?)\s+ાે$/);
+  // "મારી/મારો/મારું પસંદીદા <thing> <value> છે"
+  m = clean.match(/^(?:માર[ીોું])\s+(?:પસંદીદા|પ્રિય|ગમ(?:તી|તો|તું)?)\s+(.+?)\s+(.+?)\s+છે$/);
   if (m) {
-    var subj4 = cap(m[1]), val6 = cap(m[2]);
-    add(/રમત/.test(subj4) ? 'sport' : 'favorite', 'favourite ' + subj4, val6);
+    var rawS3 = cap(m[1]), val6 = cap(m[2]);
+    add(/રમત/.test(rawS3) ? 'sport' : 'favorite', 'favourite ' + rawS3, val6);
     return results;
   }
 
-  // "મને <thing> પસંદ ાે" — "I like <thing>" (Gujarati)
-  m = clean.match(/^મને\s+(.+?)\s+પસંદ\s+ાે$/);
-  if (m) {
-    var v6 = cap(m[1]);
-    addV(isSport(v6) ? 'sport' : 'interest', 'interest: ' + v6, v6, 'The user likes ' + v6 + '.');
-    return results;
-  }
+  // "મને <thing> ગમે છે" / "મને <thing> પસંદ છે"
+  m = clean.match(/^મને\s+(.+?)\s+(?:ગમ(?:ે|ે\s+છે|ે\s+ાાે)|પસંદ\s+છે)$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
 
-  // "મારું નામ <name> ાે" — "My name is <name>" (Gujarati)
-  m = clean.match(/^મારું\s+નામ\s+(.+?)\s+ાે$/);
-  if (m) { add('identity', 'name', m[1]); return results; }
+  // "મારું નામ <name> છે"
+  m = clean.match(/^(?:માર[ુું]|મારો)\s+નામ\s+(.+?)\s+છે$/);
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
+
+  // "મારો શોખ <value> છે"
+  m = clean.match(/^(?:માર[ોી])\s+(?:શોખ|રુચિ)\s+(.+?)\s+છે$/);
+  if (m) { add('interest', 'hobby', cap(m[1])); return results; }
+
+  // "હું <place> માં રહું છું"
+  m = clean.match(/^હું\s+(.+?)\s+(?:માં|મા)\s+રહ(?:ુ|ુ\s+)છ(?:ું|ુ)$/);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
 
   // ════════════════════════════════════════════════════════════════
   //  URDU ARABIC SCRIPT PATTERNS
   // ════════════════════════════════════════════════════════════════
 
-  // "میرا پسندیدہ <thing> <value> ہے" — "My favourite <thing> is <value>"
-  m = clean.match(/^میرا\s+پسندیدہ\s+(.+?)\s+(.+?)\s+ہے$/);
+  // "میرا/میری/میرے پسندیدہ/پسند <thing> <value> ہے/ہیں"
+  m = clean.match(/^(?:میر[ایے]|ہمار[ایے])\s+(?:پسندیدہ|پسند|پسندیدا|اچھ[ای])\s+(.+?)\s+(.+?)\s+(?:ہے|ہیں)$/);
   if (m) {
-    var subj5 = cap(m[1]), val7 = cap(m[2]);
-    add(/کھیل/.test(subj5) ? 'sport' : 'favorite', 'favourite ' + subj5, val7);
+    var rawS4 = cap(m[1]), val7 = cap(m[2]);
+    add(/کھیل/.test(rawS4) ? 'sport' : 'favorite', 'favourite ' + rawS4, val7);
     return results;
   }
 
-  // "مجھے <thing> پسند ہے" — "I like <thing>" (Urdu)
-  m = clean.match(/^مجھے\s+(.+?)\s+پسند\s+ہے$/);
-  if (m) {
-    var v7 = cap(m[1]);
-    addV(isSport(v7) ? 'sport' : 'interest', 'interest: ' + v7, v7, 'The user likes ' + v7 + '.');
-    return results;
-  }
+  // "مجھے <thing> پسند ہے" / "مجھے <thing> اچھا لگتا ہے"
+  m = clean.match(/^مجھے\s+(.+?)\s+(?:پسند\s+ہے|اچھ[ای]\s+لگت[ای]\s+ہے)$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
 
-  // "میرا نام <name> ہے" — "My name is <name>" (Urdu)
-  m = clean.match(/^میرا\s+نام\s+(.+?)\s+ہے$/);
-  if (m) { add('identity', 'name', m[1]); return results; }
+  // "میں <thing> پسند کرتا/کرتی ہوں"
+  m = clean.match(/^میں\s+(.+?)\s+پسند\s+کرت[ای]\s+ہوں$/);
+  if (m) { addInterest(cap(m[1]), 'likes'); return results; }
+
+  // "میرا نام <name> ہے"
+  m = clean.match(/^(?:میر[ایے])\s+نام\s+(.+?)\s+(?:ہے|ہیں)$/);
+  if (m) { add('identity', 'name', cap(m[1])); return results; }
+
+  // "میرا شوق <value> ہے"
+  m = clean.match(/^(?:میر[ایے])\s+(?:شوق|مشغلہ)\s+(.+?)\s+(?:ہے|ہیں)$/);
+  if (m) { add('interest', 'hobby', cap(m[1])); return results; }
+
+  // "میں <place> میں رہتا/رہتی ہوں"
+  m = clean.match(/^میں\s+(.+?)\s+میں\s+رہت[ای]\s+ہوں$/);
+  if (m) { add('identity', 'location', cap(m[1])); return results; }
 
   return results; // no obvious match — caller falls back to LLM extraction
 }
@@ -5828,45 +5976,64 @@ function extractMemoriesDeterministic(msg) {
 // ── STRICT EXTRACTION PROMPT ──────────────────────────────────────
 function buildMemoryAnalysisPrompt(userMessage) {
   return 'You are a strict personal-memory extraction engine for an AI assistant. ' +
-    'Your ONLY job is to identify meaningful, long-term facts about THIS USER — personal preferences, recurring interests, favourites, inspirations, goals — that would still be useful in a future conversation weeks or months from now. ' +
-    '' +
-    'LANGUAGE: The user may write in English, Hindi, Marathi, Urdu, or Gujarati — in native script OR Romanized. ' +
-    'You must understand all of these equally. The "text" field in your output must always be in English (third-person). ' +
-    'The "value" field should preserve the original language/script of the value (e.g. a name written in Devanagari stays in Devanagari). ' +
-    '' +
-    'SAVE — only if explicitly stated by the user about themselves. Examples that SHOULD be saved (all languages):\n' +
-    '  • [EN] "My favourite footballer is Cristiano Ronaldo." -> favorite, "favourite footballer", "Cristiano Ronaldo"\n' +
-    '  • [EN] "I love cricket." -> sport, "favourite sport", "cricket"\n' +
-    '  • [EN] "I am learning programming." -> goal, "learning goal", "programming"\n' +
-    '  • [HI] "मेरा पसंदीदा खेल शतरंज है।" -> favorite, "favourite game", "शतरंज" (text: "The user\'s favourite game is chess.")\n' +
-    '  • [HI Roman] "Mera pasandida khel cricket hai." -> sport, "favourite sport", "cricket"\n' +
-    '  • [MR] "माझा आवडता खेळ बुद्धिबळ आहे." -> favorite, "favourite game", "बुद्धिबळ"\n' +
-    '  • [GU] "મારી પસંદીદા રમત ચેસ ાે." -> favorite, "favourite game", "ચેસ"\n' +
-    '  • [GU Roman] "Maru pasandida game chess che." -> favorite, "favourite game", "chess"\n' +
-    '  • [UR] "میرا پسندیدہ کھیل شطرنج ہے۔" -> favorite, "favourite game", "شطرنج"\n' +
-    '  • Name, age, occupation, location, nationality (in any language) -> identity\n' +
-    '  • Active ongoing projects -> project\n' +
-    '  • General long-term hobbies/passions -> interest\n' +
-    '' +
+    'Your ONLY job: identify meaningful, long-term facts about THIS USER — preferences, favourites, inspirations, goals, identity — that would still be useful weeks or months from now. ' +
+    '\n\n' +
+    'LANGUAGE: The user may write in English, Hindi, Marathi, Urdu, or Gujarati — native script OR Romanized. ' +
+    'Understand all equally. The "text" field MUST always be English (third-person). ' +
+    'The "value" field preserves the original script (e.g. Devanagari names stay in Devanagari). ' +
+    '\n\n' +
+    '⚠️  CRITICAL — SUBJECT NORMALISATION FOR UPDATE/REPLACE LOGIC:\n' +
+    'The "subject" field MUST be a short, CANONICAL ENGLISH key. ' +
+    'This is used to detect when the user changes a preference (e.g. favourite game changes from chess to football). ' +
+    'All equivalent subjects across ALL languages must map to the SAME English key:\n' +
+    '  favourite game: "khel", "khed", "खेल", "खेळ", "رمت", "رمت", "کھیل", "רמת", "game", "sport", "ramta"\n' +
+    '  favourite colour: "rang", "color", "colour", "रंग", "رنگ", "રંગ"\n' +
+    '  favourite food: "khana", "khaana", "food", "dish", "खाना", "کھانا", "ખાવ"\n' +
+    '  favourite music: "gaana", "gana", "music", "song", "संगीत", "گانا", "ગીત"\n' +
+    '  favourite movie: "film", "movie", "फिल्म", "فلم", "ફિલ્મ"\n' +
+    '  favourite book: "kitab", "pustak", "book", "किताब", "کتاب", "ਕਿਤਾਬ", "ਕਿਤਾਬ"\n' +
+    '  hobby: "hobby", "shauq", "shok", "शौक", "شوق", "shauq", "chhand", "छंद"\n' +
+    '  goal: "goal", "lakshya", "laksha", "लक्ष्य", "ध्येय", "ہدف"\n' +
+    '  name: "naam", "name", "नाम", "نام", "નામ", "नाव"\n' +
+    '  occupation: "kaam", "job", "profession", "काम", "کام"\n' +
+    '  location: "sheher", "shahar", "city", "place", "शहर", "شہر", "શહ"\n' +
+    '\n\n' +
+    'SAVE — only if EXPLICITLY stated by the user about themselves:\n' +
+    '  [EN] "My favourite footballer is Cristiano Ronaldo." -> category:favorite, subject:"favourite footballer", value:"Cristiano Ronaldo"\n' +
+    '  [EN] "I love cricket." -> category:sport, subject:"favourite sport", value:"cricket"\n' +
+    '  [EN] "I am learning programming." -> category:goal, subject:"learning goal", value:"programming"\n' +
+    '  [HI] "मेरा पसंदीदा खेल शतरंज है।" -> category:favorite, subject:"favourite game", value:"शतरंज", text:"The user\'s favourite game is chess."\n' +
+    '  [HI Roman] "Mera pasandida khel cricket hai." -> category:sport, subject:"favourite game", value:"cricket"\n' +
+    '  [HI] "मेरा पसंदीदा रंग नीला है।" -> category:favorite, subject:"favourite colour", value:"नीला"\n' +
+    '  [MR] "माझा आवडता खेळ बुद्धिबळ आहे." -> category:favorite, subject:"favourite game", value:"बुद्धिबळ"\n' +
+    '  [MR] "मला क्रिकेट आवडते." -> category:sport, subject:"favourite sport", value:"क्रिकेट"\n' +
+    '  [GU] "મારી પસંદીદા રમત ચેસ છે." -> category:favorite, subject:"favourite game", value:"ચેસ"\n' +
+    '  [GU Roman] "Maru pasandida game chess che." -> category:favorite, subject:"favourite game", value:"chess"\n' +
+    '  [GU] "મને ક્રિકેટ ગમે છે." -> category:sport, subject:"favourite sport", value:"ક્રિકેટ"\n' +
+    '  [UR] "میرا پسندیدہ کھیل شطرنج ہے۔" -> category:favorite, subject:"favourite game", value:"شطرنج"\n' +
+    '  [UR] "مجھے کرکٹ پسند ہے۔" -> category:sport, subject:"favourite sport", value:"کرکٹ"\n' +
+    '  Name, age, occupation, location, nationality (any language) -> category:identity\n' +
+    '  Ongoing projects -> category:project\n' +
+    '  Long-term hobbies/passions -> category:interest\n' +
+    '\n\n' +
     'DO NOT SAVE — return [] for:\n' +
-    '  • Greetings, small talk, questions with no personal disclosure (in any language)\n' +
-    '  • One-time events ("I ate pizza today" / "آج میں نے پیزا کھایا")\n' +
-    '  • Temporary emotional states ("I am stressed today")\n' +
-    '  • One-time task requests ("translate this", "write a poem")\n' +
-    '  • Anything inferred or implied — only EXPLICIT self-disclosures\n' +
-    '' +
+    '  • Greetings, small talk, questions with no personal disclosure (any language)\n' +
+    '  • One-time events ("I ate pizza today" / "آج میں نے پیزا کھایا" / "आज मैंने पिज्जा खाया")\n' +
+    '  • Temporary emotional states ("I am stressed today" / "আজ আমি চাপে আছি")\n' +
+    '  • One-time task requests ("translate this", "write a poem", "ترجمہ کریں")\n' +
+    '  • Anything inferred or implied — only EXPLICIT first-person self-disclosures\n' +
+    '\n\n' +
     'STRICT RULES:\n' +
     '  1. Max 2 memories per message.\n' +
-    '  2. "text" must be a specific, factual English sentence in third person. E.g. "The user\'s favourite game is chess."\n' +
-    '  3. "subject" must be a short normalized English topic key (e.g. "favourite game", "name", "occupation").\n' +
-    '  4. "value" should be the specific value, preserving its original script if non-English.\n' +
-    '  5. Include a confidence score (0.0-1.0). Explicit statements score 0.85-1.0.\n' +
+    '  2. "text" must be a specific, factual English sentence in third person.\n' +
+    '  3. "subject" MUST be the canonical English topic key (see normalisation table above).\n' +
+    '  4. "value" should be the specific value, preserving original script.\n' +
+    '  5. Include confidence 0.0–1.0. Explicit first-person statements score 0.85–1.0.\n' +
     '  6. Return [] if no genuine long-term personal fact is present.\n' +
-    '' +
+    '\n\n' +
     'Return ONLY a raw JSON array, no markdown, no explanation:\n' +
     '[{"category":"identity|preference|goal|project|interest|favorite|inspiration|sport|other","subject":"...","value":"...","text":"...","confidence":0.95}]\n' +
-    'Or if nothing qualifies: []\n' +
-    '' +
+    'Or if nothing qualifies: []\n\n' +
     'User message to analyse: ' + userMessage;
 }
 
