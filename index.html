@@ -2255,18 +2255,20 @@
             <option value="assistant">🤖 Assistant</option>
           </select>
         </div>
-        <!-- [REVISED] Voice selector — dynamically populated from device voices.
-             Replaces the regex gender selector which fails on Android Chrome/WebView
-             because Google TTS voice names contain no "Male"/"Female" keyword. -->
+        <!-- Voice gender: pitch-based, works on all platforms including Android.
+             Android Google TTS voices share the same underlying engine regardless
+             of locale name — pitch is the only reliable way to get an audibly
+             different male vs female voice on Android Chrome/WebView. -->
         <div class="personality-selector-row">
-          <span class="personality-selector-label">Voice:</span>
-          <select id="voiceGenderSelect" style="max-width:180px;">
-            <option value="auto">Auto (best match)</option>
+          <span class="personality-selector-label">🎙️ Voice Gender:</span>
+          <select id="voiceGenderSelect">
+            <option value="auto">🔄 Auto</option>
+            <option value="female">🔴 Female</option>
+            <option value="male">🔵 Male</option>
           </select>
         </div>
-        <!-- [END ADDED] -->
-
-        <!-- [DEBUG] Voice diagnostic panel — shows available voices and gender classification -->
+        <!-- voiceDebugPanel kept in DOM (hidden) so runVoiceDiagnostic() still works
+             if called from the browser console during development. -->
         <div id="voiceDebugPanel" style="display:none; margin-top:10px; padding:12px 14px; background:rgba(0,0,0,0.35); border:1px solid rgba(99,179,237,0.25); border-radius:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-2); max-height:260px; overflow-y:auto; text-align:left; line-height:1.7;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <strong style="color:var(--a1);">🔍 Voice Diagnostic</strong>
@@ -2274,10 +2276,6 @@
           </div>
           <div id="voiceDebugContent">Running…</div>
         </div>
-        <div style="text-align:center;margin-top:6px;">
-          <button onclick="runVoiceDiagnostic()" style="background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.28);border-radius:7px;color:var(--a1);font-size:0.72rem;padding:4px 12px;cursor:pointer;font-family:var(--font-body);">🔍 Run Voice Diagnostic</button>
-        </div>
-        <!-- [END DEBUG] -->
       </div>
     </section>
 
@@ -2823,7 +2821,7 @@ const S = {
   model:       'gemini-2.5-flash',
   personality: 'friendly',
   voicePersonality: 'assistant',
-  voiceName: 'auto',   // 'auto' or exact voice.name from device
+  voiceGender: 'auto', // 'auto' | 'female' | 'male' — controls pitch on Android
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -2937,7 +2935,7 @@ function loadStorage() {
   S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
-  S.voiceName = ls('aleem_voice_name') || 'auto';
+  S.voiceGender = ls('aleem_voice_gender') || 'auto';
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -2973,50 +2971,16 @@ function loadStorage() {
   var vpSel = document.getElementById('voicePersonalitySelect');
   if (vpSel) vpSel.value = S.voicePersonality;
 
-  // [REVISED] Populate the named-voice selector dynamically from device voices.
-  function populateVoiceSelect() {
-    var sel = document.getElementById('voiceGenderSelect');
-    if (!sel) return;
-    var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-    if (!voices || !voices.length) return;
-    var enVoices = [], otherVoices = [], seen = {};
-    voices.forEach(function(v) {
-      if (!v.name || seen[v.name]) return;
-      seen[v.name] = true;
-      if (v.lang && v.lang.toLowerCase().indexOf('en') === 0) enVoices.push(v);
-      else otherVoices.push(v);
-    });
-    enVoices.sort(function(a,b){ return a.name.localeCompare(b.name); });
-    otherVoices.sort(function(a,b){ return (a.lang+a.name).localeCompare(b.lang+b.name); });
-    while (sel.options.length > 1) sel.remove(1);
-    function addGroup(label, list) {
-      if (!list.length) return;
-      var og = document.createElement('optgroup'); og.label = label;
-      list.forEach(function(v) {
-        var opt = document.createElement('option');
-        opt.value = v.name;
-        opt.textContent = v.name + (v.lang ? ' - ' + v.lang : '');
-        og.appendChild(opt);
-      });
-      sel.appendChild(og);
-    }
-    addGroup('English voices', enVoices);
-    addGroup('Other languages', otherVoices);
-    if (S.voiceName && S.voiceName !== 'auto') sel.value = S.voiceName;
-  }
-  if (window.speechSynthesis) {
-    var _iv = window.speechSynthesis.getVoices();
-    if (_iv && _iv.length) { populateVoiceSelect(); }
-    else { window.speechSynthesis.onvoiceschanged = populateVoiceSelect; }
-  }
-  // [END REVISED]
+  // Restore voice gender dropdown
+  var vgSel = document.getElementById('voiceGenderSelect');
+  if (vgSel) vgSel.value = S.voiceGender;
 }
 
 function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
   lss('aleem_voice_pers', S.voicePersonality);
-  lss('aleem_voice_name', S.voiceName);
+  lss('aleem_voice_gender', S.voiceGender);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
   lss('aleem_theme',  S.theme);
   lss('aleem_total',  S.totalQ);
@@ -3280,17 +3244,16 @@ function bindAllEvents() {
   }
   // [END ADDED]
 
-  // [REVISED] Named voice selector event handler.
+  // Voice gender selector — pitch-based, works on all platforms.
   var voiceGenderSelect = document.getElementById('voiceGenderSelect');
   if (voiceGenderSelect) {
     voiceGenderSelect.addEventListener('change', function(e) {
-      S.voiceName = e.target.value;
+      S.voiceGender = e.target.value;
       persist();
-      var label = e.target.options[e.target.selectedIndex].textContent;
-      toast('Voice: ' + label.split(' - ')[0]);
+      var vgLabels = { auto: 'Auto', female: 'Female', male: 'Male' };
+      toast('Voice Gender: ' + (vgLabels[S.voiceGender] || S.voiceGender));
     });
   }
-  // [END REVISED]
 
   var newFactBtn = document.getElementById('newFactBtn');
   if (newFactBtn) newFactBtn.addEventListener('click', function(e) {
@@ -5003,25 +4966,52 @@ function detectSpeechLang(t) {
   return 'en-US';
 }
 
-// [REVISED] Pick the best available SpeechSynthesisVoice for a target language.
-// Replaces the regex gender filter which failed on Android Chrome/WebView
-// (Google TTS voices have no "Male"/"Female" in their names).
-// Now respects S.voiceName: if the user picked a voice by name (not 'auto'),
-// that voice is used directly for English utterances.
+// Pick the best available SpeechSynthesisVoice for a target language.
+// Falls back through: native-name match → exact lang → same language family
+// → Indian fallback → English fallback → first available voice.
+//
+// ANDROID PITCH STRATEGY: On Android Chrome/WebView all Google TTS voices
+// ("English United States", "English India", etc.) are locale aliases for the
+// same underlying synthesis engine — selecting a different entry produces no
+// audible difference. The only reliable cross-platform mechanism for a clearly
+// distinct male vs female voice is SpeechSynthesisUtterance.pitch:
+//   female → pitch 1.4  (higher, clearly feminine)
+//   male   → pitch 0.7  (lower, clearly masculine)
+// This is applied in speakText() based on S.voiceGender after voice selection.
+// On desktop Chrome / iOS where true male/female voices exist (e.g. "Google US
+// English Male", "Samantha") we also filter by name so those platforms still
+// use a native-gender voice AND the pitch tweak, giving the best result on
+// every platform with a single code path.
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return null;
 
   var primary = lang.split('-')[0].toLowerCase();
-  var namePref = (typeof S !== 'undefined' && S.voiceName && S.voiceName !== 'auto') ? S.voiceName : null;
+  var genderPref = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
 
-  function findVoice(predicate) { return voices.find(predicate) || null; }
+  // Desktop Chrome / Edge / Samsung voice names include "Male" / "Female".
+  // iOS has named gendered voices (Samantha = female, Alex = male, etc.).
+  // We match these on platforms that expose them; on Android all return false
+  // so the fallback (first matching lang voice) is used, and pitch handles gender.
+  var maleRx   = /(^|\s)(male|david|james|daniel|mark|ryan|alex|jorge|diego|luca|henrik|stefan|yuri|rishi)(\s|$)/i;
+  var femaleRx = /(^|\s)(female|samantha|victoria|karen|moira|fiona|zira|susan|tessa|kate|alice|laura|anna|marie|nora|satu|ioana|amelie|monica|paulina|luciana|joana|carmit|lekha|veena)(\s|$)/i;
 
-  // Named-voice fast path for English.
-  if (namePref && primary === 'en') {
-    var named = findVoice(function(v) { return v.name === namePref; });
-    if (named) return named;
+  function matchesGender(v) {
+    if (genderPref === 'auto') return true;
+    var n = (v.name || '').toLowerCase();
+    var hasMale   = maleRx.test(n);
+    var hasFemale = femaleRx.test(n);
+    if (genderPref === 'male')   return hasMale && !hasFemale;
+    if (genderPref === 'female') return hasFemale && !hasMale;
+    return true;
+  }
+
+  // Try gender-filtered first, fall back to any matching voice so speech
+  // always works — pitch will still apply the audible gender effect.
+  function findVoice(predicate) {
+    return voices.find(function(v) { return predicate(v) && matchesGender(v); })
+        || voices.find(function(v) { return predicate(v); });
   }
 
   // Native-name patterns for Indian languages (more reliable than lang codes).
@@ -5031,7 +5021,6 @@ function pickVoiceForLang(lang) {
     if (byName) return byName;
   }
 
-  // Exact lang match, then same primary language family.
   var exact = findVoice(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
   if (exact) return exact;
 
@@ -5049,12 +5038,6 @@ function pickVoiceForLang(lang) {
     if (ind) return ind;
   }
 
-  // Named voice as last resort for non-English targets.
-  if (namePref) {
-    var nf = findVoice(function(v) { return v.name === namePref; });
-    if (nf) return nf;
-  }
-
   var enPref = findVoice(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
   if (enPref) return enPref;
   var en = findVoice(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
@@ -5063,8 +5046,8 @@ function pickVoiceForLang(lang) {
   return voices[0] || null;
 }
 
-// [REVISED] Voice diagnostic — shows full SpeechSynthesisVoice metadata
-// (name, lang, localService, default) and the current S.voiceName preference.
+// Voice diagnostic — callable from browser console: runVoiceDiagnostic()
+// Panel is hidden in production UI; button removed.
 function runVoiceDiagnostic() {
   var panel   = document.getElementById('voiceDebugPanel');
   var content = document.getElementById('voiceDebugContent');
@@ -5078,19 +5061,20 @@ function runVoiceDiagnostic() {
       content.innerHTML = 'No voices returned. TTS unavailable or not yet loaded.';
       return;
     }
-    var currentName   = (typeof S !== 'undefined' && S.voiceName) ? S.voiceName : 'auto';
+    var gp = (typeof S !== 'undefined' && S.voiceGender) ? S.voiceGender : 'auto';
+    var pitchVal = gp === 'female' ? 1.4 : gp === 'male' ? 0.7 : 1.0;
     var selectedVoice = pickVoiceForLang('en-US');
     var lines = [];
-    lines.push('<b>S.voiceName:</b> <span style="color:var(--a3)">' + escHtml(currentName) + '</span>');
-    lines.push('<b>Picked for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? escHtml(selectedVoice.name) + ' [' + escHtml(selectedVoice.lang) + ']' : 'NONE') + '</span>');
+    lines.push('<b>S.voiceGender:</b> <span style="color:var(--a3)">' + escHtml(gp) + '</span>');
+    lines.push('<b>Effective pitch multiplier:</b> <span style="color:var(--a3)">' + pitchVal + '</span>');
+    lines.push('<b>Voice picked for en-US:</b> <span style="color:var(--a1)">' + (selectedVoice ? escHtml(selectedVoice.name) + ' [' + escHtml(selectedVoice.lang) + ']' : 'NONE') + '</span>');
     lines.push('');
     lines.push('<b>All ' + voices.length + ' voices:</b>');
     voices.forEach(function(v, i) {
       var sel = selectedVoice && selectedVoice.name === v.name ? ' <b style="color:var(--a1)">SELECTED</b>' : '';
-      var pin = v.name === currentName && currentName !== 'auto' ? ' <span style="color:var(--a3)">[PINNED]</span>' : '';
       var loc = v.localService ? ' [local]' : ' [network]';
       var def = v.default ? ' <span style="color:var(--a2)">[default]</span>' : '';
-      lines.push((i+1) + '. <b>' + escHtml(v.name) + '</b> (' + escHtml(v.lang) + ')' + loc + def + pin + sel);
+      lines.push((i+1) + '. <b>' + escHtml(v.name) + '</b> (' + escHtml(v.lang) + ')' + loc + def + sel);
     });
     content.innerHTML = lines.join('<br>');
   }
@@ -5111,8 +5095,15 @@ function speakText(t) {
   // multiplier that made every personality slightly slower than intended).
   var vp = VOICE_PERSONALITIES[S.voicePersonality] || VOICE_PERSONALITIES.assistant;
   u.rate   = vp.rateMul;
-  u.pitch  = vp.pitch;
   u.volume = 0.85;
+
+  // Gender pitch — applied on top of personality pitch so both settings stack.
+  // This is the primary gender mechanism on Android where all TTS voices share
+  // the same engine. On desktop/iOS a gendered voice is also selected above.
+  var genderPitch = (S.voiceGender === 'female') ? 1.4
+                  : (S.voiceGender === 'male')   ? 0.7
+                  : 1.0;
+  u.pitch = vp.pitch * genderPitch;
 
   // [ADDED/IMPROVED] Language-aware voice selection — detect reply language
   // and pick the best matching installed voice so Hindi/Marathi/Urdu replies
