@@ -762,41 +762,34 @@
   .send-btn:hover { transform: scale(1.08); box-shadow: 0 5px 18px var(--glow1); }
   .chat-hint { font-size: 0.7rem; color: var(--text-3); margin-top: 7px; text-align: center; max-width: 800px; }
 
-  /* ── [ADDED] MODEL SELECTOR ── */
-  .model-selector-row {
-    display: flex; align-items: center; justify-content: center;
-    gap: 6px; margin-top: 6px; max-width: 800px;
-  }
-  .model-selector-label {
-    font-size: 0.7rem; color: var(--text-3); white-space: nowrap;
-  }
-  #modelSelect {
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    color: var(--text-2);
-    font-family: var(--font-body);
-    font-size: 0.75rem;
-    padding: 3px 8px;
-    cursor: pointer;
-    outline: none;
-    transition: border-color var(--t), color var(--t);
-    touch-action: manipulation;
-  }
-  #modelSelect:focus, #modelSelect:hover {
-    border-color: var(--border-hi); color: var(--text-1);
-  }
-  /* ── [END ADDED] ── */
-
-  /* ── [ADDED] PERSONALITY SELECTOR — mirrors model selector styling ── */
+  /* ── [ADDED] MODEL / PERSONALITY / VOICE SELECTOR ROWS ── */
+  /* Shared row: full width, never overflows, label stays on one line */
+  .model-selector-row,
   .personality-selector-row {
-    display: flex; align-items: center; justify-content: center;
-    gap: 6px; margin-top: 5px; max-width: 800px;
+    display: flex; align-items: center;
+    gap: 6px; margin-top: 5px;
+    width: 100%; max-width: 800px;
+    overflow: hidden; box-sizing: border-box;
   }
+  .model-selector-row { margin-top: 6px; }
+
+  .model-selector-label,
   .personality-selector-label {
-    font-size: 0.7rem; color: var(--text-3); white-space: nowrap;
+    font-size: 0.7rem; color: var(--text-3);
+    white-space: nowrap; flex-shrink: 0;
   }
-  #personalitySelect {
+
+  /* All selects in these rows: fill remaining space, never overflow */
+  #modelSelect,
+  #personalitySelect,
+  #voicePersonalitySelect,
+  #voiceSelect {
+    flex: 1;
+    min-width: 0;          /* override browser default of auto/fit-content */
+    width: 0;              /* forces flex to control the width, not content */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--r-sm);
@@ -809,7 +802,10 @@
     transition: border-color var(--t), color var(--t);
     touch-action: manipulation;
   }
-  #personalitySelect:focus, #personalitySelect:hover {
+  #modelSelect:focus, #modelSelect:hover,
+  #personalitySelect:focus, #personalitySelect:hover,
+  #voicePersonalitySelect:focus, #voicePersonalitySelect:hover,
+  #voiceSelect:focus, #voiceSelect:hover {
     border-color: var(--border-hi); color: var(--text-1);
   }
   /* ── [END ADDED] ── */
@@ -5573,21 +5569,30 @@ function memPreFilter(msg) {
   // Too short
   if (t.length < MEM_CONFIG.MIN_MSG_LENGTH) return true;
 
-  // Pure question — ends with "?" and has no personal disclosure pattern.
-  // Questions *can* contain personal info ("What are good exercises for my bad knee?")
-  // so we only skip messages that are ONLY a question with no first-person signal.
-  var isQuestion   = /\?$/.test(t);
-  var hasFirstPerson = /(i |i'm|i am|i've|i have|i do|i like|i love|i hate|i want|i need|my |mine|we |our )/i.test(t);
+  // ── First-person signal — English + Hindi + Marathi + Urdu + Gujarati ──
+  // Catches native-script pronouns/possessives AND common Romanized forms so
+  // personal disclosures in any supported language pass through to analysis.
+  var hasFirstPerson =
+    /(i |i'm|i am|i've|i have|i do|i like|i love|i hate|i want|i need|my |mine|we |our )/i.test(t) ||
+    /मैं|मेर[ाीे]|मुझे|हमारा|मला|माझ[ाीे]|आवड|पसंद/.test(t) ||
+    /میں|میر[اےی]|مجھے|ہمارا|پسند/.test(t) ||
+    /હું|મારો|મારી|મારું|મને|આપણ|પસંદ/.test(t) ||
+    /\b(mera|meri|mere|mujhe|mala|maza|mazi|maze|main|hum|maru|mari|mare|mane|hu|tamaru|tamari|pasandida|pasand|aavad|avad)\b/i.test(t);
+
+  // Pure question — ends with "?" / "؟" and has no personal disclosure.
+  var isQuestion = /[?؟]$/.test(t);
   if (isQuestion && !hasFirstPerson) return true;
 
-  // Pure factual query patterns (no personal context)
+  // Pure factual query patterns (no personal context) — English only
   if (/^(what|who|where|when|why|how|tell me|explain|define|give me|list|show me|can you|could you|please)/i.test(t) && !hasFirstPerson) return true;
 
-  // Greetings / filler
-  if (/^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|lol|haha|hehe|bye|goodbye|good morning|good night|good afternoon)[\s!?.]*$/i.test(t)) return true;
+  // Greetings / filler — English + common cross-language equivalents
+  if (/^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|lol|haha|hehe|bye|goodbye|good morning|good night|good afternoon|shukriya|dhanyavaad|theek hai|acha|accha|haan|nahi|kem cho|kem chho|kaise ho|kasa aahes)[\s!?.,،؟]*$/i.test(t)) return true;
+  // Native-script greetings and filler
+  if (/^(नमस्ते|हाँ|नहीं|शुक्रिया|ठीक है|ہاں|نہیں|شکریہ|ٹھیک|નમસ્તે|હા|ના|આભાર)[\s!?.,،؟]*$/.test(t)) return true;
 
   // Pure commands with no personal info ("translate this", "summarise that")
-  if (/^(translate|summarise|summarize|write|create|make|generate|calculate|convert|fix|correct|check|review)/i.test(t) && !hasFirstPerson) return true;
+  if (/^(translate|summarise|summarize|write|create|make|generate|calculate|convert|fix|correct|check|review)/i.test(t) && !hasFirstPerson) return true;
 
   // Looks like a code snippet or math expression — no personal data here
   if (/^[\s\d\W]+$/.test(t)) return true;                   // only symbols/numbers
@@ -5596,152 +5601,267 @@ function memPreFilter(msg) {
   return false; // passes filter — proceed to LLM analysis
 }
 
-// ── DETERMINISTIC PATTERN-BASED EXTRACTOR ─────────────────────────
-// [ADDED] Fast, fully client-side, regex-based extraction for obvious
-// personal preferences/facts — runs BEFORE the LLM-based extractor and,
-// when it matches, is used instead of it (no extra API call needed).
-// Returns an array in the SAME shape as the LLM extractor:
-//   [{ category, subject, value, text, confidence }]
-// or [] if nothing obvious matched (caller should then fall back to the
-// LLM-based analyseAndSaveMemory path for more complex cases).
+// ── DETERMINISTIC PATTERN-BASED EXTRACTOR ─────────────────
+// Fast, fully client-side, regex-based extraction for obvious personal preferences/facts.
+// Covers English, Hindi, Marathi, Urdu, and Gujarati (both native script and Romanized).
+// Runs BEFORE the LLM-based extractor; when it matches, no API call is needed.
+// Returns an array of { category, subject, value, text, confidence } or [].
 function extractMemoriesDeterministic(msg) {
   var t = msg.trim();
-  // Strip a single trailing sentence-ending punctuation mark for matching,
-  // but keep using the original `t` for anything that needs full context.
-  var clean = t.replace(/[.!?]+$/, '').trim();
+  // Strip trailing sentence-ending punctuation (. ! ? । ؟ ।) for cleaner matching.
+  var clean = t.replace(/[\.!?\u0964\u061f\u06D4]+$/, '').trim();
   var results = [];
 
-  function cap(v) {
-    return v.replace(/\s+/g, ' ').trim();
-  }
+  function cap(v) { return v.replace(/\s+/g, ' ').trim(); }
   function add(category, subject, value) {
     value = cap(value);
-    if (!value || value.length < 2 || value.length > 80) return;
-    results.push({
-      category: category,
-      subject: subject,
-      value: value,
-      text: 'The user\'s ' + subject + ' is ' + value + '.',
-      confidence: 0.95
-    });
+    if (!value || value.length < 2 || value.length > 120) return;
+    results.push({ category: category, subject: subject, value: value,
+      text: 'The user\'s ' + subject + ' is ' + value + '.', confidence: 0.95 });
   }
-  function addVerbPhrase(category, subject, value, text) {
-    results.push({ category: category, subject: subject, value: cap(value), text: text, confidence: 0.9 });
+  function addV(category, subject, value, text) {
+    value = cap(value);
+    if (!value || value.length < 2 || value.length > 120) return;
+    results.push({ category: category, subject: subject, value: value, text: text, confidence: 0.9 });
   }
+
+  // Sports lookup used across all language branches
+  var sportsSet = {football:1,soccer:1,cricket:1,basketball:1,tennis:1,badminton:1,
+    hockey:1,baseball:1,volleyball:1,rugby:1,golf:1,boxing:1,swimming:1,running:1,
+    cycling:1,chess:1,kabaddi:1,kho:1,wrestling:1,athletics:1};
+  // खेल/रमत word in Devanagari/Gujarati
+  var isSport = function(v) { return !!sportsSet[v.toLowerCase().trim()]; };
+
+  // ════════════════════════════════════════════════════════════════
+  //  ENGLISH PATTERNS
+  // ════════════════════════════════════════════════════════════════
 
   // "My favourite/favorite <thing> is <value>"
-  var favMatch = clean.match(/^my\s+favou?rite\s+([a-z\s]+?)\s+is\s+(.+)$/i);
-  if (favMatch) {
-    var thing = cap(favMatch[1]).toLowerCase();
-    var val   = favMatch[2];
-    // Special-case "sport" -> sport category, everything else -> favorite
-    var category = /sport/.test(thing) ? 'sport' : 'favorite';
-    add(category, 'favourite ' + thing, val);
+  var m = clean.match(/^my\s+favou?rite\s+([a-z\s]+?)\s+is\s+(.+)$/i);
+  if (m) {
+    var thing = cap(m[1]).toLowerCase(), val = m[2];
+    add(isSport(val) || /sport|game|khe/.test(thing) ? 'sport' : 'favorite', 'favourite ' + thing, val);
     return results;
   }
-
-  // "My favourite/favorite <thing>" without "is" but with a value after a colon (rare) — skip, too ambiguous.
 
   // "<Someone> is my inspiration"
-  var inspoMatch1 = clean.match(/^(.+?)\s+is\s+my\s+inspiration$/i);
-  if (inspoMatch1) {
-    add('inspiration', 'inspiration', inspoMatch1[1]);
-    return results;
-  }
+  m = clean.match(/^(.+?)\s+is\s+my\s+inspiration$/i);
+  if (m) { add('inspiration', 'inspiration', m[1]); return results; }
 
   // "My inspiration is <Someone>"
-  var inspoMatch2 = clean.match(/^my\s+inspiration\s+is\s+(.+)$/i);
-  if (inspoMatch2) {
-    add('inspiration', 'inspiration', inspoMatch2[1]);
-    return results;
-  }
+  m = clean.match(/^my\s+inspiration\s+is\s+(.+)$/i);
+  if (m) { add('inspiration', 'inspiration', m[1]); return results; }
 
-  // "I admire <Someone/Something>"
-  var admireMatch = clean.match(/^i\s+admire\s+(.+)$/i);
-  if (admireMatch) {
-    var who = cap(admireMatch[1]);
-    results.push({
-      category: 'inspiration',
-      subject: 'inspiration',
-      value: who,
-      text: 'The user admires ' + who + '.',
-      confidence: 0.92
-    });
-    return results;
-  }
+  // "I admire <Someone>"
+  m = clean.match(/^i\s+admire\s+(.+)$/i);
+  if (m) { addV('inspiration','inspiration', m[1], 'The user admires ' + cap(m[1]) + '.'); return results; }
 
   // "I love <thing>" / "I really love <thing>"
-  var loveMatch = clean.match(/^i\s+(?:really\s+)?love\s+(.+)$/i);
-  if (loveMatch) {
-    var loved = cap(loveMatch[1]);
-    var lower = loved.toLowerCase();
-    // Common sports -> sport category with a normalized subject
-    var sportsList = ['football','soccer','cricket','basketball','tennis','badminton','hockey','baseball','volleyball','rugby','golf','boxing','swimming','running','cycling'];
-    if (sportsList.indexOf(lower) !== -1) {
-      addVerbPhrase('sport', 'favourite sport', loved, 'The user loves ' + loved + '.');
-    } else {
-      addVerbPhrase('interest', 'interest: ' + lower, loved, 'The user loves ' + loved + '.');
-    }
+  m = clean.match(/^i\s+(?:really\s+)?love\s+(.+)$/i);
+  if (m) {
+    var v = cap(m[1]), vl = v.toLowerCase();
+    addV(isSport(v) ? 'sport' : 'interest', isSport(v) ? 'favourite sport' : 'interest: ' + vl, v, 'The user loves ' + v + '.');
     return results;
   }
 
   // "I prefer <thing>"
-  var preferMatch = clean.match(/^i\s+prefer\s+(.+)$/i);
-  if (preferMatch) {
-    var pref = cap(preferMatch[1]);
-    addVerbPhrase('preference', 'preference', pref, 'The user prefers ' + pref + '.');
+  m = clean.match(/^i\s+prefer\s+(.+)$/i);
+  if (m) { addV('preference','preference', m[1], 'The user prefers ' + cap(m[1]) + '.'); return results; }
+
+  // "I am learning / I'm learning <thing>"
+  m = clean.match(/^i(?:'m| am)\s+learning\s+(.+)$/i);
+  if (m) { addV('goal','learning goal', m[1], 'The user is learning ' + cap(m[1]) + '.'); return results; }
+
+  // "My name is <name>" / "I am <name>"
+  m = clean.match(/^(?:my\s+name\s+is|i\s+am|i'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/i);
+  if (m && !/learning|studying|working/i.test(m[1])) {
+    add('identity', 'name', m[1]); return results;
+  }
+
+  // "I work as / I am a <occupation>"
+  m = clean.match(/^i\s+(?:work\s+as|am\s+a(?:n)?)\s+(.+)$/i);
+  if (m && !/learning|studying/i.test(m[1])) {
+    add('identity', 'occupation', m[1]); return results;
+  }
+
+  // "I live in <place>"
+  m = clean.match(/^i\s+live\s+in\s+(.+)$/i);
+  if (m) { add('identity', 'location', m[1]); return results; }
+
+  // ════════════════════════════════════════════════════════════════
+  //  ROMANIZED HINDI / MARATHI / URDU / GUJARATI PATTERNS
+  //  (Latin-script transliterations of South Asian languages)
+  // ════════════════════════════════════════════════════════════════
+
+  // "Mera/Meri/Mere/Maru/Mari/Mare pasandida/pasand/aavdta <thing> <value> hai/aahe/chhe"
+  // Covers: "Mera pasandida khel cricket hai" / "Maru pasandida game chess che"
+  m = clean.match(/^(?:mera?|meri|mere|maru|mari|mare|mara)\s+(?:pasandida|pasand|aavdta|avadta|aavadta|priya)\s+(.+?)\s+(\S+)\s+(?:hai|he|aahe|ahe|chhe|che|6e)$/i);
+  if (m) {
+    var subj = cap(m[1]).toLowerCase(), val2 = cap(m[2]);
+    add(isSport(val2) || /khel|khed|game|sport/.test(subj) ? 'sport' : 'favorite', 'favourite ' + subj, val2);
     return results;
   }
 
-  // "I am learning <thing>" / "I'm learning <thing>"
-  var learnMatch = clean.match(/^i(?:'m| am)\s+learning\s+(.+)$/i);
-  if (learnMatch) {
-    var subj = cap(learnMatch[1]);
-    addVerbPhrase('goal', 'learning goal', subj, 'The user is learning ' + subj + '.');
+  // Shorter: "Maru pasandida <value> chhe" (thing implicit/omitted)
+  m = clean.match(/^(?:meru?|meru|maru|mera?|meri|mere)\s+(?:pasandida|pasand|priya)\s+(.+?)\s+(?:chhe|che|6e|hai|he|aahe)$/i);
+  if (m) {
+    var val3 = cap(m[1]);
+    add(isSport(val3) ? 'sport' : 'favorite', 'favourite', val3);
     return results;
   }
+
+  // "Main/Mujhe <thing> pasand hai/aahe" — "I like <thing>"
+  m = clean.match(/^(?:main|mujhe|mala|mane)\s+(.+?)\s+(?:pasand|aavad)\s+(?:hai|he|aahe|ahe|chhe|che)$/i);
+  if (m) {
+    var v2 = cap(m[1]);
+    addV(isSport(v2) ? 'sport' : 'interest', isSport(v2) ? 'favourite sport' : 'interest: ' + v2.toLowerCase(), v2, 'The user likes ' + v2 + '.');
+    return results;
+  }
+
+  // "Mera naam <name> hai/chhe" — "My name is <name>"
+  m = clean.match(/^(?:mera|maru|maro)\s+naam\s+(.+?)\s+(?:hai|he|chhe|che|aahe|6e)$/i);
+  if (m) { add('identity', 'name', m[1]); return results; }
+
+  // "Main <name> hun/hoon" — "I am <name>"
+  m = clean.match(/^main\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:hun|hoon|hu|chu|chhu)$/i);
+  if (m) { add('identity', 'name', m[1]); return results; }
+
+  // "Mujhe/Mala/Mane <thing> bahut pasand hai" — "I like <thing> a lot"
+  m = clean.match(/^(?:mujhe|mala|mane)\s+(.+?)\s+bahut\s+pasand\s+(?:hai|he|aahe|ahe)$/i);
+  if (m) {
+    var v3 = cap(m[1]);
+    addV(isSport(v3) ? 'sport' : 'interest', isSport(v3) ? 'favourite sport' : 'interest: ' + v3.toLowerCase(), v3, 'The user really likes ' + v3 + '.');
+    return results;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  HINDI / MARATHI DEVANAGARI SCRIPT PATTERNS
+  // ════════════════════════════════════════════════════════════════
+
+  // "मेरा/मेरी पसंदीदा <thing> ... है" — "My favourite <thing> is <value>"
+  m = clean.match(/^(?:मेर[ाीे]|हमार[ाी])\s+पसंदीदा\s+(.+?)\s+(.+?)\s+है$/);
+  if (m) {
+    var subj2 = cap(m[1]), val4 = cap(m[2]);
+    add(/खेल|खेलो/.test(subj2) ? 'sport' : 'favorite', 'favourite ' + subj2, val4);
+    return results;
+  }
+
+  // "मुझे <thing> पसंद है" — "I like <thing>"
+  m = clean.match(/^मुझे\s+(.+?)\s+पसंद\s+है$/);
+  if (m) {
+    var v4 = cap(m[1]);
+    addV(isSport(v4) ? 'sport' : 'interest', 'interest: ' + v4, v4, 'The user likes ' + v4 + '.');
+    return results;
+  }
+
+  // "मेरा नाम <name> है" — "My name is <name>"
+  m = clean.match(/^मेरा\s+नाम\s+(.+?)\s+है$/);
+  if (m) { add('identity', 'name', m[1]); return results; }
+
+  // Marathi: "माझा/माझी आवडता <thing> <value> आहे"
+  m = clean.match(/^(?:माझ[ाीे])\s+(?:आवडत[ाीे]|प्रिय)\s+(.+?)\s+(.+?)\s+आहे$/);
+  if (m) {
+    var subj3 = cap(m[1]), val5 = cap(m[2]);
+    add(/खेळ/.test(subj3) ? 'sport' : 'favorite', 'favourite ' + subj3, val5);
+    return results;
+  }
+
+  // "मला <thing> आवडते — "I like <thing>" (Marathi)
+  m = clean.match(/^मला\s+(.+?)\s+आवडत[ेे]$/);
+  if (m) {
+    var v5 = cap(m[1]);
+    addV(isSport(v5) ? 'sport' : 'interest', 'interest: ' + v5, v5, 'The user likes ' + v5 + '.');
+    return results;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  GUJARATI SCRIPT PATTERNS
+  // ════════════════════════════════════════════════════════════════
+
+  // "મારી/મારો/મારું પસંદીદા <thing> <value> ાે" — "My favourite <thing> is <value>"
+  m = clean.match(/^(?:માર[ીોું])\s+પસંદીદા\s+(.+?)\s+(.+?)\s+ાે$/);
+  if (m) {
+    var subj4 = cap(m[1]), val6 = cap(m[2]);
+    add(/રમત/.test(subj4) ? 'sport' : 'favorite', 'favourite ' + subj4, val6);
+    return results;
+  }
+
+  // "મને <thing> પસંદ ાે" — "I like <thing>" (Gujarati)
+  m = clean.match(/^મને\s+(.+?)\s+પસંદ\s+ાે$/);
+  if (m) {
+    var v6 = cap(m[1]);
+    addV(isSport(v6) ? 'sport' : 'interest', 'interest: ' + v6, v6, 'The user likes ' + v6 + '.');
+    return results;
+  }
+
+  // "મારું નામ <name> ાે" — "My name is <name>" (Gujarati)
+  m = clean.match(/^મારું\s+નામ\s+(.+?)\s+ાે$/);
+  if (m) { add('identity', 'name', m[1]); return results; }
+
+  // ════════════════════════════════════════════════════════════════
+  //  URDU ARABIC SCRIPT PATTERNS
+  // ════════════════════════════════════════════════════════════════
+
+  // "میرا پسندیدہ <thing> <value> ہے" — "My favourite <thing> is <value>"
+  m = clean.match(/^میرا\s+پسندیدہ\s+(.+?)\s+(.+?)\s+ہے$/);
+  if (m) {
+    var subj5 = cap(m[1]), val7 = cap(m[2]);
+    add(/کھیل/.test(subj5) ? 'sport' : 'favorite', 'favourite ' + subj5, val7);
+    return results;
+  }
+
+  // "مجھے <thing> پسند ہے" — "I like <thing>" (Urdu)
+  m = clean.match(/^مجھے\s+(.+?)\s+پسند\s+ہے$/);
+  if (m) {
+    var v7 = cap(m[1]);
+    addV(isSport(v7) ? 'sport' : 'interest', 'interest: ' + v7, v7, 'The user likes ' + v7 + '.');
+    return results;
+  }
+
+  // "میرا نام <name> ہے" — "My name is <name>" (Urdu)
+  m = clean.match(/^میرا\s+نام\s+(.+?)\s+ہے$/);
+  if (m) { add('identity', 'name', m[1]); return results; }
 
   return results; // no obvious match — caller falls back to LLM extraction
 }
 
 // ── STRICT EXTRACTION PROMPT ──────────────────────────────────────
 function buildMemoryAnalysisPrompt(userMessage) {
-  return 'You are a strict personal-memory extraction engine for an AI assistant, similar to ChatGPT-style memory. ' +
+  return 'You are a strict personal-memory extraction engine for an AI assistant. ' +
     'Your ONLY job is to identify meaningful, long-term facts about THIS USER — personal preferences, recurring interests, favourites, inspirations, goals — that would still be useful in a future conversation weeks or months from now. ' +
     '' +
-    'SAVE — only if explicitly stated by the user about themselves. Examples that SHOULD be saved:\n' +
-    '  • "My favourite footballer is Cristiano Ronaldo." -> favorite, subject "favourite footballer", value "Cristiano Ronaldo"\n' +
-    '  • "I admire Cristiano Ronaldo." -> inspiration, subject "inspiration", value "Cristiano Ronaldo"\n' +
-    '  • "Cristiano Ronaldo is my inspiration." -> inspiration, subject "inspiration", value "Cristiano Ronaldo"\n' +
-    '  • "My favourite cricket player is Virat Kohli." -> favorite, subject "favourite cricket player", value "Virat Kohli"\n' +
-    '  • "My favourite color is blue." -> favorite, subject "favourite color", value "blue"\n' +
-    '  • "I love football." -> sport, subject "favourite sport", value "football"\n' +
-    '  • "I prefer dark mode." -> preference, subject "app theme preference", value "dark mode"\n' +
-    '  • "I am learning programming." -> goal, subject "learning goal", value "programming"\n' +
-    '  • "My favourite team is Real Madrid." -> favorite, subject "favourite team", value "Real Madrid"\n' +
-    '  • Name, age, occupation, location, nationality -> identity\n' +
-    '  • Active ongoing projects they describe -> project\n' +
-    '  • General long-term hobbies/passions not covered above -> interest\n' +
+    'LANGUAGE: The user may write in English, Hindi, Marathi, Urdu, or Gujarati — in native script OR Romanized. ' +
+    'You must understand all of these equally. The "text" field in your output must always be in English (third-person). ' +
+    'The "value" field should preserve the original language/script of the value (e.g. a name written in Devanagari stays in Devanagari). ' +
     '' +
-    'DO NOT SAVE — return [] for messages like these:\n' +
-    '  • "Hello", "How are you?", "What\'s the weather?" (greetings/small talk/questions with no personal disclosure)\n' +
-    '  • "I ate pizza today." (one-time, temporary, not a long-term fact)\n' +
-    '  • Random one-time conversations or temporary requests\n' +
-    '  • One-time task requests ("translate this", "write a poem about X")\n' +
-    '  • Questions, even with personal context ("what exercises help bad knees?")\n' +
-    '  • Emotional states that are temporary ("I am stressed today")\n' +
-    '  • Conversational filler (thanks, ok, sure, yes, no)\n' +
+    'SAVE — only if explicitly stated by the user about themselves. Examples that SHOULD be saved (all languages):\n' +
+    '  • [EN] "My favourite footballer is Cristiano Ronaldo." -> favorite, "favourite footballer", "Cristiano Ronaldo"\n' +
+    '  • [EN] "I love cricket." -> sport, "favourite sport", "cricket"\n' +
+    '  • [EN] "I am learning programming." -> goal, "learning goal", "programming"\n' +
+    '  • [HI] "मेरा पसंदीदा खेल शतरंज है।" -> favorite, "favourite game", "शतरंज" (text: "The user\'s favourite game is chess.")\n' +
+    '  • [HI Roman] "Mera pasandida khel cricket hai." -> sport, "favourite sport", "cricket"\n' +
+    '  • [MR] "माझा आवडता खेळ बुद्धिबळ आहे." -> favorite, "favourite game", "बुद्धिबळ"\n' +
+    '  • [GU] "મારી પસંદીદા રમત ચેસ ાે." -> favorite, "favourite game", "ચેસ"\n' +
+    '  • [GU Roman] "Maru pasandida game chess che." -> favorite, "favourite game", "chess"\n' +
+    '  • [UR] "میرا پسندیدہ کھیل شطرنج ہے۔" -> favorite, "favourite game", "شطرنج"\n' +
+    '  • Name, age, occupation, location, nationality (in any language) -> identity\n' +
+    '  • Active ongoing projects -> project\n' +
+    '  • General long-term hobbies/passions -> interest\n' +
+    '' +
+    'DO NOT SAVE — return [] for:\n' +
+    '  • Greetings, small talk, questions with no personal disclosure (in any language)\n' +
+    '  • One-time events ("I ate pizza today" / "آج میں نے پیزا کھایا")\n' +
+    '  • Temporary emotional states ("I am stressed today")\n' +
+    '  • One-time task requests ("translate this", "write a poem")\n' +
     '  • Anything inferred or implied — only EXPLICIT self-disclosures\n' +
     '' +
     'STRICT RULES:\n' +
     '  1. Max 2 memories per message.\n' +
-    '  2. Each memory must be a single, specific, factual sentence in third person for "text".\n' +
-    '     Good: "The user\'s favourite footballer is Cristiano Ronaldo."\n' +
-    '     Bad:  "The user seems to like technology."\n' +
-    '  3. ALSO provide "subject" — a short, normalized topic key for this fact (e.g. "favourite footballer", "favourite color", "app theme preference"), used to detect when a NEWER fact should replace an OLDER one on the same subject.\n' +
-    '  4. ALSO provide "value" — the short specific value itself (e.g. "Cristiano Ronaldo", "blue", "dark mode"), used for a user-facing save notice.\n' +
-    '  5. Include a confidence score (0.0-1.0).\n' +
-    '  6. Clear, explicit first-person statements (e.g. "My favourite X is Y", "I love X", "I admire X", "X is my inspiration") should get HIGH confidence (0.85-1.0) and SHOULD be saved. Only return [] for messages with no genuine personal preference/fact, or for the DO NOT SAVE cases above.\n' +
+    '  2. "text" must be a specific, factual English sentence in third person. E.g. "The user\'s favourite game is chess."\n' +
+    '  3. "subject" must be a short normalized English topic key (e.g. "favourite game", "name", "occupation").\n' +
+    '  4. "value" should be the specific value, preserving its original script if non-English.\n' +
+    '  5. Include a confidence score (0.0-1.0). Explicit statements score 0.85-1.0.\n' +
+    '  6. Return [] if no genuine long-term personal fact is present.\n' +
     '' +
     'Return ONLY a raw JSON array, no markdown, no explanation:\n' +
     '[{"category":"identity|preference|goal|project|interest|favorite|inspiration|sport|other","subject":"...","value":"...","text":"...","confidence":0.95}]\n' +
