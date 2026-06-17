@@ -6978,12 +6978,30 @@ if ('serviceWorker' in navigator) {
     // [ADDED — Bug #3 fix] Spoken-language tracking. langPref is the user's
     // explicit choice from the Spoken Language selector ('' = Auto).
     // lastDetectedLang is the language of the AI's most recent reply,
-    // captured in vcSpeakAndRestart — since the AI always replies in the
-    // language the user just spoke, this lets the next listening session
-    // adapt automatically without needing the browser's (unreliable) ''
-    // auto-detect. See vcResolveRecognitionLang().
-    langPref:         '',
-    lastDetectedLang: '',
+    // captured in vcSpeakAndRestart.
+    //
+    // [FIX — Auto mode lagging one turn behind] lastDetectedLang alone was
+    // the entire Auto resolution signal, and it is the language of the AI's
+    // PREVIOUS reply, not the language the user is about to speak NOW. That
+    // is a one-turn-lagging proxy: it happens to work when the user keeps
+    // speaking the same language turn after turn (Hindi -> Hindi), because
+    // the AI's reply language matches what's coming next anyway. It breaks
+    // the moment the user switches languages (Hindi -> Gujarati), because
+    // recognition for that turn still starts pinned to hi-IN (the language
+    // of the AI's prior reply), so the Gujarati audio gets recognized
+    // through a Hindi-tuned model and comes out garbled/empty.
+    // userUtteranceLang closes this gap: it's set from the USER's OWN
+    // just-finalized transcript (via the existing detectSpeechLang script
+    // detector, already used elsewhere for TTS voice selection — no new
+    // multilingual logic introduced) the moment an utterance is submitted,
+    // and is checked FIRST in vcResolveRecognitionLang, ahead of the older
+    // AI-reply-based signal. This still can't predict a language switch
+    // before the user starts the next sentence (no engine truly does), but
+    // it means recognition adapts based on what the user just said rather
+    // than lagging an extra turn behind on what the AI said before that.
+    langPref:          '',
+    lastDetectedLang:  '',
+    userUtteranceLang: '',
 
     // [ADDED — Bug #1 fix, accumulating barge-in probes] vcBargeInCheck used
     // to be a free-running chain: each call created a new probe
@@ -7120,6 +7138,48 @@ if ('serviceWorker' in navigator) {
     vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
   }
 
+  // [FIX — premature cutoff during recognizer restarts] Root cause traced:
+  // vcFinalizeUtterance is ONLY ever invoked from the setTimeout inside
+  // vcResetSilenceTimer above — there is no other submission trigger.
+  // The bug was never the timer's length: it's that the timer keeps
+  // counting down through restart gaps it knows nothing about. Sequence
+  // that was cutting people off, in EVERY language:
+  //   1. onresult fires, vcResetSilenceTimer() arms a countdown anchored
+  //      to "now" (the last moment we KNOW the user was still talking).
+  //   2. The recognizer session ends on its own — most commonly on Android
+  //      Chrome, but this can happen on any engine even with
+  //      continuous=true. This is NOT necessarily preceded by real
+  //      silence; it's a platform/engine session-length quirk.
+  //   3. onend (below) schedules a reconnect via setTimeout(vcStartListening, 250).
+  //   4. rec.start() is asynchronous — onstart/the first onresult of the
+  //      NEW instance can easily take several hundred ms to over a second
+  //      to actually start delivering audio again, especially on mobile.
+  //   5. During that whole gap, nothing fires onresult, so nothing calls
+  //      vcResetSilenceTimer() — the countdown from step 1 just keeps
+  //      ticking, blind to the fact that no recognizer is currently
+  //      listening. If steps 2-4 eat enough of that countdown (which on a
+  //      slow restart they easily can), vcFinalizeUtterance fires and
+  //      submits mid-sentence even though the user never stopped talking
+  //      and no real silence occurred.
+  // This explains why it affected ALL languages identically — it's a race
+  // between wall-clock timer expiry and recognizer-restart latency, not a
+  // race that depends on the timeout length per language.
+  // Fix: every time we schedule a restart because the recognizer ended on
+  // its own (not user silence, not an intentional stop), re-arm a FRESH
+  // full-length countdown right then — so the user gets the full silence
+  // threshold counted from the moment the new instance is expected to be
+  // listening, not a leftover fraction of the threshold counted from
+  // before the gap even started. Only re-arms if there's something
+  // pending in the buffer (no point keeping a countdown alive for an
+  // utterance that hasn't started yet).
+  function vcExtendSilenceTimerForRestart(lang) {
+    if (!vc.utteranceBuffer) return; // nothing buffered yet — let it expire/stay idle normally
+    if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
+    var ms = vcSilenceMsFor(lang);
+    vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
+    vcLog('vcExtendSilenceTimerForRestart', 'fresh ' + ms + 'ms window armed across restart gap');
+  }
+
   // Called only when real silence (the language-specific threshold from
   // vcSilenceMsFor — see Bug #2 fix above) has elapsed since the last bit
   // of speech activity. Submits whatever finalized text has been
@@ -7131,6 +7191,38 @@ if ('serviceWorker' in navigator) {
     vc.utteranceBuffer = '';
     if (!transcript) { vcLog('vcFinalizeUtterance:empty', 'nothing captured'); return; }
     vcLog('vcFinalizeUtterance', 'submitting "' + transcript + '"');
+
+    // [FIX — Auto mode lagging one turn behind] Detect the language of
+    // what the user JUST said (using the same script-based detectSpeechLang
+    // already used elsewhere for TTS voice selection — not new
+    // multilingual logic) so the NEXT recognition session can be biased
+    // toward it via vcResolveRecognitionLang, instead of only ever
+    // reacting to the AI's reply from the turn before. Only meaningful
+    // when Auto is active (vc.langPref === '') — a pinned language always
+    // wins regardless, per vcResolveRecognitionLang's priority order.
+    //
+    // Guard: detectSpeechLang() returns 'en-US' both for genuinely English
+    // text AND as its catch-all when nothing else matched (e.g. a
+    // mis-recognized non-English utterance that came back as unrecognizable
+    // Latin-script text). We can't tell those two cases apart here without
+    // touching detectSpeechLang itself, which is shared multilingual logic
+    // out of scope for this fix. So: an 'en' result only updates
+    // userUtteranceLang if it isn't already pinned to a non-English
+    // language — this avoids a garbled non-English transcript flipping
+    // recognition to English for the next turn, while still letting a
+    // real switch INTO English (or the very first turn) through normally.
+    if (!vc.langPref && typeof detectSpeechLang === 'function') {
+      var detected = detectSpeechLang(transcript);
+      var isEnglish = detected && detected.slice(0, 2).toLowerCase() === 'en';
+      var alreadyNonEnglish = vc.userUtteranceLang && vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en';
+      if (detected && !(isEnglish && alreadyNonEnglish)) {
+        vcLog('vcFinalizeUtterance:langDetect', 'user utterance detected as ' + detected);
+        vc.userUtteranceLang = detected;
+      } else if (detected) {
+        vcLog('vcFinalizeUtterance:langDetect:skipped', 'ambiguous en default, keeping ' + vc.userUtteranceLang);
+      }
+    }
+
     vcStopMic('utterance-finalized');
 
     // [Preserved from before] Do NOT navigate to the chat page. The whole
@@ -7150,12 +7242,25 @@ if ('serviceWorker' in navigator) {
   // ── [ADDED — Bug #3 fix] Resolve which BCP-47 locale to recognize with ──
   // The Web Speech API has no real automatic spoken-language detection;
   // lang='' just falls back to the device/browser locale (usually English).
-  // Priority: 1) language explicitly pinned via the Spoken Language
-  // selector, 2) the language the conversation has been adapting to (set
-  // from the AI's last reply in vcSpeakAndRestart, since the AI always
-  // replies in the language the user just spoke), 3) a safe default.
+  //
+  // [FIX — Auto mode lagging one turn behind] Priority is now:
+  //   1) language explicitly pinned via the Spoken Language selector
+  //   2) the language detected from the USER's own last finalized
+  //      utterance (vc.userUtteranceLang) — what they just said, which is
+  //      the best available signal for what they're likely to keep
+  //      speaking. Set in vcFinalizeUtterance.
+  //   3) the language of the AI's last reply (vc.lastDetectedLang) — kept
+  //      only as a fallback for the very first turn, before any user
+  //      utterance has been transcribed yet.
+  //   4) a safe default.
+  // This does not (and cannot) predict a language switch before the user
+  // starts speaking it — no engine offers true predictive auto-detection —
+  // but it removes the extra one-turn lag that made Auto mode pin to
+  // whatever the AI said in the PREVIOUS turn instead of what the user
+  // most recently actually said.
   function vcResolveRecognitionLang() {
     if (vc.langPref) return vc.langPref;
+    if (vc.userUtteranceLang) return vc.userUtteranceLang;
     if (vc.lastDetectedLang) return vc.lastDetectedLang;
     return 'en-IN';
   }
@@ -7297,6 +7402,9 @@ if ('serviceWorker' in navigator) {
         case 'network':
           vcLog('onerror:network', 'speech recognition network failure');
           vcSetStatus('error');
+          // [FIX — premature cutoff] Same restart-gap exposure as onend —
+          // see vcExtendSilenceTimerForRestart. Re-arm before the gap.
+          vcExtendSilenceTimerForRestart(rec.lang);
           // Recoverable — retry after a longer backoff since it's network-related.
           if (vc.active) setTimeout(vcStartListening, 1500);
           return;
@@ -7309,14 +7417,18 @@ if ('serviceWorker' in navigator) {
           vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
           return;
         case 'no-speech':
-          // Completely normal — the browser's silence timeout. Not an error
-          // from the user's perspective; just restart quietly and keep the
-          // badge showing Listening so there's no visible flicker.
+          // Completely normal — the browser's silence timeout. This is a
+          // genuine "nothing was said for a while" signal from the engine
+          // itself, so — unlike onend/network above — we deliberately do
+          // NOT extend the silence timer here: if it's also due to expire,
+          // letting it expire is correct, not a bug.
           vcLog('onerror:no-speech', 'silence timeout — restarting');
           if (vc.active) setTimeout(vcStartListening, 400);
           return;
         default:
           vcLog('onerror:other', String(e.error));
+          // [FIX — premature cutoff] Same restart-gap exposure as onend.
+          vcExtendSilenceTimerForRestart(rec.lang);
           if (vc.active) setTimeout(vcStartListening, 800);
           return;
       }
@@ -7336,11 +7448,22 @@ if ('serviceWorker' in navigator) {
       // Android Chrome) still end the session on a short pause — but unlike
       // before, that no longer means the utterance is "done": we never
       // submit from here. We just seamlessly start a fresh recognizer
-      // instance; vc.utteranceBuffer and vc.silenceTimer are untouched by
-      // this restart, so a multi-part sentence keeps accumulating across
-      // instances and is only submitted once real silence (the
-      // language-specific threshold from vcSilenceMsFor)
-      // is observed by vcFinalizeUtterance.
+      // instance; vc.utteranceBuffer keeps accumulating across instances
+      // and is only submitted once real silence is observed by
+      // vcFinalizeUtterance.
+      //
+      // [FIX — premature cutoff, traced root cause] The recognizer ending
+      // here is exactly the restart gap described above
+      // vcExtendSilenceTimerForRestart — there's about to be a real delay
+      // before a new instance is confirmed listening again (rec.start()
+      // is async; onstart can take a while, especially on mobile). Without
+      // this call, the silence timer left over from this dead instance's
+      // last onresult keeps ticking through that whole gap and can expire
+      // before the new instance ever captures another sound, submitting
+      // mid-sentence. Re-arming a fresh full window here means the user
+      // gets the full silence threshold counted from the restart, not a
+      // leftover fraction of it counted from before the gap started.
+      vcExtendSilenceTimerForRestart(rec.lang);
       setTimeout(vcStartListening, 250);
     };
 
