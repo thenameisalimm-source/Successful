@@ -6874,11 +6874,18 @@ if ('serviceWorker' in navigator) {
 
   // ── State ───────────────────────────────────────────────────────
   var vc = {
-    active:   false,   // Voice Chat Mode on/off
-    listening: false,  // mic is open
+    active:    false,  // Voice Chat Mode on/off (USER INTENT)
+    listening: false,  // CONFIRMED: recognizer's onstart has fired for the current instance
+    starting:  false,  // a start() call is in flight, awaiting onstart/onerror — blocks duplicate start()
     speaking:  false,  // TTS is playing
-    rec:       null,   // SpeechRecognition instance
-    ignoreEnd: false,  // suppress auto-restart on intentional stop
+    rec:       null,   // the CURRENT SpeechRecognition instance (or null if none is live)
+    gen:       0,      // generation counter — incremented every time we intentionally
+                        // replace/retire a recognizer instance. Every handler closure
+                        // captures the gen it was created for and checks it's still
+                        // current before touching shared state, so a stale instance's
+                        // late-firing event can never corrupt the live state.
+    ignoreEnd: false,  // suppress auto-restart on intentional stop (legacy flag, kept
+                        // for vcStopMic callers; superseded by gen-check but harmless)
   };
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
@@ -6887,7 +6894,7 @@ if ('serviceWorker' in navigator) {
   // ── Helpers ─────────────────────────────────────────────────────
 
   function vcSetStatus(mode) {
-    // mode: 'listening' | 'processing' | 'speaking' | 'idle'
+    // mode: 'listening' | 'processing' | 'speaking' | 'error' | 'idle'
     // Uses visibility (not display) so the panel always holds its space —
     // preventing the layout reflow / page-jump that was Root Cause 1.
     if (!vcPanel) return;
@@ -6909,9 +6916,25 @@ if ('serviceWorker' in navigator) {
       vcText.textContent  = 'AI Speaking…';
       vcPanel.firstElementChild.style.background = 'rgba(99,179,237,0.12)';
       vcPanel.firstElementChild.style.borderColor = 'rgba(99,179,237,0.3)';
+    } else if (mode === 'error') {
+      vcPanel.style.visibility = 'visible';
+      vcIcon.textContent  = '⚠️';
+      vcText.textContent  = 'Mic error — tap to retry';
+      vcPanel.firstElementChild.style.background = 'rgba(248,113,113,0.12)';
+      vcPanel.firstElementChild.style.borderColor = 'rgba(248,113,113,0.45)';
     } else {
       vcPanel.style.visibility = 'hidden';
     }
+  }
+
+  // [ADDED] Single logging chokepoint for the recognition lifecycle so every
+  // state transition and every error path (no-speech, aborted, audio-capture,
+  // network, not-allowed, language-not-supported, etc.) is traceable in the
+  // console with the generation it belongs to. Does not affect behavior.
+  function vcLog(event, detail) {
+    try {
+      console.log('[ALEEM-VC] gen=' + vc.gen + ' ' + event + (detail ? ' :: ' + detail : ''));
+    } catch (e) { /* never let logging break voice chat */ }
   }
 
   function vcUpdateToggleUI() {
@@ -6932,13 +6955,27 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── Stop mic cleanly ────────────────────────────────────────────
-  function vcStopMic() {
-    vc.listening  = false;
-    vc.ignoreEnd  = true;
+  // Tears down the CURRENT recognizer instance (if any) and bumps the
+  // generation counter so any of its still-pending event callbacks become
+  // no-ops (they check `myGen !== vc.gen` and bail). This is what makes
+  // start()/stop()/abort() and the four event handlers safe to overlap —
+  // there is never more than one instance whose events can affect state.
+  function vcStopMic(reason) {
+    vc.gen++;             // retire whatever instance is currently live
+    vc.listening = false;
+    vc.starting  = false;
+    vc.ignoreEnd = true;
     if (vc.rec) {
-      try { vc.rec.stop(); } catch(e){}
+      var r = vc.rec;
       vc.rec = null;
+      // abort() (not stop()) — we are intentionally discarding this
+      // instance, including any in-flight partial recognition. stop()
+      // would still fire a final onresult/onend for trailing audio, which
+      // is exactly the kind of late event that caused state desync before.
+      try { r.onresult = null; r.onerror = null; r.onend = null; r.onstart = null; } catch (e) {}
+      try { r.abort(); } catch (e) {}
     }
+    vcLog('vcStopMic', reason || '');
   }
 
   // ── Stop TTS cleanly ────────────────────────────────────────────
@@ -6950,36 +6987,81 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── Start listening ─────────────────────────────────────────────
+  // Guarded against duplicate concurrent start() calls and against
+  // restart loops via the generation counter: every callback below is
+  // tagged with the generation it was created for (myGen) and checks
+  // `myGen !== vc.gen` before doing anything, so a stale instance firing
+  // late (after a newer vcStartListening() already replaced it) can never
+  // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
-    if (!vc.active) return;
+    if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
+
+    // [FIX] Duplicate-start guard. Without this, overlapping callers
+    // (onend, onerror, TTS onend, barge-in, a late setTimeout) could each
+    // try to create+start a new recognizer while one is already starting
+    // or already listening — the classic cause of "Listening shown but
+    // mic isn't actually listening": the second start() throws
+    // InvalidStateError on some browsers, or silently creates an instance
+    // that never gets onstart, while the badge was already set optimistically.
+    if (vc.starting || vc.listening) {
+      vcLog('vcStartListening:skip', 'already starting=' + vc.starting + ' listening=' + vc.listening);
+      return;
+    }
 
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
+      vcLog('vcStartListening:fatal', 'SpeechRecognition unsupported');
       if (typeof toast === 'function') toast('⚠️ Speech recognition not supported in this browser');
+      vcSetStatus('error');
       vcStop();
       return;
     }
 
-    vc.rec = new SR();
-    vc.rec.continuous      = false;
-    vc.rec.interimResults  = false;
+    // Retire any previous instance/generation before creating a new one.
+    vcStopMic('superseded-by-new-start');
+
+    var myGen = vc.gen;     // this instance's generation — captured for every handler below
+    vc.starting = true;
+
+    var rec;
+    try {
+      rec = new SR();
+    } catch (e) {
+      vcLog('vcStartListening:fatal', 'constructor threw: ' + e.message);
+      vc.starting = false;
+      vcSetStatus('error');
+      vcStop();
+      return;
+    }
+
+    rec.continuous     = false;
+    rec.interimResults = false;
     // Empty string = browser auto-detects language from audio.
     // This lets the STT engine accept Hindi, Gujarati, Urdu, Marathi, etc.
     // Language detection for the AI reply and TTS is handled downstream by
     // LANGUAGE_INSTRUCTION (AI side) and detectSpeechLang/pickVoiceForLang (TTS side).
-    vc.rec.lang            = '';
-    vc.ignoreEnd           = false;
+    rec.lang = '';
 
-    vc.rec.onstart = function() {
+    rec.onstart = function() {
+      if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
+      // SpeechRecognition's onstart firing IS the confirmation that the
+      // recognizer is actually running — this is the one and only place
+      // vc.listening becomes true and vc.starting clears together.
+      vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
+      vcLog('onstart', 'recognizer confirmed running');
+      // Only NOW — on confirmed start, not on intent — does the badge say
+      // Listening. This is what keeps the badge synced to reality.
       vcSetStatus('listening');
     };
 
-    vc.rec.onresult = function(e) {
+    rec.onresult = function(e) {
+      if (myGen !== vc.gen) { vcLog('onresult:stale', 'gen ' + myGen); return; }
       var transcript = e.results[0][0].transcript.trim();
+      vcLog('onresult', 'transcript length ' + transcript.length);
       if (!transcript) return;
-      vcStopMic();
+      vcStopMic('got-result');
 
       // [FIX] Do NOT navigate to the chat page. The whole point of Voice
       // Chat Mode is a call-style experience that never leaves this page.
@@ -6999,40 +7081,91 @@ if ('serviceWorker' in navigator) {
       }
     };
 
-    vc.rec.onerror = function(e) {
+    var errorHandled = false; // set by onerror; tells the always-following
+                               // onend not to ALSO schedule its own restart,
+                               // since per spec onend always fires after
+                               // onerror for the same instance — without this
+                               // flag both handlers would schedule a restart
+                               // for the same dead instance (the duplicate
+                               // start / restart-loop bug).
+
+    rec.onerror = function(e) {
+      if (myGen !== vc.gen) { vcLog('onerror:stale', 'gen ' + myGen + ' error=' + e.error); return; }
+      errorHandled = true;
+      vc.starting  = false;
       vc.listening = false;
-      if (!vc.active) return;
-      if (e.error === 'not-allowed' || e.error === 'permission-denied') {
-        if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
-        vcStop();
-        return;
+
+      // [REQUIREMENT] Log the exact error path for every known error type.
+      switch (e.error) {
+        case 'not-allowed':
+        case 'permission-denied':
+          vcLog('onerror:not-allowed', 'mic permission denied/revoked');
+          if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
+          vcSetStatus('error');
+          vcStop();
+          return;
+        case 'audio-capture':
+          vcLog('onerror:audio-capture', 'no microphone available/hardware issue');
+          if (typeof toast === 'function') toast('🎤 No microphone detected. Check your device and try again.');
+          vcSetStatus('error');
+          vcStop();
+          return;
+        case 'network':
+          vcLog('onerror:network', 'speech recognition network failure');
+          vcSetStatus('error');
+          // Recoverable — retry after a longer backoff since it's network-related.
+          if (vc.active) setTimeout(vcStartListening, 1500);
+          return;
+        case 'aborted':
+          // We caused this ourselves via vcStopMic()'s abort() call — not a
+          // real failure. Stay quiet; whoever called vcStopMic() owns what
+          // happens next (e.g. they're about to go to 'processing' or
+          // 'speaking'). Do NOT schedule a restart here, or we risk a race
+          // against that caller's own next step (restart-loop risk).
+          vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
+          return;
+        case 'no-speech':
+          // Completely normal — the browser's silence timeout. Not an error
+          // from the user's perspective; just restart quietly and keep the
+          // badge showing Listening so there's no visible flicker.
+          vcLog('onerror:no-speech', 'silence timeout — restarting');
+          if (vc.active) setTimeout(vcStartListening, 400);
+          return;
+        default:
+          vcLog('onerror:other', String(e.error));
+          if (vc.active) setTimeout(vcStartListening, 800);
+          return;
       }
-      // [FIX] Most "errors" here are just the browser's silence/no-speech
-      // timeout — a completely normal event while waiting for the user to
-      // talk. The old code dropped the status panel to 'idle' (hidden) and
-      // then back to 'listening' 1.2s later on every single occurrence,
-      // which is the "Listening indicator repeatedly refreshes/shakes" bug.
-      // We now keep the "Listening…" indicator visible/stable through this
-      // transient restart so the UI doesn't flicker; only genuinely fatal
-      // errors should ever hide the badge.
-      if (vc.active) setTimeout(vcStartListening, 600);
     };
 
-    vc.rec.onend = function() {
+    rec.onend = function() {
+      if (myGen !== vc.gen) { vcLog('onend:stale', 'gen ' + myGen); return; }
+      vc.starting  = false;
+      var wasListening = vc.listening;
       vc.listening = false;
-      if (vc.ignoreEnd) return;           // intentional stop
+      vcLog('onend', 'wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled);
       if (!vc.active) return;
-      if (!vc.speaking) {
-        // [FIX] Same flicker fix as onerror above: silently restart the
-        // recognizer without hiding the "Listening…" badge first. The
-        // badge only changes when we move to 'processing' or 'speaking'.
-        setTimeout(vcStartListening, 300);
-      }
+      if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
+      if (errorHandled) return;    // onerror already decided what happens next
+      // Recognition ended on its own (not via our abort, not via an error)
+      // with nothing else in flight — this is the "ended unexpectedly,
+      // recover cleanly" case. Restart, but only this one instance's worth;
+      // the gen-check above already prevents this from stacking with a
+      // parallel restart.
+      setTimeout(vcStartListening, 300);
     };
+
+    vc.rec = rec;
 
     try {
-      vc.rec.start();
-    } catch(e) {
+      rec.start();
+      vcLog('start()', 'called, awaiting onstart');
+    } catch (e) {
+      // [REQUIREMENT] "If recognition fails to start, show an error state."
+      vcLog('start():threw', e.name + ' — ' + e.message);
+      vc.starting = false;
+      if (myGen === vc.gen) vc.rec = null;
+      vcSetStatus('error');
       if (typeof toast === 'function') toast('⚠️ Could not start microphone: ' + e.message);
       vcStop();
     }
@@ -7094,6 +7227,11 @@ if ('serviceWorker' in navigator) {
   // ── Barge-in: detect mic audio while AI is speaking ────────────
   // We hook SpeechRecognition to detect the user starting to speak.
   // When activity detected we cancel TTS and switch to listening.
+  // NOTE: this probe is a separate, independent SpeechRecognition instance
+  // from vc.rec — it intentionally does NOT touch vc.gen/vc.starting/vc.rec,
+  // so it can never corrupt the main lifecycle's state. The only thing it
+  // does to shared state is call vcStartListening(), which is itself
+  // guarded against duplicate/overlapping starts.
   function vcBargeInCheck() {
     if (!vc.active || !vc.speaking) return;
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -7105,23 +7243,25 @@ if ('serviceWorker' in navigator) {
     probe.onresult = function() {
       if (!vc.active || !vc.speaking) { try { probe.stop(); } catch(e){} return; }
       // User spoke — barge in
+      vcLog('bargeIn', 'user spoke during TTS — cancelling speech');
       vcStopTTS();
       try { probe.stop(); } catch(e){}
-      vc.listening = false;
       vcStartListening();
     };
-    probe.onerror = function() {};
+    probe.onerror = function(e) { vcLog('bargeIn:probeError', String(e && e.error)); };
     probe.onend   = function() {
       // probe ended without barge-in — if still speaking, recheck
       if (vc.active && vc.speaking) setTimeout(vcBargeInCheck, 300);
     };
-    try { probe.start(); } catch(e) {}
+    try { probe.start(); } catch(e) { vcLog('bargeIn:probeStartThrew', e.message); }
   }
 
   // ── Turn Voice Chat Mode on ──────────────────────────────────────
   function vcStart() {
     vc.active   = true;
     vc.speaking = false;
+    vc.starting = false;
+    vcLog('vcStart', 'Voice Chat Mode enabled');
     vcUpdateToggleUI();
     if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — start speaking!');
     vcStartListening();
@@ -7130,8 +7270,9 @@ if ('serviceWorker' in navigator) {
   // ── Turn Voice Chat Mode off ─────────────────────────────────────
   function vcStop() {
     vc.active = false;
+    vcLog('vcStop', 'Voice Chat Mode disabled');
     vcStopTTS();
-    vcStopMic();
+    vcStopMic('vcStop');
     vcSetStatus('idle');
     vcUpdateToggleUI();
     if (vcToggle) vcToggle.checked = false;
@@ -7146,7 +7287,7 @@ if ('serviceWorker' in navigator) {
     var orig = window.speakText;
     window.speakText = function(t) {
       if (vc.active) {
-        vcStopMic();          // don't listen while speaking
+        vcStopMic('about-to-speak');          // don't listen while speaking
         vcSpeakAndRestart(t);
         setTimeout(vcBargeInCheck, 400);  // watch for barge-in
       } else {
