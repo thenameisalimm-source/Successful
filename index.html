@@ -7086,13 +7086,55 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // [ADDED] Single logging chokepoint for the recognition lifecycle so every
-  // state transition and every error path (no-speech, aborted, audio-capture,
-  // network, not-allowed, language-not-supported, etc.) is traceable in the
-  // console with the generation it belongs to. Does not affect behavior.
-  function vcLog(event, detail) {
+  // ── INSTRUMENTATION ─────────────────────────────────────────────
+  // Full runtime trace buffer — every event is pushed here AND to console.
+  // Access window._vcTrace in DevTools to inspect the complete sequence.
+  // Each entry: { t (ms since page load), gen, event, detail, snap (vc state snapshot) }
+  window._vcTrace = [];
+  window._vcTraceClear = function() { window._vcTrace = []; console.log('[ALEEM-VC] trace cleared'); };
+  window._vcTraceDump  = function() {
+    console.group('[ALEEM-VC] === FULL TRACE DUMP (' + window._vcTrace.length + ' events) ===');
+    window._vcTrace.forEach(function(e, i) {
+      console.log(
+        '#' + String(i).padStart(3, '0') +
+        ' +' + String(e.t).padStart(6) + 'ms' +
+        ' gen=' + e.gen +
+        ' [' + e.event + ']' +
+        (e.detail ? ' :: ' + e.detail : '') +
+        ' | buf="' + e.bufBefore + '"→"' + e.bufAfter + '"' +
+        ' listen=' + e.listening + ' start=' + e.starting + ' speak=' + e.speaking +
+        ' timer=' + (e.timerActive ? 'ARMED' : 'null')
+      );
+    });
+    console.groupEnd();
+  };
+
+  var _vcT0 = Date.now();
+  function vcLog(event, detail, bufBefore, bufAfter) {
     try {
-      console.log('[ALEEM-VC] gen=' + vc.gen + ' ' + event + (detail ? ' :: ' + detail : ''));
+      var now   = Date.now() - _vcT0;
+      var bufB  = (bufBefore !== undefined) ? bufBefore : (vc ? vc.utteranceBuffer : '?');
+      var bufA  = (bufAfter  !== undefined) ? bufAfter  : (vc ? vc.utteranceBuffer : '?');
+      var entry = {
+        t:          now,
+        gen:        vc ? vc.gen : -1,
+        event:      event,
+        detail:     detail || '',
+        bufBefore:  bufB,
+        bufAfter:   bufA,
+        listening:  vc ? vc.listening  : false,
+        starting:   vc ? vc.starting   : false,
+        speaking:   vc ? vc.speaking   : false,
+        timerActive: vc ? !!vc.silenceTimer : false,
+      };
+      window._vcTrace.push(entry);
+      console.log(
+        '[ALEEM-VC] +' + now + 'ms gen=' + vc.gen +
+        ' [' + event + ']' +
+        (detail ? ' :: ' + detail : '') +
+        ' | buf="' + bufB + '"→"' + bufA + '"' +
+        ' timer=' + (!!vc.silenceTimer ? 'ARMED' : 'null')
+      );
     } catch (e) { /* never let logging break voice chat */ }
   }
 
@@ -7158,9 +7200,11 @@ if ('serviceWorker' in navigator) {
   // recognizer's actual lang (vc.rec.lang) via vcSilenceMsFor(), instead of
   // a single flat constant — see VC_SILENCE_MS_BY_LANG above.
   function vcResetSilenceTimer() {
+    var hadTimer = !!vc.silenceTimer;
     if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
     var ms = vcSilenceMsFor(vc.rec && vc.rec.lang);
     vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
+    vcLog('vcResetSilenceTimer', 'lang=' + (vc.rec && vc.rec.lang) + ' ms=' + ms + ' hadTimer=' + hadTimer + ' → ARMED');
   }
 
   // [FIX — Bug #2, premature submission during recognizer restarts]
@@ -7198,8 +7242,9 @@ if ('serviceWorker' in navigator) {
   // sites; this function only ever clears, it never reschedules — that
   // happens in onstart.
   function vcSuspendSilenceTimer(reason) {
+    var hadTimer = !!vc.silenceTimer;
     if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
-    vcLog('vcSuspendSilenceTimer', (reason || '') + ' — countdown paused, mic is between recognizer instances');
+    vcLog('vcSuspendSilenceTimer', (reason || '') + ' — hadTimer=' + hadTimer + ' → CLEARED (mic between instances)');
   }
 
   // [ADDED — Bug #1 root-cause fix] restart-boundary dedup helpers.
@@ -7243,31 +7288,19 @@ if ('serviceWorker' in navigator) {
   function vcFinalizeUtterance() {
     vc.silenceTimer = null;
     var transcript = (vc.utteranceBuffer || '').trim();
+    var bufBefore  = vc.utteranceBuffer;
     vc.utteranceBuffer = '';
     vc.restartGuardSnapshot = '';
     vc.restartGuardActive   = false;
-    if (!transcript) { vcLog('vcFinalizeUtterance:empty', 'nothing captured'); return; }
-    vcLog('vcFinalizeUtterance', 'submitting "' + transcript + '"');
 
-    // [FIX — Auto mode lagging one turn behind] Detect the language of
-    // what the user JUST said (using the same script-based detectSpeechLang
-    // already used elsewhere for TTS voice selection — not new
-    // multilingual logic) so the NEXT recognition session can be biased
-    // toward it via vcResolveRecognitionLang, instead of only ever
-    // reacting to the AI's reply from the turn before. Only meaningful
-    // when Auto is active (vc.langPref === '') — a pinned language always
-    // wins regardless, per vcResolveRecognitionLang's priority order.
-    //
-    // Guard: detectSpeechLang() returns 'en-US' both for genuinely English
-    // text AND as its catch-all when nothing else matched (e.g. a
-    // mis-recognized non-English utterance that came back as unrecognizable
-    // Latin-script text). We can't tell those two cases apart here without
-    // touching detectSpeechLang itself, which is shared multilingual logic
-    // out of scope for this fix. So: an 'en' result only updates
-    // userUtteranceLang if it isn't already pinned to a non-English
-    // language — this avoids a garbled non-English transcript flipping
-    // recognition to English for the next turn, while still letting a
-    // real switch INTO English (or the very first turn) through normally.
+    vcLog('vcFinalizeUtterance:FIRED', 'SILENCE TIMER FIRED — submitting "' + transcript + '" | bufBefore="' + bufBefore + '"', bufBefore, '');
+
+    if (!transcript) {
+      vcLog('vcFinalizeUtterance:empty', 'nothing captured — NOT calling handleSend()', '', '');
+      return;
+    }
+
+    // [FIX — Auto mode lagging one turn behind]
     if (!vc.langPref && typeof detectSpeechLang === 'function') {
       var detected = detectSpeechLang(transcript);
       var isEnglish = detected && detected.slice(0, 2).toLowerCase() === 'en';
@@ -7280,13 +7313,8 @@ if ('serviceWorker' in navigator) {
       }
     }
 
+    vcLog('vcFinalizeUtterance:handleSend', '>>> CALLING handleSend() with text="' + transcript + '" <<<', '', '');
     vcStopMic('utterance-finalized');
-
-    // [Preserved from before] Do NOT navigate to the chat page. The whole
-    // point of Voice Chat Mode is a call-style experience that never leaves
-    // this page. chatInput/chatMessages/etc. still exist in the DOM even
-    // while the chat page isn't the active/visible one, so handleSend()
-    // works exactly the same without navigating.
     vcSetStatus('processing');
 
     var inp = document.getElementById('chatInput');
@@ -7330,19 +7358,14 @@ if ('serviceWorker' in navigator) {
   // late (after a newer vcStartListening() already replaced it) can never
   // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
-    if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
+    if (!vc.active) { vcLog('vcStartListening:SKIP', 'vc.active=false'); return; }
 
-    // [FIX] Duplicate-start guard. Without this, overlapping callers
-    // (onend, onerror, TTS onend, barge-in, a late setTimeout) could each
-    // try to create+start a new recognizer while one is already starting
-    // or already listening — the classic cause of "Listening shown but
-    // mic isn't actually listening": the second start() throws
-    // InvalidStateError on some browsers, or silently creates an instance
-    // that never gets onstart, while the badge was already set optimistically.
     if (vc.starting || vc.listening) {
-      vcLog('vcStartListening:skip', 'already starting=' + vc.starting + ' listening=' + vc.listening);
+      vcLog('vcStartListening:SKIP', 'already starting=' + vc.starting + ' listening=' + vc.listening + ' — duplicate start blocked');
       return;
     }
+
+    vcLog('vcStartListening:ENTER', 'gen BEFORE bump=' + vc.gen + ' buf="' + vc.utteranceBuffer + '" timerActive=' + !!vc.silenceTimer);
 
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -7391,83 +7414,106 @@ if ('serviceWorker' in navigator) {
     rec.lang = vcResolveRecognitionLang();
 
     rec.onstart = function() {
-      if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
-      // SpeechRecognition's onstart firing IS the confirmation that the
-      // recognizer is actually running — this is the one and only place
-      // vc.listening becomes true and vc.starting clears together.
+      if (myGen !== vc.gen) { vcLog('onstart:STALE', 'IGNORING — created for gen=' + myGen + ' but current gen=' + vc.gen); return; }
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
       vcStopBargeIn('main-recognizer-confirmed-listening');
-      vcLog('onstart', 'recognizer confirmed running, lang=' + rec.lang);
 
-      // [FIX — Bug #1] Snapshot whatever is already committed to the
-      // buffer the instant THIS instance starts listening. If non-empty,
-      // we're resuming an utterance an earlier instance already partly
-      // captured, so the dedup guard arms; onresult below uses this
-      // snapshot to detect and strip audio re-delivered across the
-      // restart boundary. A brand-new utterance (empty buffer) leaves the
-      // guard inert — nothing to deduplicate against.
       vc.restartGuardSnapshot = vc.utteranceBuffer;
       vc.restartGuardActive   = !!vc.utteranceBuffer;
 
-      // [FIX — Bug #2] This is the ONLY place the silence countdown is
-      // (re)armed after a restart. It was suspended in onerror/onend the
-      // moment this instance's predecessor went away (see
-      // vcSuspendSilenceTimer there) and stayed suspended for the entire
-      // gap while no recognizer was listening — so it could not have
-      // fired during that gap. Only now, with onstart confirming the mic
-      // is actually listening again, do we resume counting — and only if
-      // there's an in-progress utterance to protect. A brand-new
-      // utterance (empty buffer, nothing said yet) still waits for its
-      // first onresult to arm the timer, exactly as before.
+      vcLog('onstart',
+        'gen=' + myGen + ' lang=' + rec.lang +
+        ' | bufferOnStart="' + vc.utteranceBuffer + '"' +
+        ' restartGuardActive=' + vc.restartGuardActive +
+        ' restartGuardSnapshot="' + vc.restartGuardSnapshot + '"'
+      );
+
       if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
       if (vc.utteranceBuffer) {
         var resumeMs = vcSilenceMsFor(rec.lang);
         vc.silenceTimer = setTimeout(vcFinalizeUtterance, resumeMs);
-        vcLog('onstart:silenceResumed', resumeMs + 'ms window armed now that mic is confirmed listening');
+        vcLog('onstart:silenceResumed', 'buffer non-empty → ARMED silence timer for ' + resumeMs + 'ms');
+      } else {
+        vcLog('onstart:silenceIdle', 'buffer empty → silence timer NOT armed yet (waiting for first speech)');
       }
 
-      // Only NOW — on confirmed start, not on intent — does the badge say
-      // Listening. This is what keeps the badge synced to reality.
       vcSetStatus('listening');
     };
 
     rec.onresult = function(e) {
-      if (myGen !== vc.gen) { vcLog('onresult:stale', 'gen ' + myGen); return; }
-      // [FIX — Bug #1] Only accumulate text here; never submit directly
-      // from a result event. Walk just the newly-arrived results in this
-      // event (from e.resultIndex onward) — finalized chunks are appended
-      // to the persistent cross-instance buffer, interim chunks are only
-      // used for logging. ANY activity (final or interim) means the user
-      // is still talking, so it resets the "are they done?" timer.
+      if (myGen !== vc.gen) { vcLog('onresult:STALE', 'IGNORING — gen=' + myGen + ' current=' + vc.gen); return; }
+
+      var bufBeforeEvent = vc.utteranceBuffer;
       var interimChunk = '';
+
+      vcLog('onresult:EVENT',
+        'resultIndex=' + e.resultIndex + ' results.length=' + e.results.length +
+        ' bufBefore="' + bufBeforeEvent + '"' +
+        ' restartGuardActive=' + vc.restartGuardActive +
+        ' restartGuardSnapshot="' + vc.restartGuardSnapshot + '"',
+        bufBeforeEvent, bufBeforeEvent
+      );
+
       for (var i = e.resultIndex; i < e.results.length; i++) {
         var res = e.results[i];
         var chunkText = res[0] ? res[0].transcript : '';
-        if (res.isFinal) {
+        var isFinal   = res.isFinal;
+
+        vcLog('onresult:result[' + i + ']',
+          'isFinal=' + isFinal + ' transcript="' + chunkText + '"',
+          vc.utteranceBuffer, vc.utteranceBuffer
+        );
+
+        if (isFinal) {
           var trimmedChunk = chunkText.trim();
-          // [FIX — Bug #1, restart-boundary dedup guard] Only the first
-          // final result(s) of an instance that's RESUMING an utterance
-          // (restartGuardActive, armed in onstart) get checked — once
-          // genuinely new content has been added, the boundary is
-          // consumed and we stop guarding for the rest of this instance.
+          var bufBeforeAppend = vc.utteranceBuffer;
+
           if (vc.restartGuardActive && trimmedChunk) {
-            var overlap = vcWordOverlapLen(vcDedupWords(vc.restartGuardSnapshot), vcDedupWords(trimmedChunk));
+            var bufWords   = vcDedupWords(vc.restartGuardSnapshot);
+            var chunkWords = vcDedupWords(trimmedChunk);
+            var overlap    = vcWordOverlapLen(bufWords, chunkWords);
+            vcLog('onresult:dedupCheck',
+              'snapshot="' + vc.restartGuardSnapshot + '"' +
+              ' chunkWords=[' + chunkWords.join(',') + ']' +
+              ' bufWords=[' + bufWords.join(',') + ']' +
+              ' overlapLen=' + overlap,
+              bufBeforeAppend, bufBeforeAppend
+            );
             if (overlap > 0) {
+              var before = trimmedChunk;
               trimmedChunk = vcDedupWords(trimmedChunk).slice(overlap).join(' ');
-              vcLog('onresult:dedupBoundary', 'stripped ' + overlap + ' word(s) re-delivered across restart boundary');
+              vcLog('onresult:dedupSTRIPPED',
+                'STRIPPED ' + overlap + ' word(s): "' + before + '" → "' + trimmedChunk + '"',
+                bufBeforeAppend, bufBeforeAppend
+              );
+            } else {
+              vcLog('onresult:dedupNO-OVERLAP', 'no overlap found — chunk NOT stripped');
             }
             if (trimmedChunk) vc.restartGuardActive = false;
           }
+
           if (trimmedChunk) {
-            vc.utteranceBuffer = (vc.utteranceBuffer + ' ' + trimmedChunk).trim();
+            var bufAfterAppend = (vc.utteranceBuffer + ' ' + trimmedChunk).trim();
+            vcLog('onresult:APPEND',
+              '"' + vc.utteranceBuffer + '" + "' + trimmedChunk + '" → "' + bufAfterAppend + '"',
+              vc.utteranceBuffer, bufAfterAppend
+            );
+            vc.utteranceBuffer = bufAfterAppend;
+          } else {
+            vcLog('onresult:SKIPPED', 'trimmedChunk empty after dedup — not appending', vc.utteranceBuffer, vc.utteranceBuffer);
           }
         } else {
           interimChunk += chunkText;
+          vcLog('onresult:INTERIM', '"' + chunkText + '" (not appended)', vc.utteranceBuffer, vc.utteranceBuffer);
         }
       }
-      vcLog('onresult', 'buffer="' + vc.utteranceBuffer + '" interim="' + interimChunk + '"');
+
+      vcLog('onresult:DONE',
+        'bufAfterEvent="' + vc.utteranceBuffer + '" allInterim="' + interimChunk + '" → calling vcResetSilenceTimer',
+        bufBeforeEvent, vc.utteranceBuffer
+      );
       vcResetSilenceTimer();
     };
 
@@ -7480,63 +7526,42 @@ if ('serviceWorker' in navigator) {
                                // start / restart-loop bug).
 
     rec.onerror = function(e) {
-      if (myGen !== vc.gen) { vcLog('onerror:stale', 'gen ' + myGen + ' error=' + e.error); return; }
+      if (myGen !== vc.gen) { vcLog('onerror:STALE', 'IGNORING — gen=' + myGen + ' error=' + e.error); return; }
+      vcLog('onerror:FIRED', 'gen=' + myGen + ' error="' + e.error + '" buf="' + vc.utteranceBuffer + '"');
       errorHandled = true;
       vc.starting  = false;
       vc.listening = false;
 
-      // [REQUIREMENT] Log the exact error path for every known error type.
       switch (e.error) {
         case 'not-allowed':
         case 'permission-denied':
-          vcLog('onerror:not-allowed', 'mic permission denied/revoked');
+          vcLog('onerror:not-allowed', 'mic permission denied/revoked — STOPPING');
           if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
           vcSetStatus('error');
           vcStop();
           return;
         case 'audio-capture':
-          vcLog('onerror:audio-capture', 'no microphone available/hardware issue');
+          vcLog('onerror:audio-capture', 'no microphone — STOPPING');
           if (typeof toast === 'function') toast('🎤 No microphone detected. Check your device and try again.');
           vcSetStatus('error');
           vcStop();
           return;
         case 'network':
-          vcLog('onerror:network', 'speech recognition network failure');
+          vcLog('onerror:network', 'network failure — suspending timer, retrying in 1500ms');
           vcSetStatus('error');
-          // [FIX — Bug #2] Suspend, don't extend — the mic is about to go
-          // away for the restart below. The countdown only resumes once
-          // the replacement recognizer's onstart confirms it's listening
-          // again (see onstart), so it can't run through this gap.
           vcSuspendSilenceTimer('network-error-restart-pending');
-          // Recoverable — retry after a longer backoff since it's network-related.
           if (vc.active) setTimeout(vcStartListening, 1500);
           return;
         case 'aborted':
-          // We caused this ourselves via vcStopMic()'s abort() call — not a
-          // real failure. Stay quiet; whoever called vcStopMic() owns what
-          // happens next (e.g. they're about to go to 'processing' or
-          // 'speaking'). Do NOT schedule a restart here, or we risk a race
-          // against that caller's own next step (restart-loop risk).
-          vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
+          vcLog('onerror:aborted', 'intentional abort — no restart (caller owns next step)');
           return;
         case 'no-speech':
-          // The browser's own silence timeout firing. This IS evidence of
-          // real silence, but the mic is still about to go away for a
-          // restart — and per the requirement that an utterance must
-          // never be submitted while the mic is between recognizer
-          // instances, we suspend here too rather than letting a
-          // leftover countdown run through the gap. If it really was the
-          // end of the utterance, the countdown resumed in the
-          // replacement's onstart will simply expire again almost
-          // immediately once that's confirmed.
-          vcLog('onerror:no-speech', 'silence timeout — restarting');
+          vcLog('onerror:no-speech', 'browser silence timeout — suspending timer, restarting in 400ms');
           vcSuspendSilenceTimer('no-speech-restart-pending');
           if (vc.active) setTimeout(vcStartListening, 400);
           return;
         default:
-          vcLog('onerror:other', String(e.error));
-          // [FIX — Bug #2] Same restart-gap exposure as onend — suspend,
-          // don't extend.
+          vcLog('onerror:OTHER', 'error="' + e.error + '" — suspending timer, restarting in 800ms');
           vcSuspendSilenceTimer('error-restart-pending: ' + e.error);
           if (vc.active) setTimeout(vcStartListening, 800);
           return;
@@ -7544,32 +7569,19 @@ if ('serviceWorker' in navigator) {
     };
 
     rec.onend = function() {
-      if (myGen !== vc.gen) { vcLog('onend:stale', 'gen ' + myGen); return; }
+      if (myGen !== vc.gen) { vcLog('onend:STALE', 'IGNORING — gen=' + myGen); return; }
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
-      vcLog('onend', 'wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' bufferedSoFar="' + vc.utteranceBuffer + '"');
-      if (!vc.active) return;
-      if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
-      if (errorHandled) return;    // onerror already decided what happens next
-      // [FIX — Bug #1] Recognition ended on its own (not via our abort, not
-      // via an error). Even with continuous=true, some engines (notably
-      // Android Chrome) still end the session on a short pause — but unlike
-      // before, that no longer means the utterance is "done": we never
-      // submit from here. We just seamlessly start a fresh recognizer
-      // instance; vc.utteranceBuffer keeps accumulating across instances
-      // and is only submitted once real silence is observed by
-      // vcFinalizeUtterance.
-      //
-      // [FIX — Bug #2, traced root cause] The recognizer ending here opens
-      // exactly the restart gap described above vcSuspendSilenceTimer —
-      // there's about to be a real delay before a new instance is
-      // confirmed listening again (rec.start() is async; onstart can take
-      // a while, especially on mobile). We suspend the countdown now, for
-      // the whole gap, and only resume it once the replacement instance's
-      // onstart confirms the mic is actually listening again — so the gap
-      // itself can never be mistaken for silence and trigger a mid-sentence
-      // submission.
+      vcLog('onend:FIRED',
+        'gen=' + myGen + ' wasListening=' + wasListening +
+        ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled +
+        ' buf="' + vc.utteranceBuffer + '" timerActive=' + !!vc.silenceTimer
+      );
+      if (!vc.active) { vcLog('onend:inactive', 'vc.active=false — no restart'); return; }
+      if (vc.speaking) { vcLog('onend:speaking', 'TTS owns next transition — no restart here'); return; }
+      if (errorHandled) { vcLog('onend:errorHandled', 'onerror already decided next step — no restart'); return; }
+      vcLog('onend:RESTART', 'natural session end — suspending timer, restarting in 250ms');
       vcSuspendSilenceTimer('recognizer-ended-restart-pending');
       setTimeout(vcStartListening, 250);
     };
@@ -7830,6 +7842,96 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
+
+<!-- ── VOICE CHAT DEBUG PANEL ─────────────────────────────────── -->
+<div id="vcDebugPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
+  background:rgba(0,0,0,0.92);color:#0f0;font:12px/1.4 monospace;
+  max-height:40vh;overflow-y:auto;padding:8px;border-top:2px solid #0f0;">
+  <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+    <b style="color:#0ff">ALEEM-VC DEBUG</b>
+    <button onclick="window._vcTraceDump()" style="background:#030;color:#0f0;border:1px solid #0f0;padding:2px 8px;cursor:pointer;font-size:11px">Dump to Console</button>
+    <button onclick="window._vcTraceClear();document.getElementById('vcDebugLog').innerHTML=''" style="background:#030;color:#0f0;border:1px solid #0f0;padding:2px 8px;cursor:pointer;font-size:11px">Clear</button>
+    <button onclick="document.getElementById('vcDebugPanel').style.display='none'" style="background:#300;color:#f00;border:1px solid #f00;padding:2px 8px;cursor:pointer;font-size:11px">Hide</button>
+    <span id="vcDebugEventCount" style="color:#ff0">0 events</span>
+  </div>
+  <div id="vcDebugLog"></div>
+</div>
+
+<script>
+(function() {
+  // Patch vcLog after page loads to also write to on-screen panel
+  document.addEventListener('DOMContentLoaded', function() {
+    var panel  = document.getElementById('vcDebugPanel');
+    var log    = document.getElementById('vcDebugLog');
+    var count  = document.getElementById('vcDebugEventCount');
+
+    // Show panel when Voice Chat activates
+    var origVcStart = window.vcStart;
+
+    // Hook into _vcTrace by polling — safe, no changes to core logic
+    var lastLen = 0;
+    function refreshPanel() {
+      var trace = window._vcTrace || [];
+      if (trace.length === lastLen) return;
+      var newEntries = trace.slice(lastLen);
+      lastLen = trace.length;
+      count.textContent = trace.length + ' events';
+      newEntries.forEach(function(e) {
+        var div = document.createElement('div');
+        var color = '#0f0';
+        if (e.event.indexOf('STALE') >= 0)        color = '#888';
+        else if (e.event.indexOf('APPEND') >= 0)  color = '#0ff';
+        else if (e.event.indexOf('SUBMIT') >= 0 || e.event.indexOf('handleSend') >= 0) color = '#ff0';
+        else if (e.event.indexOf('STRIP') >= 0 || e.event.indexOf('dedup') >= 0) color = '#f80';
+        else if (e.event.indexOf('FIRED') >= 0 || e.event.indexOf('RESTART') >= 0) color = '#f0f';
+        else if (e.event.indexOf('error') >= 0 || e.event.indexOf('ERROR') >= 0)  color = '#f44';
+        else if (e.event.indexOf('onstart') >= 0) color = '#4f4';
+        else if (e.event.indexOf('onend') >= 0)   color = '#fa0';
+        div.style.color   = color;
+        div.style.borderBottom = '1px solid #111';
+        div.style.padding = '1px 0';
+        div.innerHTML =
+          '<span style="color:#555">+' + String(e.t).padStart(6) + 'ms</span> ' +
+          '<span style="color:#aaa">g' + e.gen + '</span> ' +
+          '<b>' + e.event + '</b>' +
+          (e.detail ? ' <span style="color:#ccc">' + e.detail + '</span>' : '') +
+          (e.bufBefore !== e.bufAfter
+            ? ' <span style="color:#888">buf:"' + e.bufBefore + '"→"' + e.bufAfter + '"</span>'
+            : (e.bufAfter ? ' <span style="color:#555">buf:"' + e.bufAfter + '"</span>' : ''));
+        log.appendChild(div);
+        // Auto-scroll
+        panel.scrollTop = panel.scrollHeight;
+      });
+    }
+
+    setInterval(refreshPanel, 200);
+
+    // Show debug panel automatically when vc is active
+    // Intercept vcStart to show panel
+    var checkVcActive = setInterval(function() {
+      if (window.vc && window.vc.active && panel.style.display === 'none') {
+        panel.style.display = 'block';
+      }
+    }, 500);
+  });
+})();
+</script>
+
+<!-- ── Show debug panel button (always visible) ─────────────────── -->
+<button onclick="document.getElementById('vcDebugPanel').style.display='block'"
+  style="position:fixed;bottom:8px;right:8px;z-index:99998;
+    background:rgba(0,30,0,0.85);color:#0f0;border:1px solid #0f0;
+    padding:4px 10px;font:11px monospace;cursor:pointer;border-radius:4px;
+    display:none;" id="vcDebugShowBtn">VC Debug</button>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Show the "VC Debug" reveal button only when vc becomes active
+  setInterval(function() {
+    var btn = document.getElementById('vcDebugShowBtn');
+    if (btn && window.vc && window.vc.active) btn.style.display = 'block';
+  }, 500);
+});
+</script>
 
 </body>
 </html>
