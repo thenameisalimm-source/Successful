@@ -7534,18 +7534,40 @@ if ('serviceWorker' in navigator) {
       // utterance (empty buffer, nothing said yet) still waits for its
       // first onresult to arm the timer, exactly as before.
       if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
-      // Do NOT arm the silence timer here. onstart confirms the mic is hardware-
-      // ready, not that the user is speaking. Android Chrome (and other engines)
-      // take 300–1500ms between onstart and the first onresult even when the user
-      // is speaking continuously — that latency gap alone is enough to consume the
-      // entire 1700ms (en-IN) window and fire vcFinalizeUtterance mid-sentence.
-      // vcSuspendSilenceTimer() in onend already cleared the timer for the whole
-      // restart gap. The correct and only trigger to re-arm is onresult — actual
-      // evidence the user is still talking. Letting the timer stay suspended here
-      // means the worst case is a slightly longer silence threshold after a restart;
-      // firing it here causes guaranteed premature submission whenever restart
-      // latency exceeds the threshold, which is the bug being fixed.
-      vcLog('onstart:silenceHeld', 'mic confirmed — silence timer stays suspended until onresult proves speech');
+      // [FIX — Bug #4, permanently stuck "Listening…"] A brand-new utterance
+      // (empty buffer, nothing said yet) must NOT arm the timer here — onstart
+      // confirms the mic is hardware-ready, not that the user is speaking, and
+      // Android Chrome (and other engines) take 300–1500ms between onstart and
+      // the first onresult even when the user is speaking continuously. Arming
+      // unconditionally here would let that latency gap alone consume the
+      // entire silence window and fire vcFinalizeUtterance mid-sentence — the
+      // bug this code previously guarded against. So for a fresh utterance we
+      // still wait for onresult, exactly as before.
+      //
+      // BUT: if vc.utteranceBuffer is already non-empty, this restart is
+      // resuming an utterance an EARLIER instance already finalized text for
+      // (see vcSuspendSilenceTimer's call sites in onerror/onend) — that text
+      // was real, confirmed speech, not a guess. If we leave the timer
+      // suspended in that case, the only thing that can re-arm it is the NEXT
+      // onresult — but there may never be one, because the user could have
+      // already finished talking before this restart raced in. The session
+      // then ends on its own (per the Android-Chrome-style quirk above),
+      // onend suspends, the replacement's onstart lands here again, and
+      // forever after: buffer never empty, timer never armed, no onresult
+      // ever comes, vcFinalizeUtterance never fires again — Listening… stuck
+      // permanently with a fully-captured utterance sitting unsent in the
+      // buffer. Re-arming a FRESH countdown right here does not reintroduce
+      // the premature-cutoff bug above: that bug was the timer running
+      // THROUGH the restart gap (consuming the gap's duration as silence);
+      // this anchors a brand-new window to right now, AFTER the gap has
+      // already fully elapsed and listening is reconfirmed — exactly the
+      // anchoring principle the rest of this fix is built on.
+      if (vc.utteranceBuffer) {
+        vcResetSilenceTimer();
+        vcLog('onstart:silenceResumed', 'buf="' + vc.utteranceBuffer + '" — re-arming for in-progress utterance');
+      } else {
+        vcLog('onstart:silenceHeld', 'mic confirmed — silence timer stays suspended until onresult proves speech');
+      }
 
       // Only NOW — on confirmed start, not on intent — does the badge say
       // Listening. This is what keeps the badge synced to reality.
