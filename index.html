@@ -2117,6 +2117,9 @@
         <span class="nav-icon">🧠</span> Memory Manager
         <span class="nav-mem-badge" id="memBadge">0</span>
       </button>
+      <button class="nav-btn" data-page="voicechat">
+        <span class="nav-icon">🎙️</span> Voice Chat Mode
+      </button>
       <div class="nav-label" style="margin-top:6px;">Account</div>
       <button class="nav-btn" data-page="premium">
         <span class="nav-icon">👑</span> Premium
@@ -2442,6 +2445,50 @@
             <div class="mem-empty-icon">🧠</div>
             <p>No memories yet. Start chatting — ALEEM AI will automatically remember important things about you!</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE: VOICE CHAT MODE -->
+    <section id="page-voicechat" class="page">
+      <div class="pg-body">
+        <div class="pg-head">
+          <h1>🎙️ Voice Chat Mode</h1>
+          <p>Have a hands-free conversation with ALEEM AI. Your voice is transcribed and sent as normal chat messages — full history, memory, and multilingual support included.</p>
+        </div>
+
+        <!-- Toggle -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px;">
+          <label class="toggle-switch" style="cursor:pointer;">
+            <input type="checkbox" id="vcModeToggle" style="display:none;">
+            <span id="vcToggleTrack" style="display:inline-flex;align-items:center;width:52px;height:28px;border-radius:14px;background:var(--bg-input,#2a2a3a);border:1.5px solid rgba(99,179,237,0.25);transition:background 0.2s;cursor:pointer;position:relative;">
+              <span id="vcToggleThumb" style="position:absolute;left:3px;width:22px;height:22px;border-radius:50%;background:#888;transition:left 0.2s,background 0.2s;"></span>
+            </span>
+          </label>
+          <span id="vcToggleLabel" style="font-size:1rem;color:var(--text-1);">Voice Chat Mode: <strong>Off</strong></span>
+        </div>
+
+        <!-- Status panel (shown when active) -->
+        <div id="vcStatusPanel" style="display:none;margin-bottom:20px;">
+          <div id="vcStatusBadge" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:12px;font-size:0.95rem;font-weight:600;background:rgba(99,179,237,0.12);border:1.5px solid rgba(99,179,237,0.3);color:var(--text-1);">
+            <span id="vcStatusIcon">🎤</span>
+            <span id="vcStatusText">Listening…</span>
+          </div>
+        </div>
+
+        <!-- Instructions -->
+        <div id="vcInstructions" style="background:rgba(0,0,0,0.18);border:1px solid rgba(99,179,237,0.15);border-radius:12px;padding:16px 18px;font-size:0.88rem;color:var(--text-2);line-height:1.7;">
+          <strong style="color:var(--text-1);">How it works:</strong>
+          <ul style="margin:8px 0 0 18px;padding:0;">
+            <li>Toggle on to start hands-free conversation.</li>
+            <li>Speak in <strong style="color:var(--text-1);">any supported language</strong> — English, Hindi, Gujarati, Marathi, Urdu, and more.</li>
+            <li>Your words are transcribed and sent through the same pipeline as typed messages.</li>
+            <li>ALEEM AI replies in the same language and speaks the response aloud.</li>
+            <li>When the AI finishes speaking, it listens for you again automatically.</li>
+            <li>Speak while the AI is talking to interrupt it (barge-in).</li>
+            <li>All messages, memories, and history are saved exactly like normal chat.</li>
+            <li>Toggle off to stop voice mode at any time.</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -2837,6 +2884,7 @@ const PAGE_TITLES = {
   search:    'Search',
   history:   'Conversation History',
   memories:  'Memory Manager',
+  voicechat: '🎙️ Voice Chat Mode',
   premium:   'Premium',
   profile:   'Profile',
   about:     'About / Creator',
@@ -5617,7 +5665,7 @@ var SUBJECT_CANON = (function() {
   // [ regex or string, canonical English subject ]
   var rules = [
     // ── GAME / SPORT ──────────────────────────────────────────────
-    [/\b(khel|khed|kheL|khelna|khelo|game|sport|खेल|खेळ|رمت|رمت|كھيل|کھیل|ரமத்|رمت|રમત|ゲーム)\b/i, 'favourite game'],
+    [/\b(khel|khed|khail|kheL|khelna|khelo|game|sport|खेल|खेळ|رمت|رمت|كھيل|کھیل|ரமத்|رمت|રમત|ゲーム)\b/i, 'favourite game'],
     // ── COLOUR / COLOR ───────────────────────────────────────────
     [/\b(rang|color|colour|रंग|رنگ|रन्ग|rang|રંગ|ரங்கு)\b/i, 'favourite colour'],
     // ── FOOD / DISH ───────────────────────────────────────────────
@@ -5800,14 +5848,14 @@ function extractMemoriesDeterministic(msg) {
   var myPron = '(?:mera?|meri|mere|maru|mari|mare|mara|maro)';
 
   // Preference words — pref/like equivalents across languages
-  var prefWord = '(?:pasandida|pasand|aavdta?|avadta?|aavadta?|priya|aavdat|avdat|gamtu|gamay|gamche|gamce)';
+  var prefWord = '(?:pasandida|pasandeeda|pasand|aavdta?|avadta?|aavadta?|priya|aavdat|avdat|gamtu|gamay|gamche|gamce)';
 
   // "Mera/Maru pasandida/priya <thing> <value> hai/che/aahe"
   // e.g. "Mera pasandida rang blue hai"  /  "Maru pasandida game chess che"
   m = clean.match(new RegExp('^' + myPron + '\\s+' + prefWord + '\\s+(.+?)\\s+(\\S+)\\s+' + copula + '$', 'i'));
   if (m) {
     var rawSubj = cap(m[1]).toLowerCase(), val2 = cap(m[2]);
-    add(!!sportsSet[val2.toLowerCase()] || /khel|khed|game|sport|ramta/.test(rawSubj) ? 'sport' : 'favorite',
+    add(!!sportsSet[val2.toLowerCase()] || /khel|khed|khail|game|sport|ramta/.test(rawSubj) ? 'sport' : 'favorite',
         'favourite ' + rawSubj, val2);
     return results;
   }
@@ -6813,6 +6861,324 @@ if ('serviceWorker' in navigator) {
   });
 </script>
 <!-- ── END FIREBASE AUTH ──────────────────────────────────────── -->
+
+<!-- ── VOICE CHAT MODE ───────────────────────────────────────────
+     Hands-free voice-to-voice conversation layer.
+     Uses the SAME speakText(), handleSend(), addMsg(), analyseAndSaveMemory()
+     and full model fallback pipeline as typed messages.
+     No separate architecture — voice messages are normal chat messages.
+─────────────────────────────────────────────────────────────────── -->
+<script>
+(function() {
+  'use strict';
+
+  // ── State ───────────────────────────────────────────────────────
+  var vc = {
+    active:   false,   // Voice Chat Mode on/off
+    listening: false,  // mic is open
+    speaking:  false,  // TTS is playing
+    rec:       null,   // SpeechRecognition instance
+    ignoreEnd: false,  // suppress auto-restart on intentional stop
+  };
+
+  // ── DOM refs (populated after DOMContentLoaded) ─────────────────
+  var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText;
+
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  function vcSetStatus(mode) {
+    // mode: 'listening' | 'speaking' | 'idle'
+    if (!vcPanel) return;
+    if (mode === 'listening') {
+      vcPanel.style.display = 'block';
+      vcIcon.textContent  = '🎤';
+      vcText.textContent  = 'Listening…';
+      vcPanel.firstElementChild.style.background = 'rgba(52,211,153,0.12)';
+      vcPanel.firstElementChild.style.borderColor = 'rgba(52,211,153,0.4)';
+    } else if (mode === 'speaking') {
+      vcPanel.style.display = 'block';
+      vcIcon.textContent  = '🔊';
+      vcText.textContent  = 'AI Speaking…';
+      vcPanel.firstElementChild.style.background = 'rgba(99,179,237,0.12)';
+      vcPanel.firstElementChild.style.borderColor = 'rgba(99,179,237,0.3)';
+    } else {
+      vcPanel.style.display = 'none';
+    }
+  }
+
+  function vcUpdateToggleUI() {
+    if (!vcTrack) return;
+    if (vc.active) {
+      vcTrack.style.background  = 'rgba(52,211,153,0.35)';
+      vcTrack.style.borderColor = 'rgba(52,211,153,0.6)';
+      vcThumb.style.left        = '27px';
+      vcThumb.style.background  = '#34d399';
+      vcLabel.innerHTML         = 'Voice Chat Mode: <strong>On</strong>';
+    } else {
+      vcTrack.style.background  = 'var(--bg-input,#2a2a3a)';
+      vcTrack.style.borderColor = 'rgba(99,179,237,0.25)';
+      vcThumb.style.left        = '3px';
+      vcThumb.style.background  = '#888';
+      vcLabel.innerHTML         = 'Voice Chat Mode: <strong>Off</strong>';
+    }
+  }
+
+  // ── Stop mic cleanly ────────────────────────────────────────────
+  function vcStopMic() {
+    vc.listening  = false;
+    vc.ignoreEnd  = true;
+    if (vc.rec) {
+      try { vc.rec.stop(); } catch(e){}
+      vc.rec = null;
+    }
+  }
+
+  // ── Stop TTS cleanly ────────────────────────────────────────────
+  function vcStopTTS() {
+    vc.speaking = false;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  // ── Start listening ─────────────────────────────────────────────
+  function vcStartListening() {
+    if (!vc.active) return;
+
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      if (typeof toast === 'function') toast('⚠️ Speech recognition not supported in this browser');
+      vcStop();
+      return;
+    }
+
+    vc.rec = new SR();
+    vc.rec.continuous      = false;
+    vc.rec.interimResults  = false;
+    // Empty string = browser auto-detects language from audio.
+    // This lets the STT engine accept Hindi, Gujarati, Urdu, Marathi, etc.
+    // Language detection for the AI reply and TTS is handled downstream by
+    // LANGUAGE_INSTRUCTION (AI side) and detectSpeechLang/pickVoiceForLang (TTS side).
+    vc.rec.lang            = '';
+    vc.ignoreEnd           = false;
+
+    vc.rec.onstart = function() {
+      vc.listening = true;
+      vc.speaking  = false;
+      vcSetStatus('listening');
+    };
+
+    vc.rec.onresult = function(e) {
+      var transcript = e.results[0][0].transcript.trim();
+      if (!transcript) return;
+      vcStopMic();
+
+      // Navigate to chat page so message appears there
+      if (typeof goPage === 'function') goPage('chat');
+
+      // Inject into the chat input and fire the normal send pipeline.
+      // This guarantees: message history, memory extraction, multilingual support,
+      // model fallback chain all work exactly as typed messages.
+      var inp = document.getElementById('chatInput');
+      if (inp) {
+        inp.value = transcript;
+        if (typeof handleSend === 'function') handleSend();
+      }
+    };
+
+    vc.rec.onerror = function(e) {
+      vc.listening = false;
+      if (!vc.active) return;
+      if (e.error === 'not-allowed' || e.error === 'permission-denied') {
+        if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
+        vcStop();
+        return;
+      }
+      // Network/no-speech: wait then retry
+      vcSetStatus('idle');
+      if (vc.active) setTimeout(vcStartListening, 1200);
+    };
+
+    vc.rec.onend = function() {
+      vc.listening = false;
+      if (vc.ignoreEnd) return;           // intentional stop
+      if (!vc.active) return;
+      if (!vc.speaking) {
+        // Nothing happening — restart after brief pause
+        vcSetStatus('idle');
+        setTimeout(vcStartListening, 800);
+      }
+    };
+
+    try {
+      vc.rec.start();
+    } catch(e) {
+      if (typeof toast === 'function') toast('⚠️ Could not start microphone: ' + e.message);
+      vcStop();
+    }
+  }
+
+  // ── Speak AI reply and restart mic when done ────────────────────
+  // Called by the patched speakText replacement below.
+  function vcSpeakAndRestart(text) {
+    if (!('speechSynthesis' in window)) {
+      // No TTS — just restart mic immediately
+      if (vc.active) setTimeout(vcStartListening, 500);
+      return;
+    }
+
+    // Use the same speakText logic (personality, language, voice)
+    // but intercept utterance end to restart the mic.
+    window.speechSynthesis.cancel();
+
+    var u = new SpeechSynthesisUtterance(text);
+    var S = window.S || {};
+
+    // Voice Personality
+    var VOICE_PERSONALITIES = window.VOICE_PERSONALITIES || {};
+    var vp = VOICE_PERSONALITIES[S.voicePersonality] || { rateMul: 1.0 };
+    u.rate   = vp.rateMul;
+    u.pitch  = 1.0;
+    u.volume = 0.85;
+
+    // Language-aware voice
+    if (typeof detectSpeechLang === 'function' && typeof pickVoiceForLang === 'function') {
+      var lang  = detectSpeechLang(text);
+      var voice = pickVoiceForLang(lang);
+      if (voice) { u.voice = voice; u.lang = voice.lang || lang; }
+      else        { u.lang = lang; }
+    }
+
+    vc.speaking = true;
+    vcSetStatus('speaking');
+
+    u.onend = function() {
+      vc.speaking = false;
+      if (vc.active) {
+        vcSetStatus('idle');
+        setTimeout(vcStartListening, 600);
+      }
+    };
+    u.onerror = function() {
+      vc.speaking = false;
+      if (vc.active) {
+        vcSetStatus('idle');
+        setTimeout(vcStartListening, 600);
+      }
+    };
+
+    window.speechSynthesis.speak(u);
+  }
+
+  // ── Barge-in: detect mic audio while AI is speaking ────────────
+  // We hook SpeechRecognition to detect the user starting to speak.
+  // When activity detected we cancel TTS and switch to listening.
+  function vcBargeInCheck() {
+    if (!vc.active || !vc.speaking) return;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    var probe = new SR();
+    probe.continuous     = false;
+    probe.interimResults = true;
+    probe.lang           = '';  // accept any language for barge-in detection
+    probe.onresult = function() {
+      if (!vc.active || !vc.speaking) { try { probe.stop(); } catch(e){} return; }
+      // User spoke — barge in
+      vcStopTTS();
+      try { probe.stop(); } catch(e){}
+      vc.listening = false;
+      vcStartListening();
+    };
+    probe.onerror = function() {};
+    probe.onend   = function() {
+      // probe ended without barge-in — if still speaking, recheck
+      if (vc.active && vc.speaking) setTimeout(vcBargeInCheck, 300);
+    };
+    try { probe.start(); } catch(e) {}
+  }
+
+  // ── Turn Voice Chat Mode on ──────────────────────────────────────
+  function vcStart() {
+    vc.active   = true;
+    vc.speaking = false;
+    vcUpdateToggleUI();
+    if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — start speaking!');
+    vcStartListening();
+  }
+
+  // ── Turn Voice Chat Mode off ─────────────────────────────────────
+  function vcStop() {
+    vc.active = false;
+    vcStopTTS();
+    vcStopMic();
+    vcSetStatus('idle');
+    vcUpdateToggleUI();
+    if (vcToggle) vcToggle.checked = false;
+    if (typeof toast === 'function') toast('🎙️ Voice Chat Mode off');
+  }
+
+  // ── Patch speakText so Voice Chat Mode intercepts TTS ───────────
+  // We wrap the existing speakText function. When vc.active, we use
+  // vcSpeakAndRestart instead so the mic auto-restarts after the reply.
+  // When vc is off, behaviour is 100% identical to before.
+  document.addEventListener('DOMContentLoaded', function() {
+    var orig = window.speakText;
+    window.speakText = function(t) {
+      if (vc.active) {
+        vcStopMic();          // don't listen while speaking
+        vcSpeakAndRestart(t);
+        setTimeout(vcBargeInCheck, 400);  // watch for barge-in
+      } else {
+        if (orig) orig(t);
+      }
+    };
+
+    // ── Wire up toggle UI ────────────────────────────────────────
+    vcToggle = document.getElementById('vcModeToggle');
+    vcTrack  = document.getElementById('vcToggleTrack');
+    vcThumb  = document.getElementById('vcToggleThumb');
+    vcLabel  = document.getElementById('vcToggleLabel');
+    vcPanel  = document.getElementById('vcStatusPanel');
+    vcIcon   = document.getElementById('vcStatusIcon');
+    vcText   = document.getElementById('vcStatusText');
+
+    if (vcToggle) {
+      // Click on the visual track/thumb/label all toggle
+      [vcTrack, vcThumb, vcLabel].forEach(function(el) {
+        if (el) el.addEventListener('click', function() {
+          if (vcToggle) vcToggle.checked = !vcToggle.checked;
+          if (vcToggle && vcToggle.checked) { vcStart(); } else { vcStop(); }
+        });
+      });
+      vcToggle.addEventListener('change', function() {
+        if (vcToggle.checked) { vcStart(); } else { vcStop(); }
+      });
+    }
+
+    // Stop Voice Chat Mode automatically when user navigates away from voice page
+    // (they may click another sidebar item)
+    document.querySelectorAll('.nav-btn[data-page]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var page = btn.getAttribute('data-page');
+        if (page !== 'voicechat' && vc.active) vcStop();
+      });
+    });
+
+    // goPage hook: if navigating back to voicechat, don't re-start automatically
+    // (user must re-toggle). Just ensure UI reflects current state.
+    var origGoPage = window.goPage;
+    if (origGoPage) {
+      window.goPage = function(name) {
+        origGoPage(name);
+        if (name === 'voicechat') vcUpdateToggleUI();
+        else if (vc.active) vcStop();
+      };
+    }
+  });
+
+})();
+</script>
+<!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
 </body>
 </html>
