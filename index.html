@@ -2512,34 +2512,6 @@
           </ul>
         </div>
 
-        <!-- ── VOICE DEBUG PANEL (temporary instrumentation) ───────── -->
-        <div id="vcDebugWrap" style="margin-top:20px;">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-            <button id="vcDbgClear"
-              style="background:#0a1a0a;color:#0f0;border:1.5px solid #0f0;border-radius:8px;
-                     padding:7px 14px;font-size:0.82rem;cursor:pointer;font-weight:600;">
-              🗑 Clear Log
-            </button>
-            <button id="vcDbgCopy"
-              style="background:#0a0a1a;color:#38bdf8;border:1.5px solid #38bdf8;border-radius:8px;
-                     padding:7px 14px;font-size:0.82rem;cursor:pointer;font-weight:600;">
-              📋 Copy Log
-            </button>
-            <span id="vcDbgCount"
-              style="font-size:0.78rem;color:var(--text-3);font-family:monospace;">
-              0 events
-            </span>
-          </div>
-          <div id="vcDebugLog"
-            style="background:#020d02;border:1.5px solid #1a3a1a;border-radius:10px;
-                   padding:10px;font-size:0.72rem;font-family:'JetBrains Mono',monospace;
-                   line-height:1.6;color:#9fce9f;max-height:52vh;overflow-y:auto;
-                   white-space:pre-wrap;word-break:break-all;">
-            <span style="color:#3a6a3a;">— Voice debug log. Toggle Voice Chat on and speak to capture events. —</span>
-          </div>
-        </div>
-        <!-- ── END VOICE DEBUG PANEL ──────────────────────────────── -->
-
       </div>
     </section>
 
@@ -7115,28 +7087,13 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── VOICE DEBUG LOGGING ─────────────────────────────────────────
-  // Writes to: browser console AND the #vcDebugLog div on the Voice Chat
-  // page (always visible in the page scroll — no fixed overlay, no polling).
-  var _vcLogLines = [];   // plain-text lines for clipboard copy
+  // ── VOICE DEBUG LOGGING (internal/dev only) ──────────────────────
+  // [CHANGED] The user-facing debug panel (scrolling log box, event
+  // counter, Clear/Copy buttons) has been removed from the Voice Chat
+  // page. vcLog() is kept — unchanged signature, unchanged at every call
+  // site throughout this file — as a console-only trace for development;
+  // it no longer touches the DOM.
   var _vcT0 = Date.now();
-
-  function _vcAppendLine(line, color) {
-    var el = document.getElementById('vcDebugLog');
-    if (!el) return;
-    // Clear placeholder text on first real event
-    if (_vcLogLines.length === 0) el.innerHTML = '';
-    var span = document.createElement('span');
-    span.style.color  = color || '#9fce9f';
-    span.style.display = 'block';
-    span.textContent = line;
-    el.appendChild(span);
-    // Keep the newest entry visible
-    el.scrollTop = el.scrollHeight;
-    // Update count badge
-    var cnt = document.getElementById('vcDbgCount');
-    if (cnt) cnt.textContent = _vcLogLines.length + ' events';
-  }
 
   function vcLog(event, detail) {
     try {
@@ -7151,59 +7108,9 @@ if ('serviceWorker' in navigator) {
                  (detail ? ' :: ' + detail : '') +
                  ' buf=' + buf + ' tmr=' + timer;
 
-      _vcLogLines.push(line);
       console.log('[ALEEM-VC] ' + line);
-
-      // Colour by event type
-      var color = '#9fce9f';
-      if (event.indexOf('onerror') >= 0)                         color = '#f87171';
-      else if (event.indexOf('language-not-supported') >= 0)     color = '#ff0000';
-      else if (event.indexOf('APPEND') >= 0)                     color = '#38bdf8';
-      else if (event.indexOf('Finalize') >= 0 || event.indexOf('handleSend') >= 0) color = '#fbbf24';
-      else if (event.indexOf('onstart') >= 0)                    color = '#34d399';
-      else if (event.indexOf('onend') >= 0)                      color = '#fb923c';
-      else if (event.indexOf('Timer') >= 0 || event.indexOf('timer') >= 0) color = '#a78bfa';
-      else if (event.indexOf('stale') >= 0 || event.indexOf('STALE') >= 0) color = '#4b5563';
-
-      _vcAppendLine(line, color);
     } catch(ex) { /* never break voice chat */ }
   }
-
-  // Wire Clear and Copy buttons (safe to call before DOMContentLoaded
-  // because the buttons are already in the DOM above this script block)
-  document.addEventListener('DOMContentLoaded', function() {
-    var btnClear = document.getElementById('vcDbgClear');
-    var btnCopy  = document.getElementById('vcDbgCopy');
-    var logEl    = document.getElementById('vcDebugLog');
-
-    if (btnClear) {
-      btnClear.addEventListener('click', function() {
-        _vcLogLines = [];
-        if (logEl) {
-          logEl.innerHTML = '<span style="color:#3a6a3a;">— Log cleared —</span>';
-        }
-        var cnt = document.getElementById('vcDbgCount');
-        if (cnt) cnt.textContent = '0 events';
-        console.log('[ALEEM-VC] log cleared');
-      });
-    }
-
-    if (btnCopy) {
-      btnCopy.addEventListener('click', function() {
-        var text = _vcLogLines.join('\n');
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function() {
-            btnCopy.textContent = '✅ Copied!';
-            setTimeout(function() { btnCopy.textContent = '📋 Copy Log'; }, 2000);
-          }).catch(function() {
-            prompt('Copy this log:', text);
-          });
-        } else {
-          prompt('Copy this log:', text);
-        }
-      });
-    }
-  });
 
   function vcUpdateToggleUI() {
     if (!vcTrack) return;
@@ -7888,8 +7795,40 @@ if ('serviceWorker' in navigator) {
     var orig = window.speakText;
     window.speakText = function(t) {
       if (vc.active) {
+        // [FIX — Voice Chat reply cut off mid-sentence] Traced the full TTS
+        // lifecycle (speakText -> SpeechSynthesisUtterance -> onstart ->
+        // onend/onerror, plus barge-in and speechSynthesis.cancel()): none of
+        // them fire early. u.onend fires normally because there is nothing
+        // left in the utterance to speak — the Gemini/Groq response handlers
+        // (untouched here) call speakText(reply...slice(0, 480)), a hard
+        // 480-character cap applied BEFORE speakText ever runs. addMsg()
+        // already stored the FULL, untruncated reply in chat history (S.messages)
+        // moments earlier, so the text the user sees is complete while only
+        // the spoken audio is capped — confirming this is a TTS-input issue,
+        // not a TTS-lifecycle issue.
+        //
+        // Fix is confined to this patched speakText only. If the most recent
+        // AI message in chat history, once the SAME markdown-stripping the
+        // caller already applies is repeated here, is a strict, longer
+        // superset of what we were just given, that proves `t` is a
+        // truncated prefix of it — so speak the full stored text instead.
+        // If that check doesn't hold (e.g. the welcome message, or replaying
+        // an older bubble via the per-message speak button, neither of which
+        // is "the last AI message turn"), `t` is spoken exactly as given,
+        // unchanged — so this can never speak the wrong text.
+        var full = t;
+        try {
+          var lastMsg = S.messages && S.messages.length ? S.messages[S.messages.length - 1] : null;
+          if (lastMsg && lastMsg.role === 'ai' && typeof lastMsg.text === 'string') {
+            var stripped = lastMsg.text.replace(/\*\*/g, '').replace(/\*/g, '').replace(/`/g, '');
+            if (stripped.length > t.length && stripped.indexOf(t) === 0) {
+              full = stripped;
+              vcLog('speakText:fullReplyRestored', 'caller passed ' + t.length + ' chars (truncated), speaking full ' + full.length + ' chars from history instead');
+            }
+          }
+        } catch (e) {}
         vcStopMic('about-to-speak');          // don't listen while speaking
-        vcSpeakAndRestart(t);
+        vcSpeakAndRestart(full);
         vcWatchForBargeIn();  // watch for barge-in (tracked/cancelable — see vcStopBargeIn)
       } else {
         if (orig) orig(t);
