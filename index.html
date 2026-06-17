@@ -7534,11 +7534,18 @@ if ('serviceWorker' in navigator) {
       // utterance (empty buffer, nothing said yet) still waits for its
       // first onresult to arm the timer, exactly as before.
       if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
-      if (vc.utteranceBuffer) {
-        var resumeMs = vcSilenceMsFor(rec.lang);
-        vc.silenceTimer = setTimeout(vcFinalizeUtterance, resumeMs);
-        vcLog('onstart:silenceResumed', resumeMs + 'ms window armed now that mic is confirmed listening');
-      }
+      // Do NOT arm the silence timer here. onstart confirms the mic is hardware-
+      // ready, not that the user is speaking. Android Chrome (and other engines)
+      // take 300–1500ms between onstart and the first onresult even when the user
+      // is speaking continuously — that latency gap alone is enough to consume the
+      // entire 1700ms (en-IN) window and fire vcFinalizeUtterance mid-sentence.
+      // vcSuspendSilenceTimer() in onend already cleared the timer for the whole
+      // restart gap. The correct and only trigger to re-arm is onresult — actual
+      // evidence the user is still talking. Letting the timer stay suspended here
+      // means the worst case is a slightly longer silence threshold after a restart;
+      // firing it here causes guaranteed premature submission whenever restart
+      // latency exceeds the threshold, which is the bug being fixed.
+      vcLog('onstart:silenceHeld', 'mic confirmed — silence timer stays suspended until onresult proves speech');
 
       // Only NOW — on confirmed start, not on intent — does the badge say
       // Listening. This is what keeps the badge synced to reality.
