@@ -7086,56 +7086,88 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── INSTRUMENTATION ─────────────────────────────────────────────
-  // Full runtime trace buffer — every event is pushed here AND to console.
-  // Access window._vcTrace in DevTools to inspect the complete sequence.
-  // Each entry: { t (ms since page load), gen, event, detail, snap (vc state snapshot) }
+  // ── VOICE CHAT INSTRUMENTATION (language-divergence edition) ────
+  // Goal: capture the FIRST event where mr-IN/gu-IN/ur-IN diverges from hi-IN.
+  // Access via DevTools or the on-screen panel (appears when VC is active).
+  //   window._vcTrace       — full event array
+  //   window._vcTraceDump() — pretty-print to console
+  //   window._vcTraceClear()— reset before each repro
   window._vcTrace = [];
-  window._vcTraceClear = function() { window._vcTrace = []; console.log('[ALEEM-VC] trace cleared'); };
-  window._vcTraceDump  = function() {
-    console.group('[ALEEM-VC] === FULL TRACE DUMP (' + window._vcTrace.length + ' events) ===');
-    window._vcTrace.forEach(function(e, i) {
+  window._vcTraceClear = function() {
+    window._vcTrace = [];
+    var log = document.getElementById('vcDebugLog');
+    if (log) log.innerHTML = '';
+    var cnt = document.getElementById('vcDebugCount');
+    if (cnt) cnt.textContent = '0 events';
+    console.log('[ALEEM-VC] trace cleared');
+  };
+  window._vcTraceDump = function() {
+    var t = window._vcTrace;
+    console.group('[ALEEM-VC] TRACE DUMP — ' + t.length + ' events');
+    t.forEach(function(e, i) {
       console.log(
-        '#' + String(i).padStart(3, '0') +
+        '#' + String(i).padStart(3,'0') +
         ' +' + String(e.t).padStart(6) + 'ms' +
-        ' gen=' + e.gen +
+        ' g' + e.gen +
+        ' lang=' + e.lang +
         ' [' + e.event + ']' +
         (e.detail ? ' :: ' + e.detail : '') +
-        ' | buf="' + e.bufBefore + '"→"' + e.bufAfter + '"' +
-        ' listen=' + e.listening + ' start=' + e.starting + ' speak=' + e.speaking +
-        ' timer=' + (e.timerActive ? 'ARMED' : 'null')
+        ' buf:"' + e.bufB + '"→"' + e.bufA + '"' +
+        ' timer:' + (e.timer ? 'ARMED' : 'off') +
+        ' listen:' + e.listening
       );
     });
     console.groupEnd();
   };
 
   var _vcT0 = Date.now();
+
   function vcLog(event, detail, bufBefore, bufAfter) {
     try {
-      var now   = Date.now() - _vcT0;
-      var bufB  = (bufBefore !== undefined) ? bufBefore : (vc ? vc.utteranceBuffer : '?');
-      var bufA  = (bufAfter  !== undefined) ? bufAfter  : (vc ? vc.utteranceBuffer : '?');
+      var now  = Date.now() - _vcT0;
+      var lang = (vc && vc.rec && vc.rec.lang) ? vc.rec.lang : (vc && vc.langPref ? vc.langPref : '?');
+      var bufB = (bufBefore !== undefined) ? bufBefore : (vc ? vc.utteranceBuffer : '');
+      var bufA = (bufAfter  !== undefined) ? bufAfter  : (vc ? vc.utteranceBuffer : '');
       var entry = {
-        t:          now,
-        gen:        vc ? vc.gen : -1,
-        event:      event,
-        detail:     detail || '',
-        bufBefore:  bufB,
-        bufAfter:   bufA,
-        listening:  vc ? vc.listening  : false,
-        starting:   vc ? vc.starting   : false,
-        speaking:   vc ? vc.speaking   : false,
-        timerActive: vc ? !!vc.silenceTimer : false,
+        t:        now,
+        gen:      vc ? vc.gen : -1,
+        lang:     lang,
+        event:    event,
+        detail:   detail || '',
+        bufB:     bufB,
+        bufA:     bufA,
+        timer:    vc ? !!vc.silenceTimer : false,
+        listening:vc ? vc.listening  : false,
+        starting: vc ? vc.starting   : false,
+        speaking: vc ? vc.speaking   : false,
       };
       window._vcTrace.push(entry);
+
+      // ── LANGUAGE-DIVERGENCE DETECTOR ──────────────────────────
+      // Flag the first event where Marathi/Gujarati/Urdu produces
+      // an onerror or an onend WITHOUT a prior onresult — that is
+      // the precise divergence point from Hindi's normal flow.
+      var isTargetLang = (lang === 'mr-IN' || lang === 'gu-IN' || lang === 'ur-IN');
+      var isDivergenceSignal = (
+        event === 'onerror:FIRED' ||
+        event.indexOf('language-not-supported') >= 0 ||
+        // onend with empty buffer after onstart = no results at all
+        (event === 'onend:FIRED' && bufB === '' && !entry.speaking)
+      );
+      if (isTargetLang && isDivergenceSignal) {
+        entry.DIVERGENCE = true;
+        console.warn('[ALEEM-VC] ⚠️ DIVERGENCE DETECTED at event [' + event + '] lang=' + lang + ' detail=' + detail);
+      }
+
       console.log(
-        '[ALEEM-VC] +' + now + 'ms gen=' + vc.gen +
+        '[ALEEM-VC] +' + now + 'ms g' + (vc ? vc.gen : '?') +
+        ' lang=' + lang +
         ' [' + event + ']' +
         (detail ? ' :: ' + detail : '') +
-        ' | buf="' + bufB + '"→"' + bufA + '"' +
-        ' timer=' + (!!vc.silenceTimer ? 'ARMED' : 'null')
+        ' buf:"' + bufB + '"→"' + bufA + '"' +
+        ' timer:' + (!!( vc && vc.silenceTimer) ? 'ARMED' : 'off')
       );
-    } catch (e) { /* never let logging break voice chat */ }
+    } catch(ex) { /* never break voice chat */ }
   }
 
   function vcUpdateToggleUI() {
@@ -7200,11 +7232,11 @@ if ('serviceWorker' in navigator) {
   // recognizer's actual lang (vc.rec.lang) via vcSilenceMsFor(), instead of
   // a single flat constant — see VC_SILENCE_MS_BY_LANG above.
   function vcResetSilenceTimer() {
-    var hadTimer = !!vc.silenceTimer;
     if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
-    var ms = vcSilenceMsFor(vc.rec && vc.rec.lang);
+    var lang = vc.rec && vc.rec.lang;
+    var ms = vcSilenceMsFor(lang);
     vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
-    vcLog('vcResetSilenceTimer', 'lang=' + (vc.rec && vc.rec.lang) + ' ms=' + ms + ' hadTimer=' + hadTimer + ' → ARMED');
+    vcLog('vcResetSilenceTimer', 'lang="' + lang + '" ms=' + ms + ' → ARMED');
   }
 
   // [FIX — Bug #2, premature submission during recognizer restarts]
@@ -7242,9 +7274,9 @@ if ('serviceWorker' in navigator) {
   // sites; this function only ever clears, it never reschedules — that
   // happens in onstart.
   function vcSuspendSilenceTimer(reason) {
-    var hadTimer = !!vc.silenceTimer;
+    var had = !!vc.silenceTimer;
     if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
-    vcLog('vcSuspendSilenceTimer', (reason || '') + ' — hadTimer=' + hadTimer + ' → CLEARED (mic between instances)');
+    vcLog('vcSuspendSilenceTimer', (reason || '') + ' hadTimer=' + had + ' → CLEARED');
   }
 
   // [ADDED — Bug #1 root-cause fix] restart-boundary dedup helpers.
@@ -7288,19 +7320,31 @@ if ('serviceWorker' in navigator) {
   function vcFinalizeUtterance() {
     vc.silenceTimer = null;
     var transcript = (vc.utteranceBuffer || '').trim();
-    var bufBefore  = vc.utteranceBuffer;
     vc.utteranceBuffer = '';
     vc.restartGuardSnapshot = '';
     vc.restartGuardActive   = false;
+    if (!transcript) { vcLog('vcFinalizeUtterance:empty', 'nothing captured'); return; }
+    vcLog('vcFinalizeUtterance', 'submitting "' + transcript + '"');
 
-    vcLog('vcFinalizeUtterance:FIRED', 'SILENCE TIMER FIRED — submitting "' + transcript + '" | bufBefore="' + bufBefore + '"', bufBefore, '');
-
-    if (!transcript) {
-      vcLog('vcFinalizeUtterance:empty', 'nothing captured — NOT calling handleSend()', '', '');
-      return;
-    }
-
-    // [FIX — Auto mode lagging one turn behind]
+    // [FIX — Auto mode lagging one turn behind] Detect the language of
+    // what the user JUST said (using the same script-based detectSpeechLang
+    // already used elsewhere for TTS voice selection — not new
+    // multilingual logic) so the NEXT recognition session can be biased
+    // toward it via vcResolveRecognitionLang, instead of only ever
+    // reacting to the AI's reply from the turn before. Only meaningful
+    // when Auto is active (vc.langPref === '') — a pinned language always
+    // wins regardless, per vcResolveRecognitionLang's priority order.
+    //
+    // Guard: detectSpeechLang() returns 'en-US' both for genuinely English
+    // text AND as its catch-all when nothing else matched (e.g. a
+    // mis-recognized non-English utterance that came back as unrecognizable
+    // Latin-script text). We can't tell those two cases apart here without
+    // touching detectSpeechLang itself, which is shared multilingual logic
+    // out of scope for this fix. So: an 'en' result only updates
+    // userUtteranceLang if it isn't already pinned to a non-English
+    // language — this avoids a garbled non-English transcript flipping
+    // recognition to English for the next turn, while still letting a
+    // real switch INTO English (or the very first turn) through normally.
     if (!vc.langPref && typeof detectSpeechLang === 'function') {
       var detected = detectSpeechLang(transcript);
       var isEnglish = detected && detected.slice(0, 2).toLowerCase() === 'en';
@@ -7313,8 +7357,13 @@ if ('serviceWorker' in navigator) {
       }
     }
 
-    vcLog('vcFinalizeUtterance:handleSend', '>>> CALLING handleSend() with text="' + transcript + '" <<<', '', '');
     vcStopMic('utterance-finalized');
+
+    // [Preserved from before] Do NOT navigate to the chat page. The whole
+    // point of Voice Chat Mode is a call-style experience that never leaves
+    // this page. chatInput/chatMessages/etc. still exist in the DOM even
+    // while the chat page isn't the active/visible one, so handleSend()
+    // works exactly the same without navigating.
     vcSetStatus('processing');
 
     var inp = document.getElementById('chatInput');
@@ -7344,10 +7393,19 @@ if ('serviceWorker' in navigator) {
   // whatever the AI said in the PREVIOUS turn instead of what the user
   // most recently actually said.
   function vcResolveRecognitionLang() {
-    if (vc.langPref) return vc.langPref;
-    if (vc.userUtteranceLang) return vc.userUtteranceLang;
-    if (vc.lastDetectedLang) return vc.lastDetectedLang;
-    return 'en-IN';
+    var resolved, reason;
+    if (vc.langPref) {
+      resolved = vc.langPref; reason = 'langPref (user pinned)';
+    } else if (vc.userUtteranceLang) {
+      resolved = vc.userUtteranceLang; reason = 'userUtteranceLang (last user speech)';
+    } else if (vc.lastDetectedLang) {
+      resolved = vc.lastDetectedLang; reason = 'lastDetectedLang (last AI reply)';
+    } else {
+      resolved = 'en-IN'; reason = 'default fallback';
+    }
+    vcLog('vcResolveRecognitionLang', 'resolved="' + resolved + '" via ' + reason +
+      ' | langPref="' + vc.langPref + '" userUtteranceLang="' + vc.userUtteranceLang + '" lastDetectedLang="' + vc.lastDetectedLang + '"');
+    return resolved;
   }
 
   // ── Start listening ─────────────────────────────────────────────
@@ -7358,14 +7416,12 @@ if ('serviceWorker' in navigator) {
   // late (after a newer vcStartListening() already replaced it) can never
   // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
-    if (!vc.active) { vcLog('vcStartListening:SKIP', 'vc.active=false'); return; }
+    if (!vc.active) { vcLog('vcStartListening:SKIP', 'not active'); return; }
 
     if (vc.starting || vc.listening) {
-      vcLog('vcStartListening:SKIP', 'already starting=' + vc.starting + ' listening=' + vc.listening + ' — duplicate start blocked');
+      vcLog('vcStartListening:SKIP', 'already starting=' + vc.starting + ' listening=' + vc.listening);
       return;
     }
-
-    vcLog('vcStartListening:ENTER', 'gen BEFORE bump=' + vc.gen + ' buf="' + vc.utteranceBuffer + '" timerActive=' + !!vc.silenceTimer);
 
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -7412,156 +7468,143 @@ if ('serviceWorker' in navigator) {
     // downstream by LANGUAGE_INSTRUCTION (AI side) and
     // detectSpeechLang/pickVoiceForLang (TTS side) — unchanged.
     rec.lang = vcResolveRecognitionLang();
+    vcLog('vcStartListening:recCreated',
+      'gen=' + myGen + ' rec.lang="' + rec.lang + '" continuous=' + rec.continuous + ' interimResults=' + rec.interimResults);
 
     rec.onstart = function() {
-      if (myGen !== vc.gen) { vcLog('onstart:STALE', 'IGNORING — created for gen=' + myGen + ' but current gen=' + vc.gen); return; }
+      if (myGen !== vc.gen) { vcLog('onstart:STALE', 'gen=' + myGen + ' cur=' + vc.gen); return; }
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
       vcStopBargeIn('main-recognizer-confirmed-listening');
-
       vc.restartGuardSnapshot = vc.utteranceBuffer;
       vc.restartGuardActive   = !!vc.utteranceBuffer;
-
       vcLog('onstart',
-        'gen=' + myGen + ' lang=' + rec.lang +
-        ' | bufferOnStart="' + vc.utteranceBuffer + '"' +
-        ' restartGuardActive=' + vc.restartGuardActive +
-        ' restartGuardSnapshot="' + vc.restartGuardSnapshot + '"'
-      );
+        'CONFIRMED lang="' + rec.lang + '" gen=' + myGen +
+        ' bufOnStart="' + vc.utteranceBuffer + '"' +
+        ' restartGuardActive=' + vc.restartGuardActive);
 
+      // [FIX — Bug #2] This is the ONLY place the silence countdown is
+      // (re)armed after a restart. It was suspended in onerror/onend the
+      // moment this instance's predecessor went away (see
+      // vcSuspendSilenceTimer there) and stayed suspended for the entire
+      // gap while no recognizer was listening — so it could not have
+      // fired during that gap. Only now, with onstart confirming the mic
+      // is actually listening again, do we resume counting — and only if
+      // there's an in-progress utterance to protect. A brand-new
+      // utterance (empty buffer, nothing said yet) still waits for its
+      // first onresult to arm the timer, exactly as before.
       if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
       if (vc.utteranceBuffer) {
         var resumeMs = vcSilenceMsFor(rec.lang);
         vc.silenceTimer = setTimeout(vcFinalizeUtterance, resumeMs);
-        vcLog('onstart:silenceResumed', 'buffer non-empty → ARMED silence timer for ' + resumeMs + 'ms');
+        vcLog('onstart:silenceResumed', 'lang="' + rec.lang + '" ms=' + resumeMs + ' (buffer non-empty, resuming countdown)');
       } else {
-        vcLog('onstart:silenceIdle', 'buffer empty → silence timer NOT armed yet (waiting for first speech)');
+        vcLog('onstart:silenceIdle', 'lang="' + rec.lang + '" buffer empty — timer NOT armed, waiting for first speech');
       }
 
       vcSetStatus('listening');
     };
 
     rec.onresult = function(e) {
-      if (myGen !== vc.gen) { vcLog('onresult:STALE', 'IGNORING — gen=' + myGen + ' current=' + vc.gen); return; }
-
-      var bufBeforeEvent = vc.utteranceBuffer;
+      if (myGen !== vc.gen) { vcLog('onresult:STALE', 'gen=' + myGen + ' cur=' + vc.gen); return; }
+      var bufBefore = vc.utteranceBuffer;
       var interimChunk = '';
-
       vcLog('onresult:EVENT',
-        'resultIndex=' + e.resultIndex + ' results.length=' + e.results.length +
-        ' bufBefore="' + bufBeforeEvent + '"' +
-        ' restartGuardActive=' + vc.restartGuardActive +
-        ' restartGuardSnapshot="' + vc.restartGuardSnapshot + '"',
-        bufBeforeEvent, bufBeforeEvent
-      );
-
+        'lang="' + rec.lang + '" resultIndex=' + e.resultIndex + ' results.length=' + e.results.length +
+        ' bufBefore="' + bufBefore + '"');
       for (var i = e.resultIndex; i < e.results.length; i++) {
         var res = e.results[i];
         var chunkText = res[0] ? res[0].transcript : '';
-        var isFinal   = res.isFinal;
-
         vcLog('onresult:result[' + i + ']',
-          'isFinal=' + isFinal + ' transcript="' + chunkText + '"',
-          vc.utteranceBuffer, vc.utteranceBuffer
-        );
-
-        if (isFinal) {
+          'isFinal=' + res.isFinal + ' transcript="' + chunkText + '"',
+          vc.utteranceBuffer, vc.utteranceBuffer);
+        if (res.isFinal) {
           var trimmedChunk = chunkText.trim();
-          var bufBeforeAppend = vc.utteranceBuffer;
-
           if (vc.restartGuardActive && trimmedChunk) {
-            var bufWords   = vcDedupWords(vc.restartGuardSnapshot);
-            var chunkWords = vcDedupWords(trimmedChunk);
-            var overlap    = vcWordOverlapLen(bufWords, chunkWords);
-            vcLog('onresult:dedupCheck',
-              'snapshot="' + vc.restartGuardSnapshot + '"' +
-              ' chunkWords=[' + chunkWords.join(',') + ']' +
-              ' bufWords=[' + bufWords.join(',') + ']' +
-              ' overlapLen=' + overlap,
-              bufBeforeAppend, bufBeforeAppend
-            );
+            var overlap = vcWordOverlapLen(vcDedupWords(vc.restartGuardSnapshot), vcDedupWords(trimmedChunk));
             if (overlap > 0) {
-              var before = trimmedChunk;
               trimmedChunk = vcDedupWords(trimmedChunk).slice(overlap).join(' ');
-              vcLog('onresult:dedupSTRIPPED',
-                'STRIPPED ' + overlap + ' word(s): "' + before + '" → "' + trimmedChunk + '"',
-                bufBeforeAppend, bufBeforeAppend
-              );
-            } else {
-              vcLog('onresult:dedupNO-OVERLAP', 'no overlap found — chunk NOT stripped');
+              vcLog('onresult:dedupStripped', 'stripped ' + overlap + ' word(s)');
             }
             if (trimmedChunk) vc.restartGuardActive = false;
           }
-
           if (trimmedChunk) {
-            var bufAfterAppend = (vc.utteranceBuffer + ' ' + trimmedChunk).trim();
-            vcLog('onresult:APPEND',
-              '"' + vc.utteranceBuffer + '" + "' + trimmedChunk + '" → "' + bufAfterAppend + '"',
-              vc.utteranceBuffer, bufAfterAppend
-            );
-            vc.utteranceBuffer = bufAfterAppend;
-          } else {
-            vcLog('onresult:SKIPPED', 'trimmedChunk empty after dedup — not appending', vc.utteranceBuffer, vc.utteranceBuffer);
+            var prev = vc.utteranceBuffer;
+            vc.utteranceBuffer = (vc.utteranceBuffer + ' ' + trimmedChunk).trim();
+            vcLog('onresult:APPEND', '"' + prev + '" + "' + trimmedChunk + '" → "' + vc.utteranceBuffer + '"', prev, vc.utteranceBuffer);
           }
         } else {
           interimChunk += chunkText;
-          vcLog('onresult:INTERIM', '"' + chunkText + '" (not appended)', vc.utteranceBuffer, vc.utteranceBuffer);
         }
       }
-
-      vcLog('onresult:DONE',
-        'bufAfterEvent="' + vc.utteranceBuffer + '" allInterim="' + interimChunk + '" → calling vcResetSilenceTimer',
-        bufBeforeEvent, vc.utteranceBuffer
-      );
+      vcLog('onresult:DONE', 'bufAfter="' + vc.utteranceBuffer + '" interim="' + interimChunk + '" → resetting silence timer', bufBefore, vc.utteranceBuffer);
       vcResetSilenceTimer();
     };
 
-    var errorHandled = false; // set by onerror; tells the always-following
-                               // onend not to ALSO schedule its own restart,
-                               // since per spec onend always fires after
-                               // onerror for the same instance — without this
-                               // flag both handlers would schedule a restart
-                               // for the same dead instance (the duplicate
-                               // start / restart-loop bug).
+    var errorHandled = false;
 
     rec.onerror = function(e) {
-      if (myGen !== vc.gen) { vcLog('onerror:STALE', 'IGNORING — gen=' + myGen + ' error=' + e.error); return; }
-      vcLog('onerror:FIRED', 'gen=' + myGen + ' error="' + e.error + '" buf="' + vc.utteranceBuffer + '"');
+      if (myGen !== vc.gen) { vcLog('onerror:STALE', 'gen=' + myGen + ' cur=' + vc.gen + ' error=' + e.error); return; }
       errorHandled = true;
       vc.starting  = false;
       vc.listening = false;
 
+      // ── LANGUAGE-DIVERGENCE CRITICAL LOG ──────────────────────────────
+      // This is the event we are hunting. For mr-IN/gu-IN/ur-IN, the error
+      // type here tells us WHY the session ended after one word:
+      //   'language-not-supported' → browser does not have this locale
+      //   'no-speech'              → engine gave up waiting (lang might be wrong)
+      //   'network'                → server-side recognition failure for this lang
+      //   'aborted'                → we caused it (should not happen here)
+      vcLog('onerror:FIRED',
+        '⚠️ lang="' + rec.lang + '" error="' + e.error + '"' +
+        ' buf="' + vc.utteranceBuffer + '"' +
+        ' gen=' + myGen +
+        (e.error === 'language-not-supported'
+          ? ' — LOCALE NOT INSTALLED ON DEVICE. This is the divergence root cause.'
+          : e.error === 'network'
+          ? ' — SERVER REJECTED this language locale.'
+          : ''));
+
       switch (e.error) {
         case 'not-allowed':
         case 'permission-denied':
-          vcLog('onerror:not-allowed', 'mic permission denied/revoked — STOPPING');
+          vcLog('onerror:not-allowed', 'mic permission denied/revoked');
           if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
           vcSetStatus('error');
           vcStop();
           return;
         case 'audio-capture':
-          vcLog('onerror:audio-capture', 'no microphone — STOPPING');
+          vcLog('onerror:audio-capture', 'no microphone available/hardware issue');
           if (typeof toast === 'function') toast('🎤 No microphone detected. Check your device and try again.');
           vcSetStatus('error');
           vcStop();
           return;
         case 'network':
-          vcLog('onerror:network', 'network failure — suspending timer, retrying in 1500ms');
+          vcLog('onerror:network', 'lang="' + rec.lang + '" — network/server rejection. Suspending timer, retry in 1500ms');
           vcSetStatus('error');
           vcSuspendSilenceTimer('network-error-restart-pending');
           if (vc.active) setTimeout(vcStartListening, 1500);
           return;
         case 'aborted':
-          vcLog('onerror:aborted', 'intentional abort — no restart (caller owns next step)');
+          vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
           return;
         case 'no-speech':
-          vcLog('onerror:no-speech', 'browser silence timeout — suspending timer, restarting in 400ms');
+          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" — browser silence timeout. Suspending timer, retry in 400ms');
           vcSuspendSilenceTimer('no-speech-restart-pending');
           if (vc.active) setTimeout(vcStartListening, 400);
           return;
+        case 'language-not-supported':
+          vcLog('onerror:language-not-supported',
+            '🚨 lang="' + rec.lang + '" NOT SUPPORTED by this browser/device. ' +
+            'This is the divergence root cause for mr-IN/gu-IN/ur-IN vs hi-IN. ' +
+            'Suspending timer, retry in 800ms (will keep failing until lang is changed).');
+          vcSuspendSilenceTimer('language-not-supported-restart-pending');
+          if (vc.active) setTimeout(vcStartListening, 800);
+          return;
         default:
-          vcLog('onerror:OTHER', 'error="' + e.error + '" — suspending timer, restarting in 800ms');
+          vcLog('onerror:OTHER', 'lang="' + rec.lang + '" error="' + e.error + '" — suspending timer, retry in 800ms');
           vcSuspendSilenceTimer('error-restart-pending: ' + e.error);
           if (vc.active) setTimeout(vcStartListening, 800);
           return;
@@ -7569,19 +7612,21 @@ if ('serviceWorker' in navigator) {
     };
 
     rec.onend = function() {
-      if (myGen !== vc.gen) { vcLog('onend:STALE', 'IGNORING — gen=' + myGen); return; }
+      if (myGen !== vc.gen) { vcLog('onend:STALE', 'gen=' + myGen + ' cur=' + vc.gen); return; }
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
       vcLog('onend:FIRED',
-        'gen=' + myGen + ' wasListening=' + wasListening +
-        ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled +
-        ' buf="' + vc.utteranceBuffer + '" timerActive=' + !!vc.silenceTimer
-      );
-      if (!vc.active) { vcLog('onend:inactive', 'vc.active=false — no restart'); return; }
-      if (vc.speaking) { vcLog('onend:speaking', 'TTS owns next transition — no restart here'); return; }
-      if (errorHandled) { vcLog('onend:errorHandled', 'onerror already decided next step — no restart'); return; }
-      vcLog('onend:RESTART', 'natural session end — suspending timer, restarting in 250ms');
+        'lang="' + rec.lang + '" gen=' + myGen +
+        ' wasListening=' + wasListening +
+        ' speaking=' + vc.speaking +
+        ' errorHandled=' + errorHandled +
+        ' buf="' + vc.utteranceBuffer + '"' +
+        ' timerActive=' + !!vc.silenceTimer);
+      if (!vc.active) { vcLog('onend:inactive', 'vc off — no restart'); return; }
+      if (vc.speaking) { vcLog('onend:speaking', 'TTS owns next transition'); return; }
+      if (errorHandled) { vcLog('onend:errorHandled', 'onerror already handled — no restart from here'); return; }
+      vcLog('onend:RESTART', 'lang="' + rec.lang + '" natural end — suspending timer, restart in 250ms');
       vcSuspendSilenceTimer('recognizer-ended-restart-pending');
       setTimeout(vcStartListening, 250);
     };
@@ -7843,95 +7888,103 @@ if ('serviceWorker' in navigator) {
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
-<!-- ── VOICE CHAT DEBUG PANEL ─────────────────────────────────── -->
-<div id="vcDebugPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
-  background:rgba(0,0,0,0.92);color:#0f0;font:12px/1.4 monospace;
-  max-height:40vh;overflow-y:auto;padding:8px;border-top:2px solid #0f0;">
-  <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-    <b style="color:#0ff">ALEEM-VC DEBUG</b>
-    <button onclick="window._vcTraceDump()" style="background:#030;color:#0f0;border:1px solid #0f0;padding:2px 8px;cursor:pointer;font-size:11px">Dump to Console</button>
-    <button onclick="window._vcTraceClear();document.getElementById('vcDebugLog').innerHTML=''" style="background:#030;color:#0f0;border:1px solid #0f0;padding:2px 8px;cursor:pointer;font-size:11px">Clear</button>
-    <button onclick="document.getElementById('vcDebugPanel').style.display='none'" style="background:#300;color:#f00;border:1px solid #f00;padding:2px 8px;cursor:pointer;font-size:11px">Hide</button>
-    <span id="vcDebugEventCount" style="color:#ff0">0 events</span>
+<!-- ── VOICE CHAT LANGUAGE-DIVERGENCE DEBUG PANEL ───────────────── -->
+<style>
+#vcDbg { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999;
+  background:rgba(0,0,0,0.94); color:#cfc; font:11px/1.5 'JetBrains Mono',monospace;
+  max-height:44vh; overflow-y:auto; border-top:2px solid #0f0; }
+#vcDbgBar { position:sticky; top:0; background:#001200; padding:4px 8px;
+  display:flex; gap:6px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #0f0; }
+#vcDbgBar b { color:#0ff; }
+#vcDbgBar button { background:#020; color:#0f0; border:1px solid #0f0; padding:1px 7px;
+  cursor:pointer; font:11px monospace; border-radius:3px; }
+#vcDbgLog { padding:4px 8px; }
+.vcd-row { padding:1px 0; border-bottom:1px solid #0a0; }
+.vcd-t  { color:#555; }
+.vcd-g  { color:#666; }
+.vcd-lang-hi { color:#4af; }
+.vcd-lang-mr { color:#fa4; }
+.vcd-lang-gu { color:#f84; }
+.vcd-lang-ur { color:#f4a; }
+.vcd-lang-en { color:#8f8; }
+.vcd-lang-x  { color:#aaa; }
+.vcd-ev     { font-weight:bold; }
+.vcd-div    { background:#400; border:1px solid #f44; border-radius:2px; padding:0 3px; color:#f88; }
+.vcd-append { color:#0ff; }
+.vcd-err    { color:#f44; }
+.vcd-timer  { color:#ff0; }
+</style>
+<div id="vcDbg">
+  <div id="vcDbgBar">
+    <b>VC LANG DEBUG</b>
+    <span id="vcDbgCount" style="color:#ff0">0 events</span>
+    <button onclick="window._vcTraceDump()">Dump→Console</button>
+    <button onclick="window._vcTraceClear()">Clear</button>
+    <button onclick="document.getElementById('vcDbg').style.display='none'">Hide</button>
+    <span style="color:#888;font-size:10px">🟦hi-IN 🟧mr-IN 🟥gu-IN 🟪ur-IN 🟩en</span>
   </div>
-  <div id="vcDebugLog"></div>
+  <div id="vcDbgLog"></div>
 </div>
-
+<button id="vcDbgShow" onclick="document.getElementById('vcDbg').style.display='block'"
+  style="display:none;position:fixed;bottom:6px;right:6px;z-index:99998;
+    background:#001800;color:#0f0;border:1px solid #0f0;padding:3px 10px;
+    font:11px monospace;cursor:pointer;border-radius:4px;">VC Debug</button>
 <script>
-(function() {
-  // Patch vcLog after page loads to also write to on-screen panel
-  document.addEventListener('DOMContentLoaded', function() {
-    var panel  = document.getElementById('vcDebugPanel');
-    var log    = document.getElementById('vcDebugLog');
-    var count  = document.getElementById('vcDebugEventCount');
-
-    // Show panel when Voice Chat activates
-    var origVcStart = window.vcStart;
-
-    // Hook into _vcTrace by polling — safe, no changes to core logic
-    var lastLen = 0;
-    function refreshPanel() {
-      var trace = window._vcTrace || [];
-      if (trace.length === lastLen) return;
-      var newEntries = trace.slice(lastLen);
-      lastLen = trace.length;
-      count.textContent = trace.length + ' events';
-      newEntries.forEach(function(e) {
-        var div = document.createElement('div');
-        var color = '#0f0';
-        if (e.event.indexOf('STALE') >= 0)        color = '#888';
-        else if (e.event.indexOf('APPEND') >= 0)  color = '#0ff';
-        else if (e.event.indexOf('SUBMIT') >= 0 || e.event.indexOf('handleSend') >= 0) color = '#ff0';
-        else if (e.event.indexOf('STRIP') >= 0 || e.event.indexOf('dedup') >= 0) color = '#f80';
-        else if (e.event.indexOf('FIRED') >= 0 || e.event.indexOf('RESTART') >= 0) color = '#f0f';
-        else if (e.event.indexOf('error') >= 0 || e.event.indexOf('ERROR') >= 0)  color = '#f44';
-        else if (e.event.indexOf('onstart') >= 0) color = '#4f4';
-        else if (e.event.indexOf('onend') >= 0)   color = '#fa0';
-        div.style.color   = color;
-        div.style.borderBottom = '1px solid #111';
-        div.style.padding = '1px 0';
-        div.innerHTML =
-          '<span style="color:#555">+' + String(e.t).padStart(6) + 'ms</span> ' +
-          '<span style="color:#aaa">g' + e.gen + '</span> ' +
-          '<b>' + e.event + '</b>' +
-          (e.detail ? ' <span style="color:#ccc">' + e.detail + '</span>' : '') +
-          (e.bufBefore !== e.bufAfter
-            ? ' <span style="color:#888">buf:"' + e.bufBefore + '"→"' + e.bufAfter + '"</span>'
-            : (e.bufAfter ? ' <span style="color:#555">buf:"' + e.bufAfter + '"</span>' : ''));
-        log.appendChild(div);
-        // Auto-scroll
-        panel.scrollTop = panel.scrollHeight;
-      });
-    }
-
-    setInterval(refreshPanel, 200);
-
-    // Show debug panel automatically when vc is active
-    // Intercept vcStart to show panel
-    var checkVcActive = setInterval(function() {
-      if (window.vc && window.vc.active && panel.style.display === 'none') {
-        panel.style.display = 'block';
+(function(){
+  function langClass(lang) {
+    if (!lang || lang === '?') return 'vcd-lang-x';
+    var l = lang.slice(0,2).toLowerCase();
+    if (lang === 'hi-IN') return 'vcd-lang-hi';
+    if (lang === 'mr-IN') return 'vcd-lang-mr';
+    if (lang === 'gu-IN') return 'vcd-lang-gu';
+    if (lang === 'ur-IN') return 'vcd-lang-ur';
+    if (l === 'en') return 'vcd-lang-en';
+    return 'vcd-lang-x';
+  }
+  function evClass(ev) {
+    if (ev.indexOf('APPEND') >= 0)  return 'vcd-append';
+    if (ev.indexOf('onerror') >= 0 || ev.indexOf('ERROR') >= 0) return 'vcd-err';
+    if (ev.indexOf('Timer') >= 0 || ev.indexOf('timer') >= 0 || ev.indexOf('Silence') >= 0 || ev.indexOf('Finalize') >= 0) return 'vcd-timer';
+    return '';
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var panel = document.getElementById('vcDbg');
+    var log   = document.getElementById('vcDbgLog');
+    var cnt   = document.getElementById('vcDbgCount');
+    var btn   = document.getElementById('vcDbgShow');
+    var last  = 0;
+    setInterval(function(){
+      // Show panel/button when VC active
+      if (window.vc && window.vc.active) {
+        btn.style.display = 'block';
       }
-    }, 500);
+      var tr = window._vcTrace || [];
+      if (tr.length === last) return;
+      cnt.textContent = tr.length + ' events';
+      var frag = document.createDocumentFragment();
+      for (var i = last; i < tr.length; i++) {
+        var e = tr[i];
+        var row = document.createElement('div');
+        row.className = 'vcd-row' + (e.DIVERGENCE ? ' vcd-div' : '');
+        var lc = langClass(e.lang);
+        var ec = evClass(e.event);
+        row.innerHTML =
+          '<span class="vcd-t">+' + String(e.t).padStart(5) + 'ms</span> ' +
+          '<span class="vcd-g">g' + e.gen + '</span> ' +
+          '<span class="' + lc + '">[' + (e.lang || '?') + ']</span> ' +
+          '<span class="vcd-ev ' + ec + '">' + e.event + '</span>' +
+          (e.detail ? ' <span style="color:#aaa">' + e.detail + '</span>' : '') +
+          (e.bufB !== e.bufA ? ' <span style="color:#555">buf:"' + e.bufB + '"→"' + e.bufA + '"</span>' : '') +
+          (e.DIVERGENCE ? ' <b style="color:#f88">⚠️ DIVERGENCE</b>' : '');
+        frag.appendChild(row);
+      }
+      log.appendChild(frag);
+      last = tr.length;
+      panel.scrollTop = panel.scrollHeight;
+    }, 150);
   });
 })();
 </script>
-
-<!-- ── Show debug panel button (always visible) ─────────────────── -->
-<button onclick="document.getElementById('vcDebugPanel').style.display='block'"
-  style="position:fixed;bottom:8px;right:8px;z-index:99998;
-    background:rgba(0,30,0,0.85);color:#0f0;border:1px solid #0f0;
-    padding:4px 10px;font:11px monospace;cursor:pointer;border-radius:4px;
-    display:none;" id="vcDebugShowBtn">VC Debug</button>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // Show the "VC Debug" reveal button only when vc becomes active
-  setInterval(function() {
-    var btn = document.getElementById('vcDebugShowBtn');
-    if (btn && window.vc && window.vc.active) btn.style.display = 'block';
-  }, 500);
-});
-</script>
-
+<!-- ── END DEBUG PANEL ───────────────────────────────────────────── -->
 </body>
 </html>
