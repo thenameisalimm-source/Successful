@@ -6887,7 +6887,7 @@ if ('serviceWorker' in navigator) {
   // ── Helpers ─────────────────────────────────────────────────────
 
   function vcSetStatus(mode) {
-    // mode: 'listening' | 'speaking' | 'idle'
+    // mode: 'listening' | 'processing' | 'speaking' | 'idle'
     // Uses visibility (not display) so the panel always holds its space —
     // preventing the layout reflow / page-jump that was Root Cause 1.
     if (!vcPanel) return;
@@ -6897,6 +6897,12 @@ if ('serviceWorker' in navigator) {
       vcText.textContent  = 'Listening…';
       vcPanel.firstElementChild.style.background = 'rgba(52,211,153,0.12)';
       vcPanel.firstElementChild.style.borderColor = 'rgba(52,211,153,0.4)';
+    } else if (mode === 'processing') {
+      vcPanel.style.visibility = 'visible';
+      vcIcon.textContent  = '⏳';
+      vcText.textContent  = 'Processing…';
+      vcPanel.firstElementChild.style.background = 'rgba(251,191,36,0.12)';
+      vcPanel.firstElementChild.style.borderColor = 'rgba(251,191,36,0.4)';
     } else if (mode === 'speaking') {
       vcPanel.style.visibility = 'visible';
       vcIcon.textContent  = '🔊';
@@ -6975,12 +6981,17 @@ if ('serviceWorker' in navigator) {
       if (!transcript) return;
       vcStopMic();
 
-      // Navigate to chat page so message appears there
-      if (typeof goPage === 'function') goPage('chat');
+      // [FIX] Do NOT navigate to the chat page. The whole point of Voice
+      // Chat Mode is a call-style experience that never leaves this page.
+      // chatInput/chatMessages/etc. still exist in the DOM even while the
+      // chat page isn't the active/visible one (goPage just toggles a CSS
+      // class), so handleSend() works exactly the same without navigating.
+      vcSetStatus('processing');
 
       // Inject into the chat input and fire the normal send pipeline.
       // This guarantees: message history, memory extraction, multilingual support,
-      // model fallback chain all work exactly as typed messages.
+      // model fallback chain all work exactly as typed messages — the ONLY
+      // change is that we stay on the Voice Chat page while it happens.
       var inp = document.getElementById('chatInput');
       if (inp) {
         inp.value = transcript;
@@ -6996,9 +7007,15 @@ if ('serviceWorker' in navigator) {
         vcStop();
         return;
       }
-      // Network/no-speech: wait then retry
-      vcSetStatus('idle');
-      if (vc.active) setTimeout(vcStartListening, 1200);
+      // [FIX] Most "errors" here are just the browser's silence/no-speech
+      // timeout — a completely normal event while waiting for the user to
+      // talk. The old code dropped the status panel to 'idle' (hidden) and
+      // then back to 'listening' 1.2s later on every single occurrence,
+      // which is the "Listening indicator repeatedly refreshes/shakes" bug.
+      // We now keep the "Listening…" indicator visible/stable through this
+      // transient restart so the UI doesn't flicker; only genuinely fatal
+      // errors should ever hide the badge.
+      if (vc.active) setTimeout(vcStartListening, 600);
     };
 
     vc.rec.onend = function() {
@@ -7006,9 +7023,10 @@ if ('serviceWorker' in navigator) {
       if (vc.ignoreEnd) return;           // intentional stop
       if (!vc.active) return;
       if (!vc.speaking) {
-        // Nothing happening — restart after brief pause
-        vcSetStatus('idle');
-        setTimeout(vcStartListening, 800);
+        // [FIX] Same flicker fix as onerror above: silently restart the
+        // recognizer without hiding the "Listening…" badge first. The
+        // badge only changes when we move to 'processing' or 'speaking'.
+        setTimeout(vcStartListening, 300);
       }
     };
 
@@ -7057,15 +7075,16 @@ if ('serviceWorker' in navigator) {
     u.onend = function() {
       vc.speaking = false;
       if (vc.active) {
-        vcSetStatus('idle');
-        setTimeout(vcStartListening, 600);
+        // [FIX] Go straight back to a visible "Listening…" state instead of
+        // hiding the panel for a beat first — keeps the call-style flow
+        // feeling continuous rather than blinking out and back in.
+        setTimeout(vcStartListening, 400);
       }
     };
     u.onerror = function() {
       vc.speaking = false;
       if (vc.active) {
-        vcSetStatus('idle');
-        setTimeout(vcStartListening, 600);
+        setTimeout(vcStartListening, 400);
       }
     };
 
@@ -7145,13 +7164,17 @@ if ('serviceWorker' in navigator) {
     vcText   = document.getElementById('vcStatusText');
 
     if (vcToggle) {
-      // Click on the visual track/thumb/label all toggle
-      [vcTrack, vcThumb, vcLabel].forEach(function(el) {
-        if (el) el.addEventListener('click', function() {
-          if (vcToggle) vcToggle.checked = !vcToggle.checked;
-          if (vcToggle && vcToggle.checked) { vcStart(); } else { vcStop(); }
-        });
-      });
+      // [FIX] Multi-tap bug: vcTrack/vcThumb/vcLabel all live INSIDE the
+      // <label class="toggle-switch"> that wraps the checkbox. A native
+      // label click already toggles the checkbox once and fires a single
+      // 'change' event. The old code ALSO manually flipped vcToggle.checked
+      // in a click listener on those same elements — so one tap produced
+      // two toggles (native click-through + manual flip) which cancelled
+      // out, requiring a second tap to actually change state.
+      // Fix: don't touch vcToggle.checked manually at all. Just listen to
+      // the single source of truth — the checkbox's own 'change' event —
+      // which fires exactly once per tap no matter which child element
+      // (track/thumb/label text) was tapped.
       vcToggle.addEventListener('change', function() {
         if (vcToggle.checked) { vcStart(); } else { vcStop(); }
       });
