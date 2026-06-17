@@ -783,7 +783,8 @@
   #modelSelect,
   #personalitySelect,
   #voicePersonalitySelect,
-  #voiceSelect {
+  #voiceSelect,
+  #vcLangSelect {
     flex: 1;
     min-width: 0;          /* override browser default of auto/fit-content */
     width: 0;              /* forces flex to control the width, not content */
@@ -2468,6 +2469,25 @@
           <span id="vcToggleLabel" style="font-size:1rem;color:var(--text-1);">Voice Chat Mode: <strong>Off</strong></span>
         </div>
 
+        <!-- Spoken Language hint: the Web Speech API has no real automatic
+             spoken-language detection (lang='' just falls back to the device/
+             browser locale, which is almost always English) — so Gujarati,
+             Marathi, and Urdu need an explicit, supported locale tag to be
+             recognized reliably. "Auto" adapts to whichever language the
+             conversation is already in; pin a language here if recognition
+             for it isn't sticking. -->
+        <div class="personality-selector-row" style="margin-bottom:20px;max-width:360px;">
+          <span class="personality-selector-label">🌐 Spoken Language:</span>
+          <select id="vcLangSelect">
+            <option value="">🔄 Auto (adapts to conversation)</option>
+            <option value="en-IN">English</option>
+            <option value="hi-IN">Hindi (हिंदी)</option>
+            <option value="gu-IN">Gujarati (ગુજરાતી)</option>
+            <option value="mr-IN">Marathi (मराठी)</option>
+            <option value="ur-IN">Urdu (اردو)</option>
+          </select>
+        </div>
+
         <!-- Status panel (always in flow; visibility toggled to prevent layout reflow) -->
         <div id="vcStatusPanel" style="height:48px;margin-bottom:20px;visibility:hidden;">
           <div id="vcStatusBadge" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:12px;font-size:0.95rem;font-weight:600;background:rgba(99,179,237,0.12);border:1.5px solid rgba(99,179,237,0.3);color:var(--text-1);">
@@ -2482,6 +2502,7 @@
           <ul style="margin:8px 0 0 18px;padding:0;">
             <li>Toggle on to start hands-free conversation.</li>
             <li>Speak in <strong style="color:var(--text-1);">any supported language</strong> — English, Hindi, Gujarati, Marathi, Urdu, and more.</li>
+            <li>Leave <strong style="color:var(--text-1);">Spoken Language</strong> on Auto to adapt automatically, or pin a language above if recognition isn't picking it up reliably.</li>
             <li>Your words are transcribed and sent through the same pipeline as typed messages.</li>
             <li>ALEEM AI replies in the same language and speaks the response aloud.</li>
             <li>When the AI finishes speaking, it listens for you again automatically.</li>
@@ -5019,22 +5040,43 @@ function detectSpeechLang(t) {
 // → Indian fallback → English fallback → first available voice.
 //
 // VOICE SELECTION STRATEGY: If the user has chosen a specific voice via the
-// Voice selector (S.selectedVoiceName), that voice is always used regardless
-// of language, unless the language is non-English and no suitable voice exists.
+// Voice selector (S.selectedVoiceName), that voice is used only when it can
+// actually speak the target language (or the target is English) — otherwise
+// the chosen voice is skipped and the language-matched voice below is used
+// instead, so non-English replies are never read by a mismatched voice.
 // For language-matched voices we pick purely by locale/name — NO pitch manipulation.
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return null;
 
-  // If user explicitly chose a voice, use it directly.
+  // [FIX] Normalize lang tags before comparing. Some Android/WebView builds
+  // report a voice's locale with an underscore ("hi_IN") instead of the
+  // standard BCP-47 hyphen ("hi-IN"). Every comparison below assumed the
+  // hyphenated form, so on those devices Hindi/Gujarati/Marathi/Urdu voices
+  // were silently never matched and execution fell all the way through to
+  // the English fallback — the root cause of "American accent reading Hindi".
+  function normLang(s) { return (s || '').toLowerCase().replace(/_/g, '-'); }
+
+  var targetLang = normLang(lang);
+  var primary = targetLang.split('-')[0];
+
+  // If user explicitly chose a voice, use it — but ONLY when it's actually
+  // capable of the target language (or the target is English). Previously
+  // the chosen voice was forced for every reply regardless of language, so
+  // picking an English voice in Settings meant Hindi/Gujarati/Marathi/Urdu
+  // replies were also read by that English voice ("American speaking
+  // Hindi"). Now an explicit choice is still respected whenever relevant,
+  // but no longer hijacks languages it can't speak — those fall through to
+  // automatic language-matched selection below instead.
   var chosen = (typeof S !== 'undefined' && S.selectedVoiceName) ? S.selectedVoiceName : '';
   if (chosen) {
     var explicit = voices.find(function(v) { return v.name === chosen; });
-    if (explicit) return explicit;
+    if (explicit) {
+      var explicitLang = normLang(explicit.lang);
+      if (primary === 'en' || explicitLang.indexOf(primary) === 0) return explicit;
+    }
   }
-
-  var primary = lang.split('-')[0].toLowerCase();
 
   // Native-name patterns for Indian languages (more reliable than lang codes).
   var nativeNames = { hi: /hindi/i, mr: /marathi/i, ur: /urdu/i, gu: /gujarati/i };
@@ -5043,26 +5085,26 @@ function pickVoiceForLang(lang) {
     if (byName) return byName;
   }
 
-  var exact = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === lang.toLowerCase(); });
+  var exact = voices.find(function(v) { return normLang(v.lang) === targetLang; });
   if (exact) return exact;
 
-  var sameLang = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf(primary + '-') === 0; });
+  var sameLang = voices.find(function(v) { return normLang(v.lang).indexOf(primary + '-') === 0; });
   if (sameLang) return sameLang;
 
   if (primary === 'ur') {
-    var urPk = voices.find(function(v) { return v.lang && v.lang.toLowerCase() === 'ur-pk'; });
+    var urPk = voices.find(function(v) { return normLang(v.lang) === 'ur-pk'; });
     if (urPk) return urPk;
   }
 
   if ('hi mr ur bn ta te gu pa kn ml'.indexOf(primary) !== -1) {
-    var ind = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('-in') !== -1; })
+    var ind = voices.find(function(v) { return normLang(v.lang).indexOf('-in') !== -1; })
            || voices.find(function(v) { return v.name && /india|indian|hindi/i.test(v.name); });
     if (ind) return ind;
   }
 
-  var enPref = voices.find(function(v) { return v.lang && (v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en-gb'); });
+  var enPref = voices.find(function(v) { var l = normLang(v.lang); return l === 'en-us' || l === 'en-gb'; });
   if (enPref) return enPref;
-  var en = voices.find(function(v) { return v.lang && v.lang.toLowerCase().indexOf('en') === 0; });
+  var en = voices.find(function(v) { return normLang(v.lang).indexOf('en') === 0; });
   if (en) return en;
 
   return voices[0] || null;
@@ -6873,6 +6915,12 @@ if ('serviceWorker' in navigator) {
   'use strict';
 
   // ── State ───────────────────────────────────────────────────────
+  // [ADDED] How long to wait after the last bit of speech activity (final OR
+  // interim result) before treating the utterance as complete and sending
+  // it. This is what stops a short natural breathing pause from cutting the
+  // user off mid-sentence — see vcResetSilenceTimer/vcFinalizeUtterance.
+  var VC_SILENCE_MS = 1700;
+
   var vc = {
     active:    false,  // Voice Chat Mode on/off (USER INTENT)
     listening: false,  // CONFIRMED: recognizer's onstart has fired for the current instance
@@ -6886,10 +6934,29 @@ if ('serviceWorker' in navigator) {
                         // late-firing event can never corrupt the live state.
     ignoreEnd: false,  // suppress auto-restart on intentional stop (legacy flag, kept
                         // for vcStopMic callers; superseded by gen-check but harmless)
+
+    // [ADDED — Bug #1 fix] Utterance buffering, decoupled from any single
+    // recognizer instance. The recognizer (especially on Android Chrome) may
+    // end a session on every short pause even with continuous=true; instead
+    // of submitting whatever it had at that point, we accumulate finalized
+    // text here across as many instances as needed and only submit once
+    // vcFinalizeUtterance fires (driven by silenceTimer, not by onend).
+    utteranceBuffer: '',
+    silenceTimer:    null,
+
+    // [ADDED — Bug #3 fix] Spoken-language tracking. langPref is the user's
+    // explicit choice from the Spoken Language selector ('' = Auto).
+    // lastDetectedLang is the language of the AI's most recent reply,
+    // captured in vcSpeakAndRestart — since the AI always replies in the
+    // language the user just spoke, this lets the next listening session
+    // adapt automatically without needing the browser's (unreliable) ''
+    // auto-detect. See vcResolveRecognitionLang().
+    langPref:         '',
+    lastDetectedLang: '',
   };
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
-  var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText;
+  var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
 
   // ── Helpers ─────────────────────────────────────────────────────
 
@@ -6986,6 +7053,57 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  // ── [ADDED — Bug #1 fix] Utterance completion timer ─────────────
+  // Restarts a countdown every time any speech activity (interim or final)
+  // is observed. If it ever fires uninterrupted, that means VC_SILENCE_MS
+  // has passed with no further speech — a real pause, not a breath — so
+  // the utterance is treated as complete and submitted. This is what lets
+  // long, multi-part sentences (with natural pauses in the middle) survive
+  // intact instead of being cut off after the first short gap.
+  function vcResetSilenceTimer() {
+    if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
+    vc.silenceTimer = setTimeout(vcFinalizeUtterance, VC_SILENCE_MS);
+  }
+
+  // Called only when real silence (VC_SILENCE_MS) has elapsed since the
+  // last bit of speech activity. Submits whatever finalized text has been
+  // accumulated so far (across however many recognizer instances it took
+  // to capture it — see onend below) and resets state for the next turn.
+  function vcFinalizeUtterance() {
+    vc.silenceTimer = null;
+    var transcript = (vc.utteranceBuffer || '').trim();
+    vc.utteranceBuffer = '';
+    if (!transcript) { vcLog('vcFinalizeUtterance:empty', 'nothing captured'); return; }
+    vcLog('vcFinalizeUtterance', 'submitting "' + transcript + '"');
+    vcStopMic('utterance-finalized');
+
+    // [Preserved from before] Do NOT navigate to the chat page. The whole
+    // point of Voice Chat Mode is a call-style experience that never leaves
+    // this page. chatInput/chatMessages/etc. still exist in the DOM even
+    // while the chat page isn't the active/visible one, so handleSend()
+    // works exactly the same without navigating.
+    vcSetStatus('processing');
+
+    var inp = document.getElementById('chatInput');
+    if (inp) {
+      inp.value = transcript;
+      if (typeof handleSend === 'function') handleSend();
+    }
+  }
+
+  // ── [ADDED — Bug #3 fix] Resolve which BCP-47 locale to recognize with ──
+  // The Web Speech API has no real automatic spoken-language detection;
+  // lang='' just falls back to the device/browser locale (usually English).
+  // Priority: 1) language explicitly pinned via the Spoken Language
+  // selector, 2) the language the conversation has been adapting to (set
+  // from the AI's last reply in vcSpeakAndRestart, since the AI always
+  // replies in the language the user just spoke), 3) a safe default.
+  function vcResolveRecognitionLang() {
+    if (vc.langPref) return vc.langPref;
+    if (vc.lastDetectedLang) return vc.lastDetectedLang;
+    return 'en-IN';
+  }
+
   // ── Start listening ─────────────────────────────────────────────
   // Guarded against duplicate concurrent start() calls and against
   // restart loops via the generation counter: every callback below is
@@ -7034,13 +7152,25 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    rec.continuous     = false;
-    rec.interimResults = false;
-    // Empty string = browser auto-detects language from audio.
-    // This lets the STT engine accept Hindi, Gujarati, Urdu, Marathi, etc.
-    // Language detection for the AI reply and TTS is handled downstream by
-    // LANGUAGE_INSTRUCTION (AI side) and detectSpeechLang/pickVoiceForLang (TTS side).
-    rec.lang = '';
+    // [FIX — Bug #1, premature cutoff] continuous+interimResults lets the
+    // recognizer keep listening through brief pauses instead of finalizing
+    // and stopping after the very first detected silence. Submission is no
+    // longer driven by the recognizer's own result/end events — it's driven
+    // by our own silence timer in vcResetSilenceTimer/vcFinalizeUtterance,
+    // so a short breath pause never gets treated as "done talking".
+    rec.continuous     = true;
+    rec.interimResults = true;
+    // [FIX — Bug #3] '' is NOT real auto language-detection — on Android
+    // Chrome it silently falls back to the device/browser locale (almost
+    // always English), which is why English worked, Hindi partially worked,
+    // and Gujarati/Marathi/Urdu mostly failed. We now always pass an
+    // explicit, officially-supported locale: the user's pinned choice (if
+    // any), else the language the conversation has been adapting to, else
+    // a safe English/Hindi-tolerant default. See vcResolveRecognitionLang().
+    // Language detection for the AI reply and TTS is still handled
+    // downstream by LANGUAGE_INSTRUCTION (AI side) and
+    // detectSpeechLang/pickVoiceForLang (TTS side) — unchanged.
+    rec.lang = vcResolveRecognitionLang();
 
     rec.onstart = function() {
       if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
@@ -7050,7 +7180,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
-      vcLog('onstart', 'recognizer confirmed running');
+      vcLog('onstart', 'recognizer confirmed running, lang=' + rec.lang);
       // Only NOW — on confirmed start, not on intent — does the badge say
       // Listening. This is what keeps the badge synced to reality.
       vcSetStatus('listening');
@@ -7058,27 +7188,24 @@ if ('serviceWorker' in navigator) {
 
     rec.onresult = function(e) {
       if (myGen !== vc.gen) { vcLog('onresult:stale', 'gen ' + myGen); return; }
-      var transcript = e.results[0][0].transcript.trim();
-      vcLog('onresult', 'transcript length ' + transcript.length);
-      if (!transcript) return;
-      vcStopMic('got-result');
-
-      // [FIX] Do NOT navigate to the chat page. The whole point of Voice
-      // Chat Mode is a call-style experience that never leaves this page.
-      // chatInput/chatMessages/etc. still exist in the DOM even while the
-      // chat page isn't the active/visible one (goPage just toggles a CSS
-      // class), so handleSend() works exactly the same without navigating.
-      vcSetStatus('processing');
-
-      // Inject into the chat input and fire the normal send pipeline.
-      // This guarantees: message history, memory extraction, multilingual support,
-      // model fallback chain all work exactly as typed messages — the ONLY
-      // change is that we stay on the Voice Chat page while it happens.
-      var inp = document.getElementById('chatInput');
-      if (inp) {
-        inp.value = transcript;
-        if (typeof handleSend === 'function') handleSend();
+      // [FIX — Bug #1] Only accumulate text here; never submit directly
+      // from a result event. Walk just the newly-arrived results in this
+      // event (from e.resultIndex onward) — finalized chunks are appended
+      // to the persistent cross-instance buffer, interim chunks are only
+      // used for logging. ANY activity (final or interim) means the user
+      // is still talking, so it resets the "are they done?" timer.
+      var interimChunk = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var res = e.results[i];
+        var chunkText = res[0] ? res[0].transcript : '';
+        if (res.isFinal) {
+          vc.utteranceBuffer = (vc.utteranceBuffer + ' ' + chunkText).trim();
+        } else {
+          interimChunk += chunkText;
+        }
       }
+      vcLog('onresult', 'buffer="' + vc.utteranceBuffer + '" interim="' + interimChunk + '"');
+      vcResetSilenceTimer();
     };
 
     var errorHandled = false; // set by onerror; tells the always-following
@@ -7143,16 +7270,20 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
-      vcLog('onend', 'wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled);
+      vcLog('onend', 'wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' bufferedSoFar="' + vc.utteranceBuffer + '"');
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
       if (errorHandled) return;    // onerror already decided what happens next
-      // Recognition ended on its own (not via our abort, not via an error)
-      // with nothing else in flight — this is the "ended unexpectedly,
-      // recover cleanly" case. Restart, but only this one instance's worth;
-      // the gen-check above already prevents this from stacking with a
-      // parallel restart.
-      setTimeout(vcStartListening, 300);
+      // [FIX — Bug #1] Recognition ended on its own (not via our abort, not
+      // via an error). Even with continuous=true, some engines (notably
+      // Android Chrome) still end the session on a short pause — but unlike
+      // before, that no longer means the utterance is "done": we never
+      // submit from here. We just seamlessly start a fresh recognizer
+      // instance; vc.utteranceBuffer and vc.silenceTimer are untouched by
+      // this restart, so a multi-part sentence keeps accumulating across
+      // instances and is only submitted once real silence (VC_SILENCE_MS)
+      // is observed by vcFinalizeUtterance.
+      setTimeout(vcStartListening, 250);
     };
 
     vc.rec = rec;
@@ -7200,6 +7331,10 @@ if ('serviceWorker' in navigator) {
       var voice = pickVoiceForLang(lang);
       if (voice) { u.voice = voice; u.lang = voice.lang || lang; }
       else        { u.lang = lang; }
+      // [ADDED — Bug #3] Remember this turn's language so the NEXT
+      // recognition session (vcResolveRecognitionLang) is biased toward it
+      // instead of relying on the browser's unreliable '' auto-detect.
+      vc.lastDetectedLang = lang;
     }
 
     vc.speaking = true;
@@ -7271,6 +7406,10 @@ if ('serviceWorker' in navigator) {
   function vcStop() {
     vc.active = false;
     vcLog('vcStop', 'Voice Chat Mode disabled');
+    // [ADDED] Drop any pending finalize timer / partial utterance so it
+    // can't fire and submit a stale transcript after the mode is off.
+    if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
+    vc.utteranceBuffer = '';
     vcStopTTS();
     vcStopMic('vcStop');
     vcSetStatus('idle');
@@ -7303,6 +7442,21 @@ if ('serviceWorker' in navigator) {
     vcPanel  = document.getElementById('vcStatusPanel');
     vcIcon   = document.getElementById('vcStatusIcon');
     vcText   = document.getElementById('vcStatusText');
+    vcLangSelect = document.getElementById('vcLangSelect');
+
+    // [ADDED — Bug #3] Restore the user's pinned Spoken Language (if any)
+    // using the app's existing generic localStorage helpers (ls/lss) — kept
+    // out of S/persist()/loadStorage() since it's purely a Voice Chat
+    // recognition setting, not a shared app-wide preference.
+    if (vcLangSelect) {
+      try { vc.langPref = ls('aleem_vc_lang') || ''; } catch (e) {}
+      vcLangSelect.value = vc.langPref;
+      vcLangSelect.addEventListener('change', function() {
+        vc.langPref = vcLangSelect.value;
+        try { lss('aleem_vc_lang', vc.langPref); } catch (e) {}
+        vcLog('vcLangSelect:change', 'langPref="' + vc.langPref + '"');
+      });
+    }
 
     if (vcToggle) {
       // [FIX] Multi-tap bug: vcTrack/vcThumb/vcLabel all live INSIDE the
