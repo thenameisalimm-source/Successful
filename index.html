@@ -6919,7 +6919,38 @@ if ('serviceWorker' in navigator) {
   // interim result) before treating the utterance as complete and sending
   // it. This is what stops a short natural breathing pause from cutting the
   // user off mid-sentence — see vcResetSilenceTimer/vcFinalizeUtterance.
-  var VC_SILENCE_MS = 1700;
+  //
+  // [FIX — Bug #2] A single flat value here is language-agnostic by
+  // construction, and 1700ms was tuned against English speech rhythm.
+  // Hindi, Marathi, Gujarati, and Urdu speakers naturally pause longer
+  // between clauses (e.g. before "matlab", "to", "yaani", or simply at a
+  // longer breath point in longer compound sentences), so a flat 1.7s still
+  // finalizes early on real-world utterances in these languages even
+  // though the Bug #1 buffering fix made it "mostly" hold together. Keying
+  // the timeout off the SAME locale codes already resolved by
+  // vcResolveRecognitionLang() (hi-IN/mr-IN/gu-IN/ur-IN, matching the
+  // Spoken Language selector and detectSpeechLang/pickVoiceForLang
+  // elsewhere in this file) lets each language get a threshold suited to
+  // its natural pause rhythm without guessing at script/heuristics.
+  var VC_SILENCE_MS_DEFAULT = 1700;
+  var VC_SILENCE_MS_BY_LANG = {
+    'hi-IN': 2600,  // Hindi
+    'mr-IN': 2600,  // Marathi
+    'gu-IN': 2600,  // Gujarati
+    'ur-IN': 2600,  // Urdu
+    'en-IN': 1700,
+    'en-US': 1700
+  };
+
+  // Returns the silence timeout to use for the language recognition is
+  // CURRENTLY running with (i.e. rec.lang, the same value
+  // vcResolveRecognitionLang() just set on the live recognizer) — not the
+  // langPref/lastDetectedLang directly, so this stays correct even if those
+  // fall back to a default elsewhere.
+  function vcSilenceMsFor(lang) {
+    if (lang && VC_SILENCE_MS_BY_LANG.hasOwnProperty(lang)) return VC_SILENCE_MS_BY_LANG[lang];
+    return VC_SILENCE_MS_DEFAULT;
+  }
 
   var vc = {
     active:    false,  // Voice Chat Mode on/off (USER INTENT)
@@ -6953,6 +6984,24 @@ if ('serviceWorker' in navigator) {
     // auto-detect. See vcResolveRecognitionLang().
     langPref:         '',
     lastDetectedLang: '',
+
+    // [ADDED — Bug #1 fix, accumulating barge-in probes] vcBargeInCheck used
+    // to be a free-running chain: each call created a new probe
+    // SpeechRecognition instance and, on its onend, scheduled another
+    // vcBargeInCheck via setTimeout — guarded only by vc.speaking. Because
+    // every single TTS turn calls speakText -> setTimeout(vcBargeInCheck),
+    // a chain left over from a turn that ended in an unusual event order
+    // (e.g. onerror racing onend, or a barge-in on turn N overlapping the
+    // next speakText on turn N+1) had no way to be cancelled — it would
+    // just keep re-arming every ~300ms, each iteration creating its own
+    // probe recognizer, for the rest of the session. Over 10 turns this is
+    // the accumulating-recognizer-instances / accumulating-timers leak.
+    // Fix: track the CURRENT probe generation/instance/pending timeout the
+    // same way the main recognizer is tracked, so starting a fresh barge-in
+    // watch always retires any previous one first (see vcStopBargeIn()).
+    bargeGen:   0,
+    bargeTimer: null,
+    bargeProbe: null,
   };
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
@@ -7055,18 +7104,25 @@ if ('serviceWorker' in navigator) {
 
   // ── [ADDED — Bug #1 fix] Utterance completion timer ─────────────
   // Restarts a countdown every time any speech activity (interim or final)
-  // is observed. If it ever fires uninterrupted, that means VC_SILENCE_MS
-  // has passed with no further speech — a real pause, not a breath — so
-  // the utterance is treated as complete and submitted. This is what lets
+  // is observed. If it ever fires uninterrupted, that means the silence
+  // threshold for whatever language is currently being recognized has
+  // passed with no further speech — a real pause, not a breath — so the
+  // utterance is treated as complete and submitted. This is what lets
   // long, multi-part sentences (with natural pauses in the middle) survive
   // intact instead of being cut off after the first short gap.
+  //
+  // [FIX — Bug #2] Threshold is now resolved per-call from the live
+  // recognizer's actual lang (vc.rec.lang) via vcSilenceMsFor(), instead of
+  // a single flat constant — see VC_SILENCE_MS_BY_LANG above.
   function vcResetSilenceTimer() {
     if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
-    vc.silenceTimer = setTimeout(vcFinalizeUtterance, VC_SILENCE_MS);
+    var ms = vcSilenceMsFor(vc.rec && vc.rec.lang);
+    vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
   }
 
-  // Called only when real silence (VC_SILENCE_MS) has elapsed since the
-  // last bit of speech activity. Submits whatever finalized text has been
+  // Called only when real silence (the language-specific threshold from
+  // vcSilenceMsFor — see Bug #2 fix above) has elapsed since the last bit
+  // of speech activity. Submits whatever finalized text has been
   // accumulated so far (across however many recognizer instances it took
   // to capture it — see onend below) and resets state for the next turn.
   function vcFinalizeUtterance() {
@@ -7180,6 +7236,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
+      vcStopBargeIn('main-recognizer-confirmed-listening');
       vcLog('onstart', 'recognizer confirmed running, lang=' + rec.lang);
       // Only NOW — on confirmed start, not on intent — does the badge say
       // Listening. This is what keeps the badge synced to reality.
@@ -7281,7 +7338,8 @@ if ('serviceWorker' in navigator) {
       // submit from here. We just seamlessly start a fresh recognizer
       // instance; vc.utteranceBuffer and vc.silenceTimer are untouched by
       // this restart, so a multi-part sentence keeps accumulating across
-      // instances and is only submitted once real silence (VC_SILENCE_MS)
+      // instances and is only submitted once real silence (the
+      // language-specific threshold from vcSilenceMsFor)
       // is observed by vcFinalizeUtterance.
       setTimeout(vcStartListening, 250);
     };
@@ -7367,7 +7425,29 @@ if ('serviceWorker' in navigator) {
   // so it can never corrupt the main lifecycle's state. The only thing it
   // does to shared state is call vcStartListening(), which is itself
   // guarded against duplicate/overlapping starts.
-  function vcBargeInCheck() {
+  //
+  // [FIX — Bug #1, accumulating probes/timers] This chain is now tracked
+  // with its own generation counter (vc.bargeGen), exactly like the main
+  // recognizer is tracked with vc.gen. Every probe instance and every
+  // pending setTimeout below is tagged with the bargeGen it was created
+  // for and checks it's still current before doing anything. Starting a
+  // new watch (vcWatchForBargeIn) always retires the previous one first,
+  // so there is never more than one live probe / one pending reschedule
+  // at a time — across any number of turns.
+  function vcStopBargeIn(reason) {
+    vc.bargeGen++;
+    if (vc.bargeTimer) { clearTimeout(vc.bargeTimer); vc.bargeTimer = null; }
+    if (vc.bargeProbe) {
+      var p = vc.bargeProbe;
+      vc.bargeProbe = null;
+      try { p.onresult = null; p.onerror = null; p.onend = null; } catch (e) {}
+      try { p.stop(); } catch (e) {}
+    }
+    vcLog('vcStopBargeIn', reason || '');
+  }
+
+  function vcBargeInCheck(myBargeGen) {
+    if (myBargeGen !== vc.bargeGen) { vcLog('bargeIn:stale', 'gen ' + myBargeGen); return; }
     if (!vc.active || !vc.speaking) return;
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
@@ -7376,19 +7456,37 @@ if ('serviceWorker' in navigator) {
     probe.interimResults = true;
     probe.lang           = '';  // accept any language for barge-in detection
     probe.onresult = function() {
+      if (myBargeGen !== vc.bargeGen) return;
       if (!vc.active || !vc.speaking) { try { probe.stop(); } catch(e){} return; }
       // User spoke — barge in
       vcLog('bargeIn', 'user spoke during TTS — cancelling speech');
       vcStopTTS();
-      try { probe.stop(); } catch(e){}
+      vcStopBargeIn('barge-in-detected');
       vcStartListening();
     };
-    probe.onerror = function(e) { vcLog('bargeIn:probeError', String(e && e.error)); };
-    probe.onend   = function() {
-      // probe ended without barge-in — if still speaking, recheck
-      if (vc.active && vc.speaking) setTimeout(vcBargeInCheck, 300);
+    probe.onerror = function(e) {
+      if (myBargeGen !== vc.bargeGen) return;
+      vcLog('bargeIn:probeError', String(e && e.error));
     };
+    probe.onend = function() {
+      if (myBargeGen !== vc.bargeGen) return;
+      if (vc.bargeProbe === probe) vc.bargeProbe = null;
+      // probe ended without barge-in — if still speaking, recheck once
+      if (vc.active && vc.speaking) {
+        vc.bargeTimer = setTimeout(function() { vcBargeInCheck(myBargeGen); }, 300);
+      }
+    };
+    vc.bargeProbe = probe;
     try { probe.start(); } catch(e) { vcLog('bargeIn:probeStartThrew', e.message); }
+  }
+
+  // Starts (or restarts) the barge-in watch for the current TTS turn.
+  // Always retires any previous watch first, so calling this once per
+  // speakText() turn — as before — can never stack up extra chains.
+  function vcWatchForBargeIn() {
+    vcStopBargeIn('restarting-for-new-turn');
+    var myBargeGen = vc.bargeGen;
+    vc.bargeTimer = setTimeout(function() { vcBargeInCheck(myBargeGen); }, 400);
   }
 
   // ── Turn Voice Chat Mode on ──────────────────────────────────────
@@ -7412,6 +7510,7 @@ if ('serviceWorker' in navigator) {
     vc.utteranceBuffer = '';
     vcStopTTS();
     vcStopMic('vcStop');
+    vcStopBargeIn('vcStop');
     vcSetStatus('idle');
     vcUpdateToggleUI();
     if (vcToggle) vcToggle.checked = false;
@@ -7428,7 +7527,7 @@ if ('serviceWorker' in navigator) {
       if (vc.active) {
         vcStopMic('about-to-speak');          // don't listen while speaking
         vcSpeakAndRestart(t);
-        setTimeout(vcBargeInCheck, 400);  // watch for barge-in
+        vcWatchForBargeIn();  // watch for barge-in (tracked/cancelable — see vcStopBargeIn)
       } else {
         if (orig) orig(t);
       }
