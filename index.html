@@ -2468,8 +2468,8 @@
           <span id="vcToggleLabel" style="font-size:1rem;color:var(--text-1);">Voice Chat Mode: <strong>Off</strong></span>
         </div>
 
-        <!-- Status panel (shown when active) -->
-        <div id="vcStatusPanel" style="display:none;margin-bottom:20px;">
+        <!-- Status panel (always in flow; visibility toggled to prevent layout reflow) -->
+        <div id="vcStatusPanel" style="height:48px;margin-bottom:20px;visibility:hidden;">
           <div id="vcStatusBadge" style="display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:12px;font-size:0.95rem;font-weight:600;background:rgba(99,179,237,0.12);border:1.5px solid rgba(99,179,237,0.3);color:var(--text-1);">
             <span id="vcStatusIcon">🎤</span>
             <span id="vcStatusText">Listening…</span>
@@ -6888,21 +6888,23 @@ if ('serviceWorker' in navigator) {
 
   function vcSetStatus(mode) {
     // mode: 'listening' | 'speaking' | 'idle'
+    // Uses visibility (not display) so the panel always holds its space —
+    // preventing the layout reflow / page-jump that was Root Cause 1.
     if (!vcPanel) return;
     if (mode === 'listening') {
-      vcPanel.style.display = 'block';
+      vcPanel.style.visibility = 'visible';
       vcIcon.textContent  = '🎤';
       vcText.textContent  = 'Listening…';
       vcPanel.firstElementChild.style.background = 'rgba(52,211,153,0.12)';
       vcPanel.firstElementChild.style.borderColor = 'rgba(52,211,153,0.4)';
     } else if (mode === 'speaking') {
-      vcPanel.style.display = 'block';
+      vcPanel.style.visibility = 'visible';
       vcIcon.textContent  = '🔊';
       vcText.textContent  = 'AI Speaking…';
       vcPanel.firstElementChild.style.background = 'rgba(99,179,237,0.12)';
       vcPanel.firstElementChild.style.borderColor = 'rgba(99,179,237,0.3)';
     } else {
-      vcPanel.style.display = 'none';
+      vcPanel.style.visibility = 'hidden';
     }
   }
 
