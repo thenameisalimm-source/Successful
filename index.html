@@ -6973,6 +6973,31 @@ if ('serviceWorker' in navigator) {
     // text here across as many instances as needed and only submit once
     // vcFinalizeUtterance fires (driven by silenceTimer, not by onend).
     utteranceBuffer: '',
+
+    // [ADDED — Bug #1 root-cause fix, restart-boundary dedup guard]
+    // restartGuardSnapshot is a copy of utteranceBuffer taken the instant a
+    // recognizer instance reaches onstart. restartGuardActive is true only
+    // when that snapshot is non-empty — i.e. this instance is resuming an
+    // utterance that an EARLIER instance already partly committed, not
+    // starting a brand-new one. The audio Android Chrome hands to a fresh
+    // recognizer instance can include audio from just before the restart
+    // boundary, so the new instance's first final result(s) can re-transcribe
+    // words already sitting in utteranceBuffer. onresult uses this snapshot
+    // to detect and strip that overlap before appending — see onresult and
+    // vcWordOverlapLen below. Cleared back to inert the moment genuinely new
+    // (non-overlapping) text arrives, so it never affects mid-utterance text.
+    restartGuardSnapshot: '',
+    restartGuardActive:   false,
+
+    // [CHANGED — Bug #2 root-cause fix] silenceTimer now strictly means
+    // "counting down while a recognizer instance is CONFIRMED listening".
+    // It is suspended (cleared, not running) the moment a recognizer
+    // instance ends/errors and a replacement is about to be created, and
+    // only resumed inside the replacement's onstart — never before. This
+    // guarantees the countdown can never consume the gap between
+    // instances, so vcFinalizeUtterance can never fire while the mic is
+    // between recognizer instances. See vcSuspendSilenceTimer, onstart,
+    // onerror, and onend below.
     silenceTimer:    null,
 
     // [ADDED — Bug #3 fix] Spoken-language tracking. langPref is the user's
@@ -7138,47 +7163,77 @@ if ('serviceWorker' in navigator) {
     vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
   }
 
-  // [FIX — premature cutoff during recognizer restarts] Root cause traced:
-  // vcFinalizeUtterance is ONLY ever invoked from the setTimeout inside
-  // vcResetSilenceTimer above — there is no other submission trigger.
-  // The bug was never the timer's length: it's that the timer keeps
-  // counting down through restart gaps it knows nothing about. Sequence
-  // that was cutting people off, in EVERY language:
+  // [FIX — Bug #2, premature submission during recognizer restarts]
+  // Root cause traced: vcFinalizeUtterance is ONLY ever invoked from the
+  // setTimeout inside vcResetSilenceTimer/onstart — there is no other
+  // submission trigger. The bug was never the timer's length; it's that
+  // the timer kept counting down through restart gaps it knew nothing
+  // about. Sequence that was cutting people off, in EVERY language:
   //   1. onresult fires, vcResetSilenceTimer() arms a countdown anchored
   //      to "now" (the last moment we KNOW the user was still talking).
   //   2. The recognizer session ends on its own — most commonly on Android
   //      Chrome, but this can happen on any engine even with
   //      continuous=true. This is NOT necessarily preceded by real
   //      silence; it's a platform/engine session-length quirk.
-  //   3. onend (below) schedules a reconnect via setTimeout(vcStartListening, 250).
-  //   4. rec.start() is asynchronous — onstart/the first onresult of the
-  //      NEW instance can easily take several hundred ms to over a second
-  //      to actually start delivering audio again, especially on mobile.
-  //   5. During that whole gap, nothing fires onresult, so nothing calls
-  //      vcResetSilenceTimer() — the countdown from step 1 just keeps
-  //      ticking, blind to the fact that no recognizer is currently
-  //      listening. If steps 2-4 eat enough of that countdown (which on a
-  //      slow restart they easily can), vcFinalizeUtterance fires and
-  //      submits mid-sentence even though the user never stopped talking
-  //      and no real silence occurred.
-  // This explains why it affected ALL languages identically — it's a race
-  // between wall-clock timer expiry and recognizer-restart latency, not a
-  // race that depends on the timeout length per language.
-  // Fix: every time we schedule a restart because the recognizer ended on
-  // its own (not user silence, not an intentional stop), re-arm a FRESH
-  // full-length countdown right then — so the user gets the full silence
-  // threshold counted from the moment the new instance is expected to be
-  // listening, not a leftover fraction of the threshold counted from
-  // before the gap even started. Only re-arms if there's something
-  // pending in the buffer (no point keeping a countdown alive for an
-  // utterance that hasn't started yet).
-  function vcExtendSilenceTimerForRestart(lang) {
-    if (!vc.utteranceBuffer) return; // nothing buffered yet — let it expire/stay idle normally
-    if (vc.silenceTimer) clearTimeout(vc.silenceTimer);
-    var ms = vcSilenceMsFor(lang);
-    vc.silenceTimer = setTimeout(vcFinalizeUtterance, ms);
-    vcLog('vcExtendSilenceTimerForRestart', 'fresh ' + ms + 'ms window armed across restart gap');
+  //   3. onend/onerror schedules a reconnect via setTimeout(vcStartListening, ...).
+  //   4. rec.start() is asynchronous — onstart of the NEW instance can
+  //      easily take several hundred ms to over a second to fire,
+  //      especially on mobile.
+  //   5. During that whole gap, no recognizer is listening, yet a
+  //      previous attempt at fixing this (re-arming a "fresh" countdown
+  //      the moment the restart was SCHEDULED, in step 3) still let that
+  //      fresh countdown run THROUGH the gap from step 4 — it just made
+  //      the gap+post-restart-silence have to fit inside one window
+  //      instead of a leftover fraction of one. On a slow restart the gap
+  //      alone can still consume the whole window, so vcFinalizeUtterance
+  //      still fires and submits mid-sentence even though the user never
+  //      stopped talking and no real silence occurred.
+  // The actual fix is to never let the countdown run at all while no
+  // recognizer is confirmed listening: SUSPEND it (clear, schedule
+  // nothing) the moment an instance ends/errors and a replacement is
+  // about to be created, and only RESUME it inside the replacement's
+  // onstart handler — i.e. anchor the fresh window to the moment
+  // listening is confirmed again, not to the moment the restart was
+  // merely requested. See onstart, onerror, and onend below for the call
+  // sites; this function only ever clears, it never reschedules — that
+  // happens in onstart.
+  function vcSuspendSilenceTimer(reason) {
+    if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
+    vcLog('vcSuspendSilenceTimer', (reason || '') + ' — countdown paused, mic is between recognizer instances');
   }
+
+  // [ADDED — Bug #1 root-cause fix] restart-boundary dedup helpers.
+  // Splits text into words for a simple, alignment-preserving comparison
+  // (raw split is reused to rebuild the trimmed string, normalized split
+  // is only used for the equality check, so word boundaries always match
+  // up 1:1 between the two).
+  function vcDedupWords(text) {
+    if (!text) return [];
+    return text.trim().split(/\s+/);
+  }
+  function vcNormWord(w) {
+    return (w || '').toLowerCase().replace(/^[.,!?;:'"()]+|[.,!?;:'"()]+$/g, '');
+  }
+  // Returns the length (in words) of the longest suffix of bufferWords that
+  // matches a prefix of chunkWords. That overlap is exactly the audio an
+  // Android Chrome restart re-delivered across the boundary — content the
+  // PREVIOUS recognizer instance already finalized and committed, which
+  // the NEW instance is now re-recognizing from the top of its own buffer.
+  function vcWordOverlapLen(bufferWords, chunkWords) {
+    var maxLen = Math.min(bufferWords.length, chunkWords.length);
+    for (var len = maxLen; len > 0; len--) {
+      var match = true;
+      for (var i = 0; i < len; i++) {
+        if (vcNormWord(bufferWords[bufferWords.length - len + i]) !== vcNormWord(chunkWords[i])) {
+          match = false;
+          break;
+        }
+      }
+      if (match) return len;
+    }
+    return 0;
+  }
+
 
   // Called only when real silence (the language-specific threshold from
   // vcSilenceMsFor — see Bug #2 fix above) has elapsed since the last bit
@@ -7189,6 +7244,8 @@ if ('serviceWorker' in navigator) {
     vc.silenceTimer = null;
     var transcript = (vc.utteranceBuffer || '').trim();
     vc.utteranceBuffer = '';
+    vc.restartGuardSnapshot = '';
+    vc.restartGuardActive   = false;
     if (!transcript) { vcLog('vcFinalizeUtterance:empty', 'nothing captured'); return; }
     vcLog('vcFinalizeUtterance', 'submitting "' + transcript + '"');
 
@@ -7343,6 +7400,34 @@ if ('serviceWorker' in navigator) {
       vc.speaking  = false;
       vcStopBargeIn('main-recognizer-confirmed-listening');
       vcLog('onstart', 'recognizer confirmed running, lang=' + rec.lang);
+
+      // [FIX — Bug #1] Snapshot whatever is already committed to the
+      // buffer the instant THIS instance starts listening. If non-empty,
+      // we're resuming an utterance an earlier instance already partly
+      // captured, so the dedup guard arms; onresult below uses this
+      // snapshot to detect and strip audio re-delivered across the
+      // restart boundary. A brand-new utterance (empty buffer) leaves the
+      // guard inert — nothing to deduplicate against.
+      vc.restartGuardSnapshot = vc.utteranceBuffer;
+      vc.restartGuardActive   = !!vc.utteranceBuffer;
+
+      // [FIX — Bug #2] This is the ONLY place the silence countdown is
+      // (re)armed after a restart. It was suspended in onerror/onend the
+      // moment this instance's predecessor went away (see
+      // vcSuspendSilenceTimer there) and stayed suspended for the entire
+      // gap while no recognizer was listening — so it could not have
+      // fired during that gap. Only now, with onstart confirming the mic
+      // is actually listening again, do we resume counting — and only if
+      // there's an in-progress utterance to protect. A brand-new
+      // utterance (empty buffer, nothing said yet) still waits for its
+      // first onresult to arm the timer, exactly as before.
+      if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
+      if (vc.utteranceBuffer) {
+        var resumeMs = vcSilenceMsFor(rec.lang);
+        vc.silenceTimer = setTimeout(vcFinalizeUtterance, resumeMs);
+        vcLog('onstart:silenceResumed', resumeMs + 'ms window armed now that mic is confirmed listening');
+      }
+
       // Only NOW — on confirmed start, not on intent — does the badge say
       // Listening. This is what keeps the badge synced to reality.
       vcSetStatus('listening');
@@ -7361,7 +7446,23 @@ if ('serviceWorker' in navigator) {
         var res = e.results[i];
         var chunkText = res[0] ? res[0].transcript : '';
         if (res.isFinal) {
-          vc.utteranceBuffer = (vc.utteranceBuffer + ' ' + chunkText).trim();
+          var trimmedChunk = chunkText.trim();
+          // [FIX — Bug #1, restart-boundary dedup guard] Only the first
+          // final result(s) of an instance that's RESUMING an utterance
+          // (restartGuardActive, armed in onstart) get checked — once
+          // genuinely new content has been added, the boundary is
+          // consumed and we stop guarding for the rest of this instance.
+          if (vc.restartGuardActive && trimmedChunk) {
+            var overlap = vcWordOverlapLen(vcDedupWords(vc.restartGuardSnapshot), vcDedupWords(trimmedChunk));
+            if (overlap > 0) {
+              trimmedChunk = vcDedupWords(trimmedChunk).slice(overlap).join(' ');
+              vcLog('onresult:dedupBoundary', 'stripped ' + overlap + ' word(s) re-delivered across restart boundary');
+            }
+            if (trimmedChunk) vc.restartGuardActive = false;
+          }
+          if (trimmedChunk) {
+            vc.utteranceBuffer = (vc.utteranceBuffer + ' ' + trimmedChunk).trim();
+          }
         } else {
           interimChunk += chunkText;
         }
@@ -7402,9 +7503,11 @@ if ('serviceWorker' in navigator) {
         case 'network':
           vcLog('onerror:network', 'speech recognition network failure');
           vcSetStatus('error');
-          // [FIX — premature cutoff] Same restart-gap exposure as onend —
-          // see vcExtendSilenceTimerForRestart. Re-arm before the gap.
-          vcExtendSilenceTimerForRestart(rec.lang);
+          // [FIX — Bug #2] Suspend, don't extend — the mic is about to go
+          // away for the restart below. The countdown only resumes once
+          // the replacement recognizer's onstart confirms it's listening
+          // again (see onstart), so it can't run through this gap.
+          vcSuspendSilenceTimer('network-error-restart-pending');
           // Recoverable — retry after a longer backoff since it's network-related.
           if (vc.active) setTimeout(vcStartListening, 1500);
           return;
@@ -7417,18 +7520,24 @@ if ('serviceWorker' in navigator) {
           vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
           return;
         case 'no-speech':
-          // Completely normal — the browser's silence timeout. This is a
-          // genuine "nothing was said for a while" signal from the engine
-          // itself, so — unlike onend/network above — we deliberately do
-          // NOT extend the silence timer here: if it's also due to expire,
-          // letting it expire is correct, not a bug.
+          // The browser's own silence timeout firing. This IS evidence of
+          // real silence, but the mic is still about to go away for a
+          // restart — and per the requirement that an utterance must
+          // never be submitted while the mic is between recognizer
+          // instances, we suspend here too rather than letting a
+          // leftover countdown run through the gap. If it really was the
+          // end of the utterance, the countdown resumed in the
+          // replacement's onstart will simply expire again almost
+          // immediately once that's confirmed.
           vcLog('onerror:no-speech', 'silence timeout — restarting');
+          vcSuspendSilenceTimer('no-speech-restart-pending');
           if (vc.active) setTimeout(vcStartListening, 400);
           return;
         default:
           vcLog('onerror:other', String(e.error));
-          // [FIX — premature cutoff] Same restart-gap exposure as onend.
-          vcExtendSilenceTimerForRestart(rec.lang);
+          // [FIX — Bug #2] Same restart-gap exposure as onend — suspend,
+          // don't extend.
+          vcSuspendSilenceTimer('error-restart-pending: ' + e.error);
           if (vc.active) setTimeout(vcStartListening, 800);
           return;
       }
@@ -7452,18 +7561,16 @@ if ('serviceWorker' in navigator) {
       // and is only submitted once real silence is observed by
       // vcFinalizeUtterance.
       //
-      // [FIX — premature cutoff, traced root cause] The recognizer ending
-      // here is exactly the restart gap described above
-      // vcExtendSilenceTimerForRestart — there's about to be a real delay
-      // before a new instance is confirmed listening again (rec.start()
-      // is async; onstart can take a while, especially on mobile). Without
-      // this call, the silence timer left over from this dead instance's
-      // last onresult keeps ticking through that whole gap and can expire
-      // before the new instance ever captures another sound, submitting
-      // mid-sentence. Re-arming a fresh full window here means the user
-      // gets the full silence threshold counted from the restart, not a
-      // leftover fraction of it counted from before the gap started.
-      vcExtendSilenceTimerForRestart(rec.lang);
+      // [FIX — Bug #2, traced root cause] The recognizer ending here opens
+      // exactly the restart gap described above vcSuspendSilenceTimer —
+      // there's about to be a real delay before a new instance is
+      // confirmed listening again (rec.start() is async; onstart can take
+      // a while, especially on mobile). We suspend the countdown now, for
+      // the whole gap, and only resume it once the replacement instance's
+      // onstart confirms the mic is actually listening again — so the gap
+      // itself can never be mistaken for silence and trigger a mid-sentence
+      // submission.
+      vcSuspendSilenceTimer('recognizer-ended-restart-pending');
       setTimeout(vcStartListening, 250);
     };
 
@@ -7631,6 +7738,8 @@ if ('serviceWorker' in navigator) {
     // can't fire and submit a stale transcript after the mode is off.
     if (vc.silenceTimer) { clearTimeout(vc.silenceTimer); vc.silenceTimer = null; }
     vc.utteranceBuffer = '';
+    vc.restartGuardSnapshot = '';
+    vc.restartGuardActive   = false;
     vcStopTTS();
     vcStopMic('vcStop');
     vcStopBargeIn('vcStop');
