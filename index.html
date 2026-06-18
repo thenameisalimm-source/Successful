@@ -7364,18 +7364,40 @@ if ('serviceWorker' in navigator) {
           if (i >= instanceFinalCount) {
             var chunk = text.trim();
             if (chunk) {
+              // RESTART-BOUNDARY OVERLAP CHECK
+              // On Android Chrome, a new recognizer instance re-feeds a small
+              // audio buffer from just before the restart boundary. Its first
+              // final result(s) can re-transcribe words already at the END of
+              // vc.transcript from the previous instance. We check whether
+              // vc.transcript already ends with this chunk (case-insensitive,
+              // whitespace-normalised) and skip the commit if it does.
+              // This only runs when instanceFinalCount === 0 (the very first
+              // final from this instance) — after the first commit, the browser
+              // has moved past the overlap window and the check is not needed.
+              var isDuplicate = false;
+              if (instanceFinalCount === 0 && vc.transcript) {
+                var tailLen  = chunk.length + 10; // small margin for whitespace
+                var tail     = vc.transcript.slice(-tailLen).toLowerCase().replace(/\s+/g, ' ').trim();
+                var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ');
+                isDuplicate  = tail.slice(-chunkLow.length) === chunkLow;
+              }
+
               var before = vc.transcript;
-              vc.transcript = (vc.transcript + ' ' + chunk).trim();
-              // DIAGNOSTIC: every append is tagged with the recognizer generation
-              // that produced it. If two different gen values appear in successive
-              // APPEND lines, two instances were alive simultaneously.
-              vcLog('REC:APPEND',
-                '[gen=' + myGen + '] i=' + i +
-                ' chunk="' + chunk + '"' +
-                ' vc.gen=' + vc.gen +
-                (myGen !== vc.gen ? ' *** GEN MISMATCH — stale instance appending!' : ' (gen current)') +
-                ' transcript BEFORE="' + before + '"' +
-                ' AFTER="' + vc.transcript + '"');
+              if (isDuplicate) {
+                vcLog('REC:OVERLAP_SKIP',
+                  '[gen=' + myGen + '] i=' + i +
+                  ' chunk="' + chunk + '" already at end of transcript — skipped' +
+                  ' transcript="' + vc.transcript + '"');
+              } else {
+                vc.transcript = (vc.transcript + ' ' + chunk).trim();
+                vcLog('REC:APPEND',
+                  '[gen=' + myGen + '] i=' + i +
+                  ' chunk="' + chunk + '"' +
+                  ' vc.gen=' + vc.gen +
+                  (myGen !== vc.gen ? ' *** GEN MISMATCH — stale instance appending!' : ' (gen current)') +
+                  ' transcript BEFORE="' + before + '"' +
+                  ' AFTER="' + vc.transcript + '"');
+              }
             }
             instanceFinalCount = i + 1;
           }
