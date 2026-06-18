@@ -7374,25 +7374,55 @@ if ('serviceWorker' in navigator) {
               // This only runs when instanceFinalCount === 0 (the very first
               // final from this instance) — after the first commit, the browser
               // has moved past the overlap window and the check is not needed.
-              var isDuplicate = false;
+              // RESTART-BOUNDARY DEDUP
+              // Android Chrome ends continuous sessions on short pauses and
+              // restarts them. The new instance's first final result(s) replay
+              // audio from just before the restart — delivering the full
+              // cumulative phrase so far, not just the new word. Without this
+              // check, that phrase is appended wholesale and produces:
+              //   "तेरा" → "तेरा तेरा नाम" → "तेरा तेरा नाम तेरा नाम क्या" …
+              //
+              // Fix: on the first final of a new instance, check whether
+              // vc.transcript is a prefix of (or equal to) the incoming chunk.
+              // If it is, the chunk is the old content PLUS new words — so we
+              // append only the new suffix. If chunk equals or is shorter than
+              // the existing transcript, the whole thing is already present and
+              // we skip entirely. Only runs when instanceFinalCount === 0.
+              var before   = vc.transcript;
+              var toAppend = chunk; // what actually gets written — may be trimmed
+
               if (instanceFinalCount === 0 && vc.transcript) {
-                var tailLen  = chunk.length + 10; // small margin for whitespace
-                var tail     = vc.transcript.slice(-tailLen).toLowerCase().replace(/\s+/g, ' ').trim();
+                var existLow = vc.transcript.toLowerCase().replace(/\s+/g, ' ').trim();
                 var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ');
-                isDuplicate  = tail.slice(-chunkLow.length) === chunkLow;
+
+                if (chunkLow === existLow || chunkLow.length <= existLow.length) {
+                  // Chunk is identical to or shorter than what we already have.
+                  // Entire chunk is already present — skip.
+                  toAppend = '';
+                  vcLog('REC:OVERLAP_SKIP',
+                    '[gen=' + myGen + '] i=' + i +
+                    ' chunk fully covered by existing transcript — skipped' +
+                    ' chunk="' + chunk + '"' +
+                    ' transcript="' + vc.transcript + '"');
+                } else if (chunkLow.indexOf(existLow + ' ') === 0 || chunkLow.indexOf(existLow) === 0) {
+                  // Chunk starts with everything already in transcript.
+                  // Append only the new suffix after the existing content.
+                  toAppend = chunk.slice(vc.transcript.length).replace(/^\s+/, '');
+                  vcLog('REC:OVERLAP_TRIM',
+                    '[gen=' + myGen + '] i=' + i +
+                    ' chunk starts with existing transcript — appending suffix only' +
+                    ' full_chunk="' + chunk + '"' +
+                    ' suffix="' + toAppend + '"' +
+                    ' transcript="' + vc.transcript + '"');
+                }
+                // else: chunk is genuinely new content, toAppend stays = chunk
               }
 
-              var before = vc.transcript;
-              if (isDuplicate) {
-                vcLog('REC:OVERLAP_SKIP',
-                  '[gen=' + myGen + '] i=' + i +
-                  ' chunk="' + chunk + '" already at end of transcript — skipped' +
-                  ' transcript="' + vc.transcript + '"');
-              } else {
-                vc.transcript = (vc.transcript + ' ' + chunk).trim();
+              if (toAppend) {
+                vc.transcript = (vc.transcript + ' ' + toAppend).trim();
                 vcLog('REC:APPEND',
                   '[gen=' + myGen + '] i=' + i +
-                  ' chunk="' + chunk + '"' +
+                  ' appended="' + toAppend + '"' +
                   ' vc.gen=' + vc.gen +
                   (myGen !== vc.gen ? ' *** GEN MISMATCH — stale instance appending!' : ' (gen current)') +
                   ' transcript BEFORE="' + before + '"' +
