@@ -6979,8 +6979,6 @@ if ('serviceWorker' in navigator) {
     // a new instance's onstart fires; onresult strips any overlap it finds
     // against that snapshot before appending, so the live transcript the
     // user reviews never shows duplicated words.
-    restartGuardSnapshot: '',
-    restartGuardActive:   false,
 
     // Spoken-language tracking — unchanged from before. langPref is the
     // user's explicit choice from the Spoken Language selector ('' = Auto).
@@ -7149,38 +7147,6 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── Restart-boundary dedup helpers ───────────────────────────────
-  // Splits text into words for a simple, alignment-preserving comparison
-  // (raw split is reused to rebuild the trimmed string, normalized split
-  // is only used for the equality check, so word boundaries always match
-  // up 1:1 between the two).
-  function vcDedupWords(text) {
-    if (!text) return [];
-    return text.trim().split(/\s+/);
-  }
-  function vcNormWord(w) {
-    return (w || '').toLowerCase().replace(/^[.,!?;:'"()]+|[.,!?;:'"()]+$/g, '');
-  }
-  // Returns the length (in words) of the longest suffix of bufferWords that
-  // matches a prefix of chunkWords. That overlap is exactly the audio a
-  // recognizer restart re-delivered across the boundary — content the
-  // PREVIOUS instance already finalized and committed, which the NEW
-  // instance is now re-recognizing from the top of its own buffer.
-  function vcWordOverlapLen(bufferWords, chunkWords) {
-    var maxLen = Math.min(bufferWords.length, chunkWords.length);
-    for (var len = maxLen; len > 0; len--) {
-      var match = true;
-      for (var i = 0; i < len; i++) {
-        if (vcNormWord(bufferWords[bufferWords.length - len + i]) !== vcNormWord(chunkWords[i])) {
-          match = false;
-          break;
-        }
-      }
-      if (match) return len;
-    }
-    return 0;
-  }
-
   // ── Manual Send: submit whatever transcript has been captured so far ──
   // This is the ONLY way an utterance is ever submitted now — no silence
   // timer, no auto-finalize. Triggered by a tap on the Send button.
@@ -7213,11 +7179,6 @@ if ('serviceWorker' in navigator) {
       if (detected && !(isEnglish && alreadyNonEnglish)) {
         vcLog('vcSendTranscript:langDetect', 'user utterance detected as ' + detected);
         vc.userUtteranceLang = detected;
-        // If a confirmed non-English language was just detected, also reset
-        // the auto-rotation index so vcResolveRecognitionLang will use this
-        // language directly (via the userUtteranceLang branch) rather than
-        // continuing to rotate, until the user speaks something different.
-        if (!isEnglish) _vcAutoLangIdx = 0;
       } else if (detected) {
         vcLog('vcSendTranscript:langDetect:skipped', 'ambiguous en default, keeping ' + vc.userUtteranceLang);
       }
@@ -7226,8 +7187,6 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
-    vc.restartGuardSnapshot = '';
-    vc.restartGuardActive   = false;
 
     vcStopMic('sending-transcript');
 
@@ -7244,50 +7203,50 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── Auto-mode language rotation ──────────────────────────────────
-  // When langPref='' (Auto), the Web Speech API's lang='' silently falls
-  // back to the device locale (almost always en-US/en-GB), so Gujarati,
-  // Hindi, Marathi and Urdu speech just gets mis-recognised as English words
-  // and the detector then locks the next session to English too — a vicious
-  // cycle.  Instead, in Auto mode we rotate through all supported Indian
-  // locales on successive recognizer restarts.  The rotation index advances
-  // every time vcResolveRecognitionLang is called without a pinned langPref,
-  // so each session tries a different locale.  If userUtteranceLang or
-  // lastDetectedLang points to a specific known non-English language that
-  // language is used for all Auto sessions until a different one is detected.
-  var VC_AUTO_LANGS = ['en-IN', 'hi-IN', 'gu-IN', 'mr-IN', 'ur-IN'];
-  var _vcAutoLangIdx = 0;
-
   // ── Resolve which BCP-47 locale to recognize with ────────────────
-  // Priority:
-  //   1) language explicitly pinned via the Spoken Language selector
-  //   2) a confirmed non-English language detected from the user's own
-  //      last-SENT transcript (only if it isn't the 'en' catch-all)
-  //   3) the language of the AI's last reply (if non-English)
-  //   4) Auto rotation through all supported Indian locales
+  // The Web Speech API has no real automatic spoken-language detection:
+  // lang='' silently falls back to the device/browser locale (almost always
+  // en-US/en-GB), so Indian languages are mis-recognised as English.
+  //
+  // Auto-mode strategy (langPref = ''):
+  //   1. If the user's last-SENT transcript was positively identified as a
+  //      SPECIFIC non-English language (native script detected), use that
+  //      locale — it's the most reliable signal we have.
+  //   2. If the AI's last reply was in a confirmed non-English language, use
+  //      that locale as a weaker hint.
+  //   3. Otherwise default to 'hi-IN'. Google's hi-IN backend on Android/
+  //      Chrome handles Hindi (Devanagari), Marathi, and Urdu correctly and
+  //      returns native script.  Gujarati speech on hi-IN is imperfect but
+  //      far better than en-IN or a rotating forced locale.  Users who speak
+  //      primarily Gujarati should pin 'gu-IN' in the Spoken Language selector.
+  //
+  // WHY NOT ROTATE: forcing gu-IN / mr-IN / ur-IN causes mis-recognition
+  // because those locale speech packs are frequently absent on devices, so
+  // the recognizer either errors (language-not-supported) or silently
+  // falls back to a wrong engine.  A single stable locale that the device
+  // definitely supports produces far better results than cycling into
+  // unsupported ones.
   function vcResolveRecognitionLang() {
     var resolved, reason;
     if (vc.langPref) {
+      // Explicit pin always wins.
       resolved = vc.langPref;
       reason   = 'pinned';
     } else if (vc.userUtteranceLang &&
                vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en') {
-      // Only use the detected user language if it's a confirmed non-English
-      // language — 'en-US' from detectSpeechLang is also the catch-all
-      // default for mis-recognised non-English speech, so we don't trust it
-      // to select a recognition locale in Auto mode.
+      // Confirmed non-English language detected from the user's own speech.
       resolved = vc.userUtteranceLang;
-      reason   = 'lastUserSpeech(nonEn)';
+      reason   = 'lastUserSpeech';
     } else if (vc.lastDetectedLang &&
                vc.lastDetectedLang.slice(0, 2).toLowerCase() !== 'en') {
+      // AI replied in a non-English language — weakly suggests user intent.
       resolved = vc.lastDetectedLang;
-      reason   = 'lastAIReply(nonEn)';
+      reason   = 'lastAIReply';
     } else {
-      // Auto rotation: try each supported locale in turn so the recognizer
-      // gets a real chance at every Indian language, not just English.
-      resolved = VC_AUTO_LANGS[_vcAutoLangIdx % VC_AUTO_LANGS.length];
-      _vcAutoLangIdx++;
-      reason   = 'autoRotate[' + (_vcAutoLangIdx - 1) + ']';
+      // Safe Indian-English default. hi-IN covers Hindi/Marathi/Urdu natively
+      // and is universally supported; better than en-IN for Indian speech.
+      resolved = 'hi-IN';
+      reason   = 'default(hi-IN)';
     }
     vcLog('vcResolveRecognitionLang', 'lang="' + resolved + '" via ' + reason);
     return resolved;
@@ -7354,70 +7313,62 @@ if ('serviceWorker' in navigator) {
 
     rec.onstart = function() {
       if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
-      // SpeechRecognition's onstart firing IS the confirmation that the
-      // recognizer is actually running.
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
       vcLog('onstart', 'CONFIRMED lang="' + rec.lang + '" gen=' + myGen + ' transcript="' + vc.transcript + '"');
-
-      // Snapshot whatever is already committed the instant THIS instance
-      // starts listening. If non-empty, we're resuming a transcript an
-      // earlier instance already partly captured, so the dedup guard arms;
-      // onresult below uses this snapshot to detect and strip audio
-      // re-delivered across the restart boundary.
-      vc.restartGuardSnapshot = vc.transcript;
-      vc.restartGuardActive   = !!vc.transcript;
-
-      // Only NOW — on confirmed start, not on intent — does the badge say
-      // Listening. This is what keeps the badge synced to reality.
       vcSetStatus('listening');
     };
 
+    // Per-instance counter: how many final results from THIS recognizer
+    // instance have already been committed to vc.transcript.
+    // Root cause of Bug 01: the Web Speech API's e.results is a cumulative
+    // list for the lifetime of one recognizer instance. e.resultIndex points
+    // to the result that CHANGED in this event — not a cursor past already-
+    // processed finals. On restart a brand-new instance starts its own
+    // e.results from index 0, so any append-on-final logic that doesn't
+    // track which of THIS instance's results have already been committed will
+    // re-append every previously-seen final on each new event.
+    // Fix: instanceFinalCount tracks exactly how many finals from this
+    // instance are already in vc.transcript. Each onresult only commits
+    // results at index >= instanceFinalCount, then advances the counter.
+    // No overlap matching, no snapshot diffing — each final result is
+    // committed exactly once, regardless of how many onresult events fire
+    // or how many recognizer restarts occur.
+    var instanceFinalCount = 0;
+
     rec.onresult = function(e) {
       if (myGen !== vc.gen) { vcLog('onresult:stale', 'gen ' + myGen); return; }
-      // Walk just the newly-arrived results in this event (from
-      // e.resultIndex onward) — finalized chunks are appended to the
-      // persistent cross-instance transcript, interim chunks are only used
-      // for the live preview. Nothing here submits anything.
-      var interimChunk = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) {
+
+      var interimText = '';
+
+      for (var i = 0; i < e.results.length; i++) {
         var res = e.results[i];
-        var chunkText = res[0] ? res[0].transcript : '';
+        var text = res[0] ? res[0].transcript : '';
+
         if (res.isFinal) {
-          var trimmedChunk = chunkText.trim();
-          // Restart-boundary dedup guard: only the first final result(s) of
-          // an instance that's RESUMING a transcript get checked — once
-          // genuinely new content has been added (content that does NOT
-          // overlap with the snapshot at all), the boundary is consumed
-          // and we stop guarding for the rest of this instance.
-          //
-          // IMPORTANT: the guard stays active across MULTIPLE consecutive
-          // final chunks from this instance, because some engines deliver
-          // the re-transcribed boundary audio in several small results rather
-          // than a single large one. We only disarm it once a chunk arrives
-          // that has NO overlap with the snapshot (meaning the engine has
-          // moved past the restart boundary).
-          if (vc.restartGuardActive && trimmedChunk) {
-            var overlap = vcWordOverlapLen(vcDedupWords(vc.restartGuardSnapshot), vcDedupWords(trimmedChunk));
-            if (overlap > 0) {
-              trimmedChunk = vcDedupWords(trimmedChunk).slice(overlap).join(' ');
-              vcLog('onresult:dedupBoundary', 'stripped ' + overlap + ' word(s) re-delivered across restart boundary');
-            } else {
-              // No overlap found — we're past the boundary, disarm the guard.
-              vc.restartGuardActive = false;
+          // Only commit finals we haven't seen yet from this instance.
+          if (i >= instanceFinalCount) {
+            var chunk = text.trim();
+            if (chunk) {
+              vc.transcript = (vc.transcript + ' ' + chunk).trim();
+              vcLog('onresult:final', 'i=' + i + ' committed "' + chunk + '" transcript="' + vc.transcript + '"');
             }
+            instanceFinalCount = i + 1;
           }
-          if (trimmedChunk) {
-            vc.transcript = (vc.transcript + ' ' + trimmedChunk).trim();
-          }
-          interimChunk = ''; // a final result clears any trailing interim preview
+          // Final result clears any trailing interim for that slot.
+          interimText = '';
         } else {
-          interimChunk += chunkText;
+          // The last non-final result is the live interim preview.
+          interimText = text;
         }
       }
-      vc.interim = interimChunk;
-      vcLog('onresult', 'lang="' + rec.lang + '" resultIndex=' + e.resultIndex + ' transcript="' + vc.transcript + '" interim="' + vc.interim + '"');
+
+      vc.interim = interimText;
+      vcLog('onresult', 'lang="' + rec.lang + '" resultIndex=' + e.resultIndex +
+            ' results.length=' + e.results.length +
+            ' instanceFinalCount=' + instanceFinalCount +
+            ' transcript="' + vc.transcript + '" interim="' + vc.interim + '"');
       vcRefreshTranscriptUI();
     };
 
@@ -7607,8 +7558,6 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
-    vc.restartGuardSnapshot = '';
-    vc.restartGuardActive   = false;
     vcStopTTS();
     vcStopMic('vcStop');
     vcSetStatus('idle');
