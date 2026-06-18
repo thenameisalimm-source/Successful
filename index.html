@@ -7136,7 +7136,7 @@ if ('serviceWorker' in navigator) {
       try { r.onresult = null; r.onerror = null; r.onend = null; r.onstart = null; } catch (e) {}
       try { r.abort(); } catch (e) {}
     }
-    vcLog('vcStopMic', reason || '');
+    vcLog('REC:DESTROYED', 'bumped gen to ' + vc.gen + ' (was ' + (vc.gen - 1) + ') reason=' + (reason || '') + ' vc.rec was ' + (vc.rec === null ? 'null (already cleared)' : 'present'));
   }
 
   // ── Stop TTS cleanly ────────────────────────────────────────────
@@ -7236,19 +7236,28 @@ if ('serviceWorker' in navigator) {
                vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en') {
       // Confirmed non-English language detected from the user's own speech.
       resolved = vc.userUtteranceLang;
-      reason   = 'lastUserSpeech';
+      reason   = 'lastUserSpeech(non-en)';
     } else if (vc.lastDetectedLang &&
                vc.lastDetectedLang.slice(0, 2).toLowerCase() !== 'en') {
       // AI replied in a non-English language — weakly suggests user intent.
       resolved = vc.lastDetectedLang;
-      reason   = 'lastAIReply';
+      reason   = 'lastAIReply(non-en)';
     } else {
-      // Safe Indian-English default. hi-IN covers Hindi/Marathi/Urdu natively
-      // and is universally supported; better than en-IN for Indian speech.
-      resolved = 'hi-IN';
-      reason   = 'default(hi-IN)';
+      // FIX: was 'hi-IN'. That caused English, Gujarati, Urdu (and any
+      // language whose script detectSpeechLang returns as 'en') to be
+      // transcribed in Hindi script. en-IN is universally supported, handles
+      // Indian-accented English correctly, and does not force Hindi script on
+      // non-Hindi speakers. Users who primarily speak Hindi/Marathi/Urdu
+      // should pin 'hi-IN' in the Spoken Language selector.
+      resolved = 'en-IN';
+      reason   = 'default(en-IN)';
     }
-    vcLog('vcResolveRecognitionLang', 'lang="' + resolved + '" via ' + reason);
+    // DIAGNOSTIC: log every input so resolutions are fully traceable in console
+    vcLog('vcResolveRecognitionLang',
+      'RESOLVED="' + resolved + '" reason=' + reason +
+      ' | langPref="' + vc.langPref + '"' +
+      ' userUtteranceLang="' + vc.userUtteranceLang + '"' +
+      ' lastDetectedLang="' + vc.lastDetectedLang + '"');
     return resolved;
   }
 
@@ -7300,6 +7309,9 @@ if ('serviceWorker' in navigator) {
     // brief pauses and report live partial text for the transcript box.
     // Nothing here ever auto-submits — only vcSendTranscript() (the Send
     // button) does that.
+    // DIAGNOSTIC: log recognizer creation with generation ID
+    vcLog('REC:CREATED', 'gen=' + myGen + ' lang will be set next');
+
     rec.continuous     = true;
     rec.interimResults = true;
     // [UNCHANGED] '' is NOT real auto language-detection — it silently
@@ -7310,13 +7322,14 @@ if ('serviceWorker' in navigator) {
     // handled downstream by LANGUAGE_INSTRUCTION (AI side) and
     // detectSpeechLang/pickVoiceForLang (TTS side) — unchanged.
     rec.lang = vcResolveRecognitionLang();
+    vcLog('REC:LANG_SET', 'gen=' + myGen + ' rec.lang="' + rec.lang + '"');
 
     rec.onstart = function() {
       if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
-      vcLog('onstart', 'CONFIRMED lang="' + rec.lang + '" gen=' + myGen + ' transcript="' + vc.transcript + '"');
+      vcLog('REC:STARTED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" transcript="' + vc.transcript + '"' + (myGen !== vc.gen ? ' *** STALE — vc.gen already moved on' : ''));
       vcSetStatus('listening');
     };
 
@@ -7351,8 +7364,18 @@ if ('serviceWorker' in navigator) {
           if (i >= instanceFinalCount) {
             var chunk = text.trim();
             if (chunk) {
+              var before = vc.transcript;
               vc.transcript = (vc.transcript + ' ' + chunk).trim();
-              vcLog('onresult:final', 'i=' + i + ' committed "' + chunk + '" transcript="' + vc.transcript + '"');
+              // DIAGNOSTIC: every append is tagged with the recognizer generation
+              // that produced it. If two different gen values appear in successive
+              // APPEND lines, two instances were alive simultaneously.
+              vcLog('REC:APPEND',
+                '[gen=' + myGen + '] i=' + i +
+                ' chunk="' + chunk + '"' +
+                ' vc.gen=' + vc.gen +
+                (myGen !== vc.gen ? ' *** GEN MISMATCH — stale instance appending!' : ' (gen current)') +
+                ' transcript BEFORE="' + before + '"' +
+                ' AFTER="' + vc.transcript + '"');
             }
             instanceFinalCount = i + 1;
           }
@@ -7431,7 +7454,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
-      vcLog('onend', 'lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
+      vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
       if (errorHandled) return;    // onerror already decided what happens next
@@ -7448,7 +7471,7 @@ if ('serviceWorker' in navigator) {
 
     try {
       rec.start();
-      vcLog('start()', 'called, awaiting onstart');
+      vcLog('REC:START_CALLED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" — awaiting onstart');
     } catch (e) {
       vcLog('start():threw', e.name + ' — ' + e.message);
       vc.starting = false;
