@@ -2501,8 +2501,8 @@
              hidden during processing/speaking. User reviews this and taps
              Send whenever they're done talking — nothing is auto-submitted. -->
         <div id="vcTranscriptCard" style="display:none;background:rgba(0,0,0,0.18);border:1px solid rgba(99,179,237,0.2);border-radius:12px;padding:16px 18px;margin-bottom:16px;min-height:56px;">
-          <div style="font-size:0.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Your transcript</div>
-          <div id="vcTranscriptText" style="font-size:0.98rem;color:var(--text-1);line-height:1.6;white-space:pre-wrap;">Listening for your voice…</div>
+          <div style="font-size:0.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Your transcript — edit before sending</div>
+          <textarea id="vcTranscriptText" rows="3" style="width:100%;background:transparent;border:none;outline:none;resize:vertical;font-size:0.98rem;color:var(--text-1);line-height:1.6;font-family:var(--font-body);padding:0;min-height:48px;" placeholder="Listening for your voice…"></textarea>
         </div>
 
         <!-- [ADDED — manual Send workflow] Send appears while listening
@@ -6992,6 +6992,11 @@ if ('serviceWorker' in navigator) {
     langPref:          '',
     lastDetectedLang:  '',
     userUtteranceLang: '',
+
+    // Bug03: set true when the user manually types/edits the transcript
+    // textarea so vcRefreshTranscriptUI won't overwrite their corrections.
+    // Cleared again each time we reset the transcript (vcSendTranscript, vcStop).
+    _userEdited: false,
   };
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
@@ -7055,13 +7060,25 @@ if ('serviceWorker' in navigator) {
   // Refreshes the live transcript box + Send button enabled state from
   // current vc.transcript/vc.interim. Called on every onresult and whenever
   // status switches to 'listening'.
+  // NOTE: we only push the recognised text when the user has NOT manually
+  // edited the textarea since the last recognition update, so hand-corrections
+  // are never silently overwritten by a subsequent partial result.
   function vcRefreshTranscriptUI() {
     if (vcTranscriptText) {
       var live = vc.transcript;
       if (vc.interim) live = (live ? live + ' ' : '') + vc.interim;
-      vcTranscriptText.textContent = live.trim() || 'Listening for your voice…';
+      // Only overwrite the textarea if the user hasn't manually changed it
+      // (vc._userEdited is set true by an 'input' listener added in DOMContentLoaded).
+      if (!vc._userEdited) {
+        vcTranscriptText.value = live.trim();
+        vcTranscriptText.placeholder = 'Listening for your voice…';
+      }
     }
-    if (vcSendBtn) vcSendBtn.disabled = !vc.transcript.trim();
+    // Send button enabled whenever the textarea has any text (user-edited or recognised)
+    if (vcSendBtn) {
+      var hasText = vcTranscriptText ? vcTranscriptText.value.trim().length > 0 : !!vc.transcript.trim();
+      vcSendBtn.disabled = !hasText;
+    }
   }
 
   // ── VOICE DEBUG LOGGING (internal/dev only) ──────────────────────
@@ -7168,7 +7185,11 @@ if ('serviceWorker' in navigator) {
   // This is the ONLY way an utterance is ever submitted now — no silence
   // timer, no auto-finalize. Triggered by a tap on the Send button.
   function vcSendTranscript() {
-    var transcript = (vc.transcript || '').trim();
+    // Read from the editable textarea — this honours any corrections the user
+    // has typed since the recognition populated it.
+    var transcript = vcTranscriptText
+      ? vcTranscriptText.value.trim()
+      : (vc.transcript || '').trim();
     if (!transcript) { vcLog('vcSendTranscript:empty', 'nothing to send'); return; }
     vcLog('vcSendTranscript', 'sending "' + transcript + '"');
 
@@ -7192,6 +7213,11 @@ if ('serviceWorker' in navigator) {
       if (detected && !(isEnglish && alreadyNonEnglish)) {
         vcLog('vcSendTranscript:langDetect', 'user utterance detected as ' + detected);
         vc.userUtteranceLang = detected;
+        // If a confirmed non-English language was just detected, also reset
+        // the auto-rotation index so vcResolveRecognitionLang will use this
+        // language directly (via the userUtteranceLang branch) rather than
+        // continuing to rotate, until the user speaks something different.
+        if (!isEnglish) _vcAutoLangIdx = 0;
       } else if (detected) {
         vcLog('vcSendTranscript:langDetect:skipped', 'ambiguous en default, keeping ' + vc.userUtteranceLang);
       }
@@ -7199,6 +7225,7 @@ if ('serviceWorker' in navigator) {
 
     vc.transcript = '';
     vc.interim    = '';
+    vc._userEdited = false;
     vc.restartGuardSnapshot = '';
     vc.restartGuardActive   = false;
 
@@ -7217,20 +7244,51 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  // ── Auto-mode language rotation ──────────────────────────────────
+  // When langPref='' (Auto), the Web Speech API's lang='' silently falls
+  // back to the device locale (almost always en-US/en-GB), so Gujarati,
+  // Hindi, Marathi and Urdu speech just gets mis-recognised as English words
+  // and the detector then locks the next session to English too — a vicious
+  // cycle.  Instead, in Auto mode we rotate through all supported Indian
+  // locales on successive recognizer restarts.  The rotation index advances
+  // every time vcResolveRecognitionLang is called without a pinned langPref,
+  // so each session tries a different locale.  If userUtteranceLang or
+  // lastDetectedLang points to a specific known non-English language that
+  // language is used for all Auto sessions until a different one is detected.
+  var VC_AUTO_LANGS = ['en-IN', 'hi-IN', 'gu-IN', 'mr-IN', 'ur-IN'];
+  var _vcAutoLangIdx = 0;
+
   // ── Resolve which BCP-47 locale to recognize with ────────────────
-  // [UNCHANGED] The Web Speech API has no real automatic spoken-language
-  // detection; lang='' just falls back to the device/browser locale
-  // (usually English). Priority:
+  // Priority:
   //   1) language explicitly pinned via the Spoken Language selector
-  //   2) the language detected from the user's own last-SENT transcript
-  //   3) the language of the AI's last reply (fallback for the first turn)
-  //   4) a safe default.
+  //   2) a confirmed non-English language detected from the user's own
+  //      last-SENT transcript (only if it isn't the 'en' catch-all)
+  //   3) the language of the AI's last reply (if non-English)
+  //   4) Auto rotation through all supported Indian locales
   function vcResolveRecognitionLang() {
     var resolved, reason;
-    if (vc.langPref)               { resolved = vc.langPref;           reason = 'pinned'; }
-    else if (vc.userUtteranceLang) { resolved = vc.userUtteranceLang;  reason = 'lastUserSpeech'; }
-    else if (vc.lastDetectedLang)  { resolved = vc.lastDetectedLang;   reason = 'lastAIReply'; }
-    else                            { resolved = 'en-IN';               reason = 'default'; }
+    if (vc.langPref) {
+      resolved = vc.langPref;
+      reason   = 'pinned';
+    } else if (vc.userUtteranceLang &&
+               vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en') {
+      // Only use the detected user language if it's a confirmed non-English
+      // language — 'en-US' from detectSpeechLang is also the catch-all
+      // default for mis-recognised non-English speech, so we don't trust it
+      // to select a recognition locale in Auto mode.
+      resolved = vc.userUtteranceLang;
+      reason   = 'lastUserSpeech(nonEn)';
+    } else if (vc.lastDetectedLang &&
+               vc.lastDetectedLang.slice(0, 2).toLowerCase() !== 'en') {
+      resolved = vc.lastDetectedLang;
+      reason   = 'lastAIReply(nonEn)';
+    } else {
+      // Auto rotation: try each supported locale in turn so the recognizer
+      // gets a real chance at every Indian language, not just English.
+      resolved = VC_AUTO_LANGS[_vcAutoLangIdx % VC_AUTO_LANGS.length];
+      _vcAutoLangIdx++;
+      reason   = 'autoRotate[' + (_vcAutoLangIdx - 1) + ']';
+    }
     vcLog('vcResolveRecognitionLang', 'lang="' + resolved + '" via ' + reason);
     return resolved;
   }
@@ -7330,15 +7388,25 @@ if ('serviceWorker' in navigator) {
           var trimmedChunk = chunkText.trim();
           // Restart-boundary dedup guard: only the first final result(s) of
           // an instance that's RESUMING a transcript get checked — once
-          // genuinely new content has been added, the boundary is consumed
+          // genuinely new content has been added (content that does NOT
+          // overlap with the snapshot at all), the boundary is consumed
           // and we stop guarding for the rest of this instance.
+          //
+          // IMPORTANT: the guard stays active across MULTIPLE consecutive
+          // final chunks from this instance, because some engines deliver
+          // the re-transcribed boundary audio in several small results rather
+          // than a single large one. We only disarm it once a chunk arrives
+          // that has NO overlap with the snapshot (meaning the engine has
+          // moved past the restart boundary).
           if (vc.restartGuardActive && trimmedChunk) {
             var overlap = vcWordOverlapLen(vcDedupWords(vc.restartGuardSnapshot), vcDedupWords(trimmedChunk));
             if (overlap > 0) {
               trimmedChunk = vcDedupWords(trimmedChunk).slice(overlap).join(' ');
               vcLog('onresult:dedupBoundary', 'stripped ' + overlap + ' word(s) re-delivered across restart boundary');
+            } else {
+              // No overlap found — we're past the boundary, disarm the guard.
+              vc.restartGuardActive = false;
             }
-            if (trimmedChunk) vc.restartGuardActive = false;
           }
           if (trimmedChunk) {
             vc.transcript = (vc.transcript + ' ' + trimmedChunk).trim();
@@ -7525,6 +7593,7 @@ if ('serviceWorker' in navigator) {
     vc.starting = false;
     vc.transcript = '';
     vc.interim    = '';
+    vc._userEdited = false;
     vcLog('vcStart', 'Voice Chat Mode enabled');
     vcUpdateToggleUI();
     if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — speak, then tap Send when ready');
@@ -7537,6 +7606,7 @@ if ('serviceWorker' in navigator) {
     vcLog('vcStop', 'Voice Chat Mode disabled');
     vc.transcript = '';
     vc.interim    = '';
+    vc._userEdited = false;
     vc.restartGuardSnapshot = '';
     vc.restartGuardActive   = false;
     vcStopTTS();
@@ -7629,6 +7699,16 @@ if ('serviceWorker' in navigator) {
     // Stop cancels TTS immediately and returns to listening.
     if (vcSendBtn) vcSendBtn.addEventListener('click', function() { vcSendTranscript(); });
     if (vcStopBtn) vcStopBtn.addEventListener('click', function() { vcStopSpeaking(); });
+
+    // Bug03: when the user manually types or edits in the transcript textarea,
+    // set _userEdited so vcRefreshTranscriptUI won't overwrite their changes,
+    // and keep the Send button's disabled state in sync with the textarea content.
+    if (vcTranscriptText) {
+      vcTranscriptText.addEventListener('input', function() {
+        vc._userEdited = true;
+        if (vcSendBtn) vcSendBtn.disabled = !vcTranscriptText.value.trim();
+      });
+    }
 
     // Stop Voice Chat Mode automatically when user navigates away from voice page
     // (they may click another sidebar item)
