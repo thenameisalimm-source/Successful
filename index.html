@@ -2469,17 +2469,14 @@
           <span id="vcToggleLabel" style="font-size:1rem;color:var(--text-1);">Voice Chat Mode: <strong>Off</strong></span>
         </div>
 
-        <!-- Spoken Language hint: the Web Speech API has no real automatic
-             spoken-language detection (lang='' just falls back to the device/
-             browser locale, which is almost always English) — so Gujarati,
-             Marathi, and Urdu need an explicit, supported locale tag to be
-             recognized reliably. "Auto" adapts to whichever language the
-             conversation is already in; pin a language here if recognition
-             for it isn't sticking. -->
+        <!-- Spoken Language selector: manually selecting your language gives
+             the best recognition accuracy. Auto mode may misidentify Marathi,
+             Gujarati, or Urdu on some browsers/devices. Pin your language
+             here for reliable transcription. -->
         <div class="personality-selector-row" style="margin-bottom:20px;max-width:360px;">
           <span class="personality-selector-label">🌐 Spoken Language:</span>
           <select id="vcLangSelect">
-            <option value="">🔄 Auto (adapts to conversation)</option>
+            <option value="">🔄 Auto — Recommended: Select your language manually for maximum accuracy.</option>
             <option value="en-IN">English</option>
             <option value="hi-IN">Hindi (हिंदी)</option>
             <option value="gu-IN">Gujarati (ગુજરાતી)</option>
@@ -2519,7 +2516,6 @@
           <ul style="margin:8px 0 0 18px;padding:0;">
             <li>Toggle on — the mic listens continuously while you talk.</li>
             <li>Speak in <strong style="color:var(--text-1);">any supported language</strong> — English, Hindi, Gujarati, Marathi, Urdu, and more.</li>
-            <li>Leave <strong style="color:var(--text-1);">Spoken Language</strong> on Auto to adapt automatically, or pin a language above if recognition isn't picking it up reliably.</li>
             <li>Watch your words appear live in the transcript box above.</li>
             <li>Tap <strong style="color:var(--text-1);">📤 Send</strong> whenever you're done speaking — it goes through the same pipeline as typed messages.</li>
             <li>ALEEM AI replies in the same language and speaks the response aloud.</li>
@@ -2527,6 +2523,17 @@
             <li>All messages, memories, and history are saved exactly like normal chat.</li>
             <li>Toggle off to stop voice mode at any time.</li>
           </ul>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(99,179,237,0.12);">
+            <strong style="color:var(--text-1);">🎯 Language Accuracy Tips</strong>
+            <ul style="margin:8px 0 0 18px;padding:0;">
+              <li>For the best speech recognition accuracy, <strong style="color:var(--text-1);">manually select your spoken language</strong> from the dropdown before starting.</li>
+              <li>Do <strong style="color:var(--text-1);">not rely on Auto mode</strong> for Marathi, Gujarati, or Urdu conversations.</li>
+              <li>Auto mode may misidentify languages on some browsers/devices and can reduce transcription accuracy.</li>
+              <li>If you primarily speak Hindi, Marathi, Gujarati, Urdu, or English, <strong style="color:var(--text-1);">select that language explicitly</strong>.</li>
+              <li>The selected language only affects speech recognition accuracy — AI replies, memory, history, and multilingual responses continue to work normally.</li>
+              <li>If transcripts appear incorrect, switch to the matching language manually and try again.</li>
+            </ul>
+          </div>
         </div>
 
       </div>
@@ -7391,31 +7398,44 @@ if ('serviceWorker' in navigator) {
               var before   = vc.transcript;
               var toAppend = chunk; // what actually gets written — may be trimmed
 
-              if (instanceFinalCount === 0 && vc.transcript) {
+              // CUMULATIVE-PHRASE DEDUP
+              // This browser delivers isFinal=true at every result index, each
+              // carrying the full utterance so far ("तेरा", then "तेरा नाम",
+              // then "तेरा नाम क्या", …). Without this check every phrase is
+              // appended wholesale, producing:
+              //   "तेरा तेरा नाम तेरा नाम क्या तेरा नाम क्या है"
+              //
+              // The previous version only ran when instanceFinalCount === 0
+              // (first final of a new instance). That was wrong — cumulative
+              // phrases arrive at every index, so the guard prevented the check
+              // from ever running after the first commit.
+              //
+              // Fix: run on every final commit. If vc.transcript is already a
+              // prefix of chunk, append only the new suffix. If chunk is already
+              // fully contained, skip entirely.
+              if (vc.transcript) {
                 var existLow = vc.transcript.toLowerCase().replace(/\s+/g, ' ').trim();
                 var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ');
 
                 if (chunkLow === existLow || chunkLow.length <= existLow.length) {
-                  // Chunk is identical to or shorter than what we already have.
-                  // Entire chunk is already present — skip.
+                  // Chunk is identical to or shorter than what we already have — skip.
                   toAppend = '';
                   vcLog('REC:OVERLAP_SKIP',
                     '[gen=' + myGen + '] i=' + i +
-                    ' chunk fully covered by existing transcript — skipped' +
+                    ' chunk fully covered — skipped' +
                     ' chunk="' + chunk + '"' +
                     ' transcript="' + vc.transcript + '"');
                 } else if (chunkLow.indexOf(existLow + ' ') === 0 || chunkLow.indexOf(existLow) === 0) {
-                  // Chunk starts with everything already in transcript.
-                  // Append only the new suffix after the existing content.
+                  // Chunk starts with existing transcript — append suffix only.
                   toAppend = chunk.slice(vc.transcript.length).replace(/^\s+/, '');
                   vcLog('REC:OVERLAP_TRIM',
                     '[gen=' + myGen + '] i=' + i +
-                    ' chunk starts with existing transcript — appending suffix only' +
+                    ' cumulative phrase trimmed' +
                     ' full_chunk="' + chunk + '"' +
                     ' suffix="' + toAppend + '"' +
                     ' transcript="' + vc.transcript + '"');
                 }
-                // else: chunk is genuinely new content, toAppend stays = chunk
+                // else: chunk is genuinely new content — toAppend stays = chunk
               }
 
               if (toAppend) {
