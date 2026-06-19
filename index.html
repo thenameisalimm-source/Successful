@@ -2867,21 +2867,6 @@
           </div>
         </div>
 
-        <!-- ── ON-SCREEN VC-TRACE DEBUG PANEL ──────────────────────────
-             Mirrors every [VC-TRACE] console line onto the page so logs
-             can be captured on Android without DevTools. Display-only;
-             no logic changes. ── -->
-        <div id="vcTracePanel" style="margin-top:20px;background:rgba(0,0,0,0.18);border:1px solid rgba(99,179,237,0.15);border-radius:12px;padding:14px 16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-            <strong style="color:var(--text-1);font-size:0.85rem;">🪲 VC-TRACE Debug Log</strong>
-            <div style="display:flex;gap:8px;">
-              <button id="vcTraceCopyBtn" type="button" class="btn-sec" style="padding:6px 12px;font-size:0.78rem;">📋 Copy Log</button>
-              <button id="vcTraceClearBtn" type="button" class="btn-sec" style="padding:6px 12px;font-size:0.78rem;">🗑️ Clear Log</button>
-            </div>
-          </div>
-          <div id="vcTraceLog" style="max-height:240px;overflow-y:auto;background:rgba(0,0,0,0.35);border:1px solid rgba(99,179,237,0.12);border-radius:8px;padding:10px 12px;font-family:var(--font-mono);font-size:0.7rem;line-height:1.6;color:var(--text-2);white-space:pre-wrap;word-break:break-word;"></div>
-        </div>
-
       </div>
     </section>
 
@@ -7348,6 +7333,16 @@ if ('serviceWorker' in navigator) {
     // textarea so vcRefreshTranscriptUI won't overwrite their corrections.
     // Cleared again each time we reset the transcript (vcSendTranscript, vcStop).
     _userEdited: false,
+
+    // ── Emergency-stop token ────────────────────────────────────────
+    // Monotonically-increasing integer stamped onto every vcSpeakAndRestart
+    // call (as myStopToken). vcStopSpeaking() bumps it FIRST so any response
+    // that is mid-queue or mid-speech is immediately invalidated — the
+    // wrapper around speakText (below) checks the token before ever calling
+    // vcSpeakAndRestart, and vcSpeakAndRestart checks it before speaking.
+    // This means pressing Stop multiple times is always safe and a cancelled
+    // response can never be re-spoken.
+    stopToken: 0,
   };
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
@@ -7452,94 +7447,6 @@ if ('serviceWorker' in navigator) {
     } catch(ex) { /* never break voice chat */ }
   }
 
-  // ── INSTRUMENTATION LOGGER ────────────────────────────────────────
-  // Prints every required field for the restart/stop-AI diagnosis.
-  // Format: [VC-TRACE] <timestamp> | event=<name> | reason=<r>
-  //         | gen=<n> | active=<b> | listening=<b> | starting=<b> | speaking=<b>
-  //         | detail=<free text>
-  function vcTrace(event, reason, detail) {
-    try {
-      var ts  = new Date().toISOString();
-      var g   = vc ? vc.gen       : '?';
-      var ac  = vc ? vc.active    : '?';
-      var li  = vc ? vc.listening : '?';
-      var st  = vc ? vc.starting  : '?';
-      var sp  = vc ? vc.speaking  : '?';
-      var line =
-        '[VC-TRACE] ' + ts +
-        ' | event='     + event +
-        ' | reason='    + (reason  || '-') +
-        ' | gen='       + g  +
-        ' | active='    + ac +
-        ' | listening=' + li +
-        ' | starting='  + st +
-        ' | speaking='  + sp +
-        (detail ? ' | detail=' + detail : '');
-      console.log(line);
-      vcTracePanelAppend(line);
-    } catch(ex) { /* never break voice chat */ }
-  }
-
-  // ── ON-SCREEN VC-TRACE PANEL (display-only; no logic changes) ────
-  // Appends every VC-TRACE line to the on-page debug box so logs can
-  // be read/copied on Android without DevTools.
-  function vcTracePanelAppend(line) {
-    try {
-      var box = document.getElementById('vcTraceLog');
-      if (!box) return;
-      var atBottom = (box.scrollTop + box.clientHeight) >= (box.scrollHeight - 4);
-      var row = document.createElement('div');
-      row.textContent = line;
-      box.appendChild(row);
-      if (atBottom) box.scrollTop = box.scrollHeight;
-    } catch(ex) { /* never break voice chat */ }
-  }
-
-  function vcTracePanelInit() {
-    try {
-      var copyBtn  = document.getElementById('vcTraceCopyBtn');
-      var clearBtn = document.getElementById('vcTraceClearBtn');
-      var box      = document.getElementById('vcTraceLog');
-      if (copyBtn && box) {
-        copyBtn.addEventListener('click', function() {
-          var text = box.innerText || '';
-          var done = function() {
-            var orig = copyBtn.textContent;
-            copyBtn.textContent = '✅ Copied';
-            setTimeout(function() { copyBtn.textContent = orig; }, 1200);
-          };
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(done, function() {
-              vcTraceFallbackCopy(text, done);
-            });
-          } else {
-            vcTraceFallbackCopy(text, done);
-          }
-        });
-      }
-      if (clearBtn && box) {
-        clearBtn.addEventListener('click', function() {
-          box.innerHTML = '';
-        });
-      }
-    } catch(ex) { /* never break voice chat */ }
-  }
-
-  function vcTraceFallbackCopy(text, done) {
-    try {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      if (done) done();
-    } catch(ex) { /* never break voice chat */ }
-  }
-
   function vcUpdateToggleUI() {
     if (!vcTrack) return;
     if (vc.active) {
@@ -7564,7 +7471,6 @@ if ('serviceWorker' in navigator) {
   // start()/stop()/abort() and the event handlers safe to overlap — there
   // is never more than one instance whose events can affect state.
   function vcStopMic(reason) {
-    vcTrace('vcStopMic', reason, 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     vc.gen++;             // retire whatever instance is currently live
     vc.listening = false;
     vc.starting  = false;
@@ -7711,7 +7617,6 @@ if ('serviceWorker' in navigator) {
   // late (after a newer vcStartListening() already replaced it) can never
   // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
-    vcTrace('vcStartListening', 'ENTER', 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
 
     // Duplicate-start guard. Without this, overlapping callers (onend,
@@ -7772,7 +7677,6 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
-      vcTrace('rec.onstart', 'recognition-started', 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('REC:STARTED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" transcript="' + vc.transcript + '"' + (myGen !== vc.gen ? ' *** STALE — vc.gen already moved on' : ''));
       vcSetStatus('listening');
     };
@@ -7915,7 +7819,6 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = false;
 
-      vcTrace('rec.onerror', e.error, 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('onerror:FIRED', 'lang="' + rec.lang + '" error="' + e.error + '" transcript="' + vc.transcript + '"');
 
       switch (e.error) {
@@ -7998,7 +7901,6 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
-      vcTrace('rec.onend', 'recognition-ended', 'gen=' + myGen + ' wasListening=' + wasListening + ' errorHandled=' + errorHandled + ' lang=' + rec.lang);
       vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
@@ -8009,7 +7911,6 @@ if ('serviceWorker' in navigator) {
       // talking (only the Send button means that). We just seamlessly start
       // a fresh recognizer instance; vc.transcript keeps accumulating
       // across instances and is only submitted when the user taps Send.
-      vcTrace('rec.onend', 'scheduling-restart', 'will call vcStartListening in 250ms');
       setTimeout(vcStartListening, 250);
     };
 
@@ -8017,7 +7918,6 @@ if ('serviceWorker' in navigator) {
 
     try {
       rec.start();
-      vcTrace('vcStartListening', 'rec.start() called', 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('REC:START_CALLED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" — awaiting onstart');
     } catch (e) {
       vcLog('start():threw', e.name + ' — ' + e.message);
@@ -8033,8 +7933,20 @@ if ('serviceWorker' in navigator) {
   // Called by the patched speakText replacement below. mySpeakGen lets the
   // Stop button (vcStopSpeaking) invalidate this utterance's onend/onerror
   // after a manual cancel, so they can't also try to restart the mic.
-  function vcSpeakAndRestart(text) {
-    vcTrace('vcSpeakAndRestart', 'ENTER', 'textLen=' + (text ? text.length : 0) + ' caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
+  // myStopToken is checked at entry: if vcStopSpeaking() has already bumped
+  // vc.stopToken since this response was queued, we silently discard it and
+  // return to listening — the response is never spoken.
+  function vcSpeakAndRestart(text, myStopToken) {
+    // ── Emergency-stop gate ──────────────────────────────────────
+    // If Stop was pressed after this response was queued but before we got
+    // here, discard silently and return to listening.
+    if (myStopToken !== vc.stopToken) {
+      vcLog('vcSpeakAndRestart:CANCELLED', 'stopToken mismatch myStopToken=' + myStopToken + ' vc.stopToken=' + vc.stopToken + ' — discarding response');
+      vc.speaking = false;
+      if (vc.active && !vc.listening && !vc.starting) vcStartListening();
+      return;
+    }
+
     vc.speakGen++;
     var mySpeakGen = vc.speakGen;
 
@@ -8094,24 +8006,54 @@ if ('serviceWorker' in navigator) {
     window.speechSynthesis.speak(u);
   }
 
-  // ── Stop button: cancel TTS immediately, go back to listening ────
+  // ── Stop button: true emergency stop — cancel TTS, prevent re-speak ──
+  //
+  // Order of operations (all happen synchronously before any async work):
+  //  1. Bump vc.stopToken  — invalidates any queued vcSpeakAndRestart call
+  //     that hasn't run yet.  speakText wrapper checks this before calling
+  //     vcSpeakAndRestart, so a response still in the processing→speak queue
+  //     is silently discarded the moment it tries to speak.
+  //  2. Bump vc.speakGen   — invalidates the current utterance's onend/onerror
+  //     callbacks so they can't restart the mic a second time.
+  //  3. Set vc.speaking = false immediately.
+  //  4. speechSynthesis.cancel() — stops audio output right now.
+  //     Called unconditionally: cancel() on an idle synthesizer is a safe
+  //     no-op per spec, so pressing Stop multiple times is always safe.
+  //  5. Force return to listening via vcStopMic + vcStartListening — NOT a
+  //     conditional "if not already listening" check.  vcStopMic bumps the mic
+  //     generation (retiring any stale recognizer) and vcStartListening starts
+  //     a clean new instance.  This guarantees listening resumes even if
+  //     vc.listening or vc.starting is true due to poll lag.
   function vcStopSpeaking() {
-    vcTrace('vcStopSpeaking', 'user-or-code', 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
-    vcLog('vcStopSpeaking', 'user tapped Stop — cancelling TTS (speaking=' + vc.speaking + ')');
-    // Bump speakGen FIRST so the onend/onerror this cancel() is about to
-    // fire on the in-flight utterance become no-ops — otherwise they'd
-    // race this function and could call vcStartListening() a second time.
+    vcLog('vcStopSpeaking', 'EMERGENCY STOP — speaking=' + vc.speaking +
+          ' speakGen=' + vc.speakGen + ' stopToken=' + vc.stopToken);
+
+    // 1. Invalidate any not-yet-started queued response.
+    vc.stopToken++;
+
+    // 2. Invalidate the current utterance's onend/onerror.
     vc.speakGen++;
+
+    // 3. Clear speaking flag immediately (before cancel fires any callbacks).
     vc.speaking = false;
-    // Always call cancel() unconditionally — do NOT guard on vc.speaking.
-    // The browser can still be speaking even if vc.speaking is momentarily
-    // false (e.g. poll lag between the state update and the button press).
-    // Calling cancel() on an idle speechSynthesis is a safe no-op per spec.
+
+    // 4. Stop audio output right now.
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    if (vc.active && !vc.listening && !vc.starting) vcStartListening();
-    else if (!vc.active) vcSetStatus('idle');
+
+    vcLog('vcStopSpeaking', 'TTS cancelled — stopToken now ' + vc.stopToken +
+          ' speakGen now ' + vc.speakGen);
+
+    // 5. Return to listening unconditionally.
+    //    vcStopMic bumps mic gen (retires stale recognizer + clears starting/listening flags)
+    //    so vcStartListening always gets a clean slate, regardless of current state.
+    if (vc.active) {
+      vcStopMic('stop-speech-btn');
+      vcStartListening();
+    } else {
+      vcSetStatus('idle');
+    }
   }
 
   // ── Turn Voice Chat Mode on ──────────────────────────────────────
@@ -8175,8 +8117,16 @@ if ('serviceWorker' in navigator) {
             }
           }
         } catch (e) {}
+
+        // ── Emergency-stop gate ──────────────────────────────────
+        // Snapshot stopToken at the moment speakText is called.
+        // vcSpeakAndRestart checks this snapshot against vc.stopToken at
+        // the moment it actually runs — if Stop was pressed in between
+        // (even during async processing), the response is silently dropped.
+        var myStopToken = vc.stopToken;
+
         vcStopMic('about-to-speak');          // don't listen while speaking
-        vcSpeakAndRestart(full);
+        vcSpeakAndRestart(full, myStopToken);
       } else {
         if (orig) orig(t);
       }
@@ -8195,7 +8145,6 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
-    vcTracePanelInit();
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
@@ -8463,15 +8412,19 @@ if ('serviceWorker' in navigator) {
       // ── Intercept vcSpeakAndRestart to respect mute ───────────────
       // When muted, we skip TTS (just return to listening) without
       // touching any recognition or model logic.
+      // We also bump speakGen so the skipped utterance's onend/onerror
+      // (which never fire, but just in case) can't restart the mic.
       var _origVcSpeakAndRestart = vcSpeakAndRestart;
-      vcSpeakAndRestart = function(text) {
+      vcSpeakAndRestart = function(text, myStopToken) {
         if (muted) {
+          // Bump speakGen to invalidate any prior utterance callbacks.
+          vc.speakGen++;
           // Skip TTS — go straight back to listening as if TTS ended.
           vc.speaking = false;
           if (vc.active) setTimeout(vcStartListening, 400);
           return;
         }
-        _origVcSpeakAndRestart(text);
+        _origVcSpeakAndRestart(text, myStopToken);
       };
 
       // ── Stop-speech proxy button — calls existing vcStopSpeaking ──
