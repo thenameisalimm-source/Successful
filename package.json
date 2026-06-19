@@ -1,0 +1,9 @@
+{
+  "name": "aleem-ai",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "groq-sdk": "^0.9.0",
+    "busboy": "^1.6.0"
+  }
+}
