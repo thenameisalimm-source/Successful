@@ -7869,20 +7869,11 @@ if ('serviceWorker' in navigator) {
           return;
         case 'no-speech':
           // Android Chrome fires no-speech every ~5-7 seconds of silence even
-          // with continuous=true. Per spec, onerror fires BEFORE onend for the
-          // same event.
-          //
-          // Previously this attempted to re-arm the SAME recognizer instance via
-          // rec.start() before onend fired. On Android Chrome, rec.start() in
-          // this position either throws (caught, ok) OR silently accepts the call
-          // without ever firing onstart — leaving vc.starting = true permanently
-          // and deadlocking every subsequent vcStartListening() call.
-          //
-          // Fix: always do a clean restart via vcStartListening(). errorHandled
-          // stays true so the onend that follows immediately is a no-op (we own
-          // the restart here). The 300ms delay lets onend settle before the new
-          // instance is created. The existing watchdog inside vcStartListening
-          // covers the new instance.
+          // with continuous=true. errorHandled stays true so the onend that
+          // follows immediately after remains a no-op — we own the restart here.
+          // vc.rec is cleared in onend (now unconditionally, before the
+          // errorHandled guard) so vcStopMic won't call abort() on the dead
+          // instance and produce the audible mic-release click.
           vcLog('onerror:no-speech', 'lang="' + rec.lang + '" gen=' + myGen + ' — scheduling clean restart after onend');
           vc.starting = false;
           if (vc.active) {
@@ -7917,13 +7908,14 @@ if ('serviceWorker' in navigator) {
       // Mark this instance as dead so no-speech handler won't try to re-arm it.
       rec._ended = true;
       vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
+      // Clear the dead instance reference unconditionally so vcStopMic inside
+      // vcStartListening finds vc.rec === null and skips the abort() call —
+      // preventing an audible mic-release click on an already-ended recognizer.
+      // Must run before any early-return so every exit path leaves vc.rec clean.
+      vc.rec = null;
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
       if (errorHandled) return;    // onerror already decided what happens next
-      // Clear the dead instance reference so vcStopMic inside vcStartListening
-      // finds vc.rec === null and skips the abort() call — preventing an
-      // unnecessary mic hardware release on an already-ended recognizer.
-      vc.rec = null;
       var _schedGen = myGen;
       setTimeout(function() {
         if (_schedGen !== vc.gen) { vcLog('onend:restart:stale', 'gen ' + _schedGen); return; }
