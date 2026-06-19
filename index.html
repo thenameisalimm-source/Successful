@@ -7834,8 +7834,42 @@ if ('serviceWorker' in navigator) {
           vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
           return;
         case 'no-speech':
-          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" browser silence timeout — retry 400ms');
-          if (vc.active) setTimeout(vcStartListening, 400);
+          // Android Chrome fires no-speech every ~5-7 seconds (browser silence
+          // timeout) even with continuous=true, which forces a new recognizer
+          // instance. Each new instance causes vcStopMic → r.abort() which
+          // releases the mic hardware, producing an audible stop/start click.
+          //
+          // Fix: after no-speech the recognizer is already ended (per spec onend
+          // fires right after onerror), but the SAME instance can be re-started
+          // with .start() instead of being aborted and replaced.  We skip
+          // vcStartListening (which always tears down via vcStopMic) and instead
+          // call .start() directly on the still-valid rec object.  The existing
+          // generation, vc.rec reference, and all handler closures remain live —
+          // no new instance is created, no mic hardware release occurs.
+          //
+          // Fallback: if rec is somehow already gone, do a normal restart.
+          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" silence timeout — re-arming same instance (no abort)');
+          if (vc.active) {
+            var _rec = rec; // close over THIS instance (myGen already captured)
+            setTimeout(function() {
+              if (myGen !== vc.gen) { vcLog('no-speech:restart:stale', 'gen ' + myGen); return; }
+              if (!vc.active || vc.speaking) return;
+              // Try to re-arm the existing instance without tearing down the mic.
+              try {
+                vc.starting  = true;
+                vc.listening = false;
+                errorHandled = false; // reset so the next onend can still restart if needed
+                _rec.start();
+                vcLog('no-speech:restart:reused', 'gen=' + myGen + ' same instance re-started');
+              } catch (startErr) {
+                // Instance is unusable (e.g. InvalidStateError) — fall back to
+                // a full recreate.  vcStartListening handles all the teardown.
+                vc.starting = false;
+                vcLog('no-speech:restart:fallback', 'gen=' + myGen + ' re-start threw: ' + startErr.message + ' — full restart');
+                vcStartListening();
+              }
+            }, 100);
+          }
           return;
         case 'language-not-supported':
           // Expected root cause for mr-IN/gu-IN/ur-IN on devices that do
@@ -7951,16 +7985,21 @@ if ('serviceWorker' in navigator) {
 
   // ── Stop button: cancel TTS immediately, go back to listening ────
   function vcStopSpeaking() {
-    if (!vc.speaking) return;
-    vcLog('vcStopSpeaking', 'user tapped Stop — cancelling TTS');
+    vcLog('vcStopSpeaking', 'user tapped Stop — cancelling TTS (speaking=' + vc.speaking + ')');
     // Bump speakGen FIRST so the onend/onerror this cancel() is about to
     // fire on the in-flight utterance become no-ops — otherwise they'd
     // race this function and could call vcStartListening() a second time.
     vc.speakGen++;
     vc.speaking = false;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    if (vc.active) vcStartListening();
-    else vcSetStatus('idle');
+    // Always call cancel() unconditionally — do NOT guard on vc.speaking.
+    // The browser can still be speaking even if vc.speaking is momentarily
+    // false (e.g. poll lag between the state update and the button press).
+    // Calling cancel() on an idle speechSynthesis is a safe no-op per spec.
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (vc.active && !vc.listening && !vc.starting) vcStartListening();
+    else if (!vc.active) vcSetStatus('idle');
   }
 
   // ── Turn Voice Chat Mode on ──────────────────────────────────────
