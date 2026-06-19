@@ -2867,6 +2867,21 @@
           </div>
         </div>
 
+        <!-- ── ON-SCREEN VC-TRACE DEBUG PANEL ──────────────────────────
+             Mirrors every [VC-TRACE] console line onto the page so logs
+             can be captured on Android without DevTools. Display-only;
+             no logic changes. ── -->
+        <div id="vcTracePanel" style="margin-top:20px;background:rgba(0,0,0,0.18);border:1px solid rgba(99,179,237,0.15);border-radius:12px;padding:14px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+            <strong style="color:var(--text-1);font-size:0.85rem;">🪲 VC-TRACE Debug Log</strong>
+            <div style="display:flex;gap:8px;">
+              <button id="vcTraceCopyBtn" type="button" class="btn-sec" style="padding:6px 12px;font-size:0.78rem;">📋 Copy Log</button>
+              <button id="vcTraceClearBtn" type="button" class="btn-sec" style="padding:6px 12px;font-size:0.78rem;">🗑️ Clear Log</button>
+            </div>
+          </div>
+          <div id="vcTraceLog" style="max-height:240px;overflow-y:auto;background:rgba(0,0,0,0.35);border:1px solid rgba(99,179,237,0.12);border-radius:8px;padding:10px 12px;font-family:var(--font-mono);font-size:0.7rem;line-height:1.6;color:var(--text-2);white-space:pre-wrap;word-break:break-word;"></div>
+        </div>
+
       </div>
     </section>
 
@@ -7437,6 +7452,94 @@ if ('serviceWorker' in navigator) {
     } catch(ex) { /* never break voice chat */ }
   }
 
+  // ── INSTRUMENTATION LOGGER ────────────────────────────────────────
+  // Prints every required field for the restart/stop-AI diagnosis.
+  // Format: [VC-TRACE] <timestamp> | event=<name> | reason=<r>
+  //         | gen=<n> | active=<b> | listening=<b> | starting=<b> | speaking=<b>
+  //         | detail=<free text>
+  function vcTrace(event, reason, detail) {
+    try {
+      var ts  = new Date().toISOString();
+      var g   = vc ? vc.gen       : '?';
+      var ac  = vc ? vc.active    : '?';
+      var li  = vc ? vc.listening : '?';
+      var st  = vc ? vc.starting  : '?';
+      var sp  = vc ? vc.speaking  : '?';
+      var line =
+        '[VC-TRACE] ' + ts +
+        ' | event='     + event +
+        ' | reason='    + (reason  || '-') +
+        ' | gen='       + g  +
+        ' | active='    + ac +
+        ' | listening=' + li +
+        ' | starting='  + st +
+        ' | speaking='  + sp +
+        (detail ? ' | detail=' + detail : '');
+      console.log(line);
+      vcTracePanelAppend(line);
+    } catch(ex) { /* never break voice chat */ }
+  }
+
+  // ── ON-SCREEN VC-TRACE PANEL (display-only; no logic changes) ────
+  // Appends every VC-TRACE line to the on-page debug box so logs can
+  // be read/copied on Android without DevTools.
+  function vcTracePanelAppend(line) {
+    try {
+      var box = document.getElementById('vcTraceLog');
+      if (!box) return;
+      var atBottom = (box.scrollTop + box.clientHeight) >= (box.scrollHeight - 4);
+      var row = document.createElement('div');
+      row.textContent = line;
+      box.appendChild(row);
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    } catch(ex) { /* never break voice chat */ }
+  }
+
+  function vcTracePanelInit() {
+    try {
+      var copyBtn  = document.getElementById('vcTraceCopyBtn');
+      var clearBtn = document.getElementById('vcTraceClearBtn');
+      var box      = document.getElementById('vcTraceLog');
+      if (copyBtn && box) {
+        copyBtn.addEventListener('click', function() {
+          var text = box.innerText || '';
+          var done = function() {
+            var orig = copyBtn.textContent;
+            copyBtn.textContent = '✅ Copied';
+            setTimeout(function() { copyBtn.textContent = orig; }, 1200);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function() {
+              vcTraceFallbackCopy(text, done);
+            });
+          } else {
+            vcTraceFallbackCopy(text, done);
+          }
+        });
+      }
+      if (clearBtn && box) {
+        clearBtn.addEventListener('click', function() {
+          box.innerHTML = '';
+        });
+      }
+    } catch(ex) { /* never break voice chat */ }
+  }
+
+  function vcTraceFallbackCopy(text, done) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (done) done();
+    } catch(ex) { /* never break voice chat */ }
+  }
+
   function vcUpdateToggleUI() {
     if (!vcTrack) return;
     if (vc.active) {
@@ -7461,6 +7564,7 @@ if ('serviceWorker' in navigator) {
   // start()/stop()/abort() and the event handlers safe to overlap — there
   // is never more than one instance whose events can affect state.
   function vcStopMic(reason) {
+    vcTrace('vcStopMic', reason, 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     vc.gen++;             // retire whatever instance is currently live
     vc.listening = false;
     vc.starting  = false;
@@ -7607,6 +7711,7 @@ if ('serviceWorker' in navigator) {
   // late (after a newer vcStartListening() already replaced it) can never
   // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
+    vcTrace('vcStartListening', 'ENTER', 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
 
     // Duplicate-start guard. Without this, overlapping callers (onend,
@@ -7667,6 +7772,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = true;
       vc.speaking  = false;
+      vcTrace('rec.onstart', 'recognition-started', 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('REC:STARTED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" transcript="' + vc.transcript + '"' + (myGen !== vc.gen ? ' *** STALE — vc.gen already moved on' : ''));
       vcSetStatus('listening');
     };
@@ -7809,6 +7915,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       vc.listening = false;
 
+      vcTrace('rec.onerror', e.error, 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('onerror:FIRED', 'lang="' + rec.lang + '" error="' + e.error + '" transcript="' + vc.transcript + '"');
 
       switch (e.error) {
@@ -7891,6 +7998,7 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
+      vcTrace('rec.onend', 'recognition-ended', 'gen=' + myGen + ' wasListening=' + wasListening + ' errorHandled=' + errorHandled + ' lang=' + rec.lang);
       vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
@@ -7901,6 +8009,7 @@ if ('serviceWorker' in navigator) {
       // talking (only the Send button means that). We just seamlessly start
       // a fresh recognizer instance; vc.transcript keeps accumulating
       // across instances and is only submitted when the user taps Send.
+      vcTrace('rec.onend', 'scheduling-restart', 'will call vcStartListening in 250ms');
       setTimeout(vcStartListening, 250);
     };
 
@@ -7908,6 +8017,7 @@ if ('serviceWorker' in navigator) {
 
     try {
       rec.start();
+      vcTrace('vcStartListening', 'rec.start() called', 'gen=' + myGen + ' lang=' + rec.lang);
       vcLog('REC:START_CALLED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" — awaiting onstart');
     } catch (e) {
       vcLog('start():threw', e.name + ' — ' + e.message);
@@ -7924,6 +8034,7 @@ if ('serviceWorker' in navigator) {
   // Stop button (vcStopSpeaking) invalidate this utterance's onend/onerror
   // after a manual cancel, so they can't also try to restart the mic.
   function vcSpeakAndRestart(text) {
+    vcTrace('vcSpeakAndRestart', 'ENTER', 'textLen=' + (text ? text.length : 0) + ' caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     vc.speakGen++;
     var mySpeakGen = vc.speakGen;
 
@@ -7985,6 +8096,7 @@ if ('serviceWorker' in navigator) {
 
   // ── Stop button: cancel TTS immediately, go back to listening ────
   function vcStopSpeaking() {
+    vcTrace('vcStopSpeaking', 'user-or-code', 'caller=' + (new Error().stack || '').split('\n').slice(1,3).join(' → ').trim());
     vcLog('vcStopSpeaking', 'user tapped Stop — cancelling TTS (speaking=' + vc.speaking + ')');
     // Bump speakGen FIRST so the onend/onerror this cancel() is about to
     // fire on the in-flight utterance become no-ops — otherwise they'd
@@ -8083,6 +8195,7 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
+    vcTracePanelInit();
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
