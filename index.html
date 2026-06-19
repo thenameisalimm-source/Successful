@@ -8458,34 +8458,88 @@ if ('serviceWorker' in navigator) {
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
-<!-- ── TEMPORARY STT TEST BUTTON — remove after verification ──────── -->
-<button id="stt-test-btn" onclick="(async()=>{
-  const btn=document.getElementById('stt-test-btn');
-  btn.disabled=true; btn.textContent='⏺ Recording…';
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    const recorder=new MediaRecorder(stream);
-    const chunks=[];
-    recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
-    recorder.start();
-    await new Promise(r=>setTimeout(r,5000));
-    recorder.stop();
-    await new Promise(r=>recorder.onstop=r);
-    stream.getTracks().forEach(t=>t.stop());
-    btn.textContent='⏳ Sending…';
-    const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
-    const form=new FormData();
-    form.append('audio',blob,'test.webm');
-    const res=await fetch('/.netlify/functions/stt',{method:'POST',body:form});
-    const data=await res.json();
-    alert(data.transcript?'✅ STT RESULT:\n\n\"'+data.transcript+'\"':'❌ ERROR:\n\n'+JSON.stringify(data,null,2));
-  }catch(err){
-    alert('❌ EXCEPTION:\n\n'+err.message);
-  }finally{
-    btn.disabled=false; btn.textContent='🎤 Test STT (5s)';
-  }
-})()" style="position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;background:#38bdf8;color:#000;font-weight:700;font-size:14px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 18px rgba(56,189,248,0.5);">🎤 Test STT (5s)</button>
-<!-- ── END TEMPORARY STT TEST BUTTON ──────────────────────────────── -->
+<!-- ── TEMPORARY STT DEBUG BUTTON — remove after verification ─────── -->
+<button id="stt-test-btn" style="position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;background:#38bdf8;color:#000;font-weight:700;font-size:14px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 18px rgba(56,189,248,0.5);">🎤 Test STT (5s)</button>
+<script>
+(function() {
+  var btn = document.getElementById('stt-test-btn');
+  if (!btn) { console.error('[STT DEBUG] Button element not found.'); return; }
+
+  btn.addEventListener('click', function() {
+    alert('[1/8] Button clicked.');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Working…';
+
+    alert('[2/8] Requesting microphone access…');
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function(stream) {
+        alert('[3/8] Microphone granted. Starting recorder…');
+
+        var recorder = new MediaRecorder(stream);
+        var chunks   = [];
+
+        recorder.ondataavailable = function(e) {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = function() {
+          alert('[5/8] Recording stopped. Chunks collected: ' + chunks.length + '. Building blob…');
+
+          var mimeType = recorder.mimeType || 'audio/webm';
+          var blob     = new Blob(chunks, { type: mimeType });
+
+          alert('[6/8] Sending to /.netlify/functions/stt\nBlob size: ' + blob.size + ' bytes\nMIME type: ' + mimeType);
+
+          var form = new FormData();
+          form.append('audio', blob, 'test.webm');
+
+          fetch('/.netlify/functions/stt', { method: 'POST', body: form })
+            .then(function(res) {
+              alert('[7/8] Response received. HTTP status: ' + res.status + '. Parsing JSON…');
+              return res.json();
+            })
+            .then(function(data) {
+              if (data.transcript) {
+                alert('[8/8] ✅ TRANSCRIPT:\n\n"' + data.transcript + '"');
+              } else {
+                alert('[8/8] ❌ No transcript in response:\n\n' + JSON.stringify(data, null, 2));
+              }
+            })
+            .catch(function(err) {
+              alert('[ERROR] fetch() failed:\n\n' + err.message);
+            })
+            .finally(function() {
+              btn.disabled = false;
+              btn.textContent = '🎤 Test STT (5s)';
+            });
+        };
+
+        recorder.onerror = function(e) {
+          alert('[ERROR] MediaRecorder error:\n\n' + (e.error ? e.error.message : JSON.stringify(e)));
+          stream.getTracks().forEach(function(t) { t.stop(); });
+          btn.disabled = false;
+          btn.textContent = '🎤 Test STT (5s)';
+        };
+
+        recorder.start();
+        alert('[4/8] Recording started. Speak now.\n\nThe recording runs for 5 seconds in the background — tap OK and speak.');
+
+        setTimeout(function() {
+          stream.getTracks().forEach(function(t) { t.stop(); });
+          recorder.stop();
+        }, 5000);
+      })
+      .catch(function(err) {
+        alert('[ERROR] Microphone access denied or failed:\n\n' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🎤 Test STT (5s)';
+      });
+  });
+})();
+</script>
+<!-- ── END TEMPORARY STT DEBUG BUTTON ─────────────────────────────── -->
 
 </body>
 </html>
