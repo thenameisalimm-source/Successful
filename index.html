@@ -7812,15 +7812,24 @@ if ('serviceWorker' in navigator) {
           if (vc.active) setTimeout(vcStartListening, 500);
         };
 
-        // timeslice: ask the recorder to hand us data periodically WITHOUT
-        // ever stopping/restarting capture. This is what makes "rolling
-        // chunks on one continuous stream" possible.
-        recorder.start(1000);
+        // No timeslice argument: the recorder buffers internally and ONLY
+        // hands data to ondataavailable when WE explicitly call
+        // requestData() (from vcMaybeFlush, driven by the silence watcher
+        // or the backstop timer below). This is deliberate — passing a
+        // timeslice here (e.g. recorder.start(1000)) makes the browser ALSO
+        // auto-flush on its own fixed clock, which collides with the
+        // silence-triggered flush and chops audio into tiny fragments that
+        // are too small to transcribe, get dropped by the blob.size check,
+        // and produce the rapid spinner-flicker-with-empty-transcript bug.
+        // With no timeslice, requestData() is the ONLY thing that ever
+        // moves audio out of the recorder, so each flush corresponds
+        // exactly to one full segment of speech-then-pause.
+        recorder.start();
         vc.recorder  = recorder;
         vc.starting  = false;
         vc.listening = true;
 
-        vcLog('MIC:SESSION_STARTED', 'gen=' + myGen + ' continuous MediaRecorder running');
+        vcLog('MIC:SESSION_STARTED', 'gen=' + myGen + ' continuous MediaRecorder running (manual flush only)');
         vcSetStatus('listening');
 
         // Set up the silence-aware analyser and TWO complementary triggers:
