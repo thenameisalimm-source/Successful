@@ -2836,9 +2836,6 @@
         </div>
 
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
-        <!-- ── TEMP DEBUG PANEL (remove after diagnosis) ── -->
-        <div id="vcDebugPanel" style="display:none;background:rgba(0,0,0,0.55);border:1.5px solid rgba(251,191,36,0.5);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-family:monospace;font-size:0.75rem;line-height:1.7;color:#fcd34d;word-break:break-all;max-height:220px;overflow-y:auto;"></div>
-        <!-- ── END TEMP DEBUG PANEL ── -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
           <button id="vcStopBtn" class="btn-sec" style="display:none;color:#ef4444;border-color:rgba(239,68,68,0.35);">⏹ Stop</button>
@@ -7399,7 +7396,11 @@ if ('serviceWorker' in navigator) {
                            // during the current speech-then-pause cycle; 0 means
                            // we are not currently in a quiet streak (last poll
                            // was loud, or we already flushed for this streak).
-    pendingChunks: [],    // Blob parts collected since the last flush to Whisper
+    pendingChunks: [],    // Blob parts collected since the last flush (used to detect new data)
+    allChunks:     [],    // ALL Blob parts since session start — Android WebM only writes the
+                           // container header in the first ondataavailable chunk; subsequent
+                           // requestData() chunks are raw Opus frames with no header and are
+                           // rejected by Groq. Building blobs from allChunks keeps the header.
     flushTimer:    null,  // setTimeout handle for the periodic forced flush
     transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
                            // (prevents overlapping requests from racing each other)
@@ -7472,20 +7473,6 @@ if ('serviceWorker' in navigator) {
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
   var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
   var vcTranscriptCard, vcTranscriptText, vcSendBtn, vcStopBtn;
-  var vcDebugPanel; // TEMP: on-screen debug box
-
-  // TEMP: append a timestamped line to the on-screen debug panel.
-  // Shows the panel on first use. Remove this function and vcDebugPanel
-  // after the pipeline failure is identified.
-  function vcDebugLog(msg) {
-    if (!vcDebugPanel) return;
-    vcDebugPanel.style.display = 'block';
-    var ts = ((Date.now() - _vcT0) / 1000).toFixed(1) + 's';
-    var line = document.createElement('div');
-    line.textContent = '[' + ts + '] ' + msg;
-    vcDebugPanel.appendChild(line);
-    vcDebugPanel.scrollTop = vcDebugPanel.scrollHeight;
-  }
 
   // ── Helpers ─────────────────────────────────────────────────────
 
@@ -7634,6 +7621,7 @@ if ('serviceWorker' in navigator) {
       vc.stream = null;
     }
     vc.pendingChunks = [];
+    vc.allChunks     = [];
     vc.transcribeBusy = false;
 
     vcLog('MIC:SESSION_DESTROYED', 'bumped gen to ' + vc.gen + ' (was ' + (vc.gen - 1) + ') reason=' + (reason || ''));
@@ -7807,7 +7795,10 @@ if ('serviceWorker' in navigator) {
 
         recorder.ondataavailable = function(e) {
           if (myGen !== vc.gen) return; // session torn down — drop late data
-          if (e.data && e.data.size > 0) vc.pendingChunks.push(e.data);
+          if (e.data && e.data.size > 0) {
+            vc.pendingChunks.push(e.data); // tracks whether new data arrived since last flush
+            vc.allChunks.push(e.data);     // full session history — keeps WebM header intact
+          }
         };
 
         // onstop only fires when vcStopMic() (or an error) intentionally
@@ -7972,7 +7963,6 @@ if ('serviceWorker' in navigator) {
   // Skips sending while the AI is speaking (avoids transcribing the AI's
   // own voice) and skips sending if a previous chunk is still in flight.
   function vcMaybeFlush(myGen) {
-    vcDebugLog('FLUSH gen=' + myGen + '/' + vc.gen + ' rec=' + (vc.recorder ? vc.recorder.state : 'null') + ' busy=' + vc.transcribeBusy);
     if (myGen !== vc.gen || !vc.recorder) return;
     if (vc.recorder.state !== 'recording') return;
     if (vc.speaking) {
@@ -7998,32 +7988,30 @@ if ('serviceWorker' in navigator) {
     // collect-and-send by one tick so it's definitely landed in pendingChunks.
     setTimeout(function() {
       if (myGen !== vc.gen) return;
-      var chunks = vc.pendingChunks;
+      // pendingChunks tells us whether new audio arrived since the last flush.
+      var newChunks = vc.pendingChunks;
       vc.pendingChunks = [];
-      if (!chunks.length) {
-        vcDebugLog('FLUSH→ 0 chunks (recorder gave no data)');
-        return;
-      }
+      if (!newChunks.length) return;
 
-      var blob = new Blob(chunks, { type: (vc.recorder && vc.recorder.mimeType) || 'audio/webm' });
-      vcDebugLog('BLOB ' + blob.size + 'B type=' + blob.type);
+      // Build the blob from ALL chunks since session start so the WebM container
+      // header (only present in the first ondataavailable chunk on Android) is
+      // always included. Without this every blob after the first is a headerless
+      // Opus stream that Groq rejects as an invalid media file.
+      var blob = new Blob(vc.allChunks, { type: (vc.recorder && vc.recorder.mimeType) || 'audio/webm' });
       // Rough duration estimate isn't available from a Blob directly, so we
       // use byte size as a cheap proxy to skip near-empty flushes (long
       // silence produces tiny/empty blobs that aren't worth a Whisper call).
       if (blob.size < 2000) {
-        vcDebugLog('SKIP tiny blob (' + blob.size + 'B < 2000)');
         vcLog('vcMaybeFlush:skip-tiny', 'blob size=' + blob.size + ' bytes — likely silence, not sending');
         return;
       }
 
-      vcDebugLog('→ vcTranscribeChunk');
       vcTranscribeChunk(blob, myGen);
     }, 50);
   }
 
   // ── Send one rolling chunk to Whisper and append the result ───────
   function vcTranscribeChunk(blob, myGen) {
-    vcDebugLog('STT→ sending ' + blob.size + 'B');
     if (myGen !== vc.gen) return;
     vc.transcribeBusy = true;
     vc.interim = '⏳…';
@@ -8037,17 +8025,12 @@ if ('serviceWorker' in navigator) {
     form.append('language', vcResolveRecognitionLang());
 
     fetch('/.netlify/functions/stt', { method: 'POST', body: form })
-      .then(function(res) {
-        vcDebugLog('STT← HTTP ' + res.status);
-        return res.json();
-      })
+      .then(function(res) { return res.json(); })
       .then(function(data) {
-        vcDebugLog('STT← JSON: ' + JSON.stringify(data));
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return; // session ended while this was in flight
         vc.interim = '';
         var text = data && data.transcript ? data.transcript.trim() : '';
-        vcDebugLog('transcript="' + text + '"');
         if (text) {
           vc.transcript = (vc.transcript + ' ' + text).trim();
           vcLog('STT:APPEND', 'chunk transcribed: "' + text + '" — transcript now="' + vc.transcript + '"');
@@ -8057,7 +8040,6 @@ if ('serviceWorker' in navigator) {
         vcRefreshTranscriptUI();
       })
       .catch(function(err) {
-        vcDebugLog('STT← ERROR: ' + (err && err.message));
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return;
         vc.interim = '';
@@ -8292,7 +8274,6 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
-    vcDebugPanel = document.getElementById('vcDebugPanel'); // TEMP
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
