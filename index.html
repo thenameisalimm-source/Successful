@@ -2836,6 +2836,9 @@
         </div>
 
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
+        <!-- ── TEMP DEBUG PANEL (remove after diagnosis) ── -->
+        <div id="vcDebugPanel" style="display:none;background:rgba(0,0,0,0.55);border:1.5px solid rgba(251,191,36,0.5);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-family:monospace;font-size:0.75rem;line-height:1.7;color:#fcd34d;word-break:break-all;max-height:220px;overflow-y:auto;"></div>
+        <!-- ── END TEMP DEBUG PANEL ── -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
           <button id="vcStopBtn" class="btn-sec" style="display:none;color:#ef4444;border-color:rgba(239,68,68,0.35);">⏹ Stop</button>
@@ -7469,6 +7472,20 @@ if ('serviceWorker' in navigator) {
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
   var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
   var vcTranscriptCard, vcTranscriptText, vcSendBtn, vcStopBtn;
+  var vcDebugPanel; // TEMP: on-screen debug box
+
+  // TEMP: append a timestamped line to the on-screen debug panel.
+  // Shows the panel on first use. Remove this function and vcDebugPanel
+  // after the pipeline failure is identified.
+  function vcDebugLog(msg) {
+    if (!vcDebugPanel) return;
+    vcDebugPanel.style.display = 'block';
+    var ts = ((Date.now() - _vcT0) / 1000).toFixed(1) + 's';
+    var line = document.createElement('div');
+    line.textContent = '[' + ts + '] ' + msg;
+    vcDebugPanel.appendChild(line);
+    vcDebugPanel.scrollTop = vcDebugPanel.scrollHeight;
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────
 
@@ -7955,6 +7972,7 @@ if ('serviceWorker' in navigator) {
   // Skips sending while the AI is speaking (avoids transcribing the AI's
   // own voice) and skips sending if a previous chunk is still in flight.
   function vcMaybeFlush(myGen) {
+    vcDebugLog('FLUSH gen=' + myGen + '/' + vc.gen + ' rec=' + (vc.recorder ? vc.recorder.state : 'null') + ' busy=' + vc.transcribeBusy);
     if (myGen !== vc.gen || !vc.recorder) return;
     if (vc.recorder.state !== 'recording') return;
     if (vc.speaking) {
@@ -7982,23 +8000,30 @@ if ('serviceWorker' in navigator) {
       if (myGen !== vc.gen) return;
       var chunks = vc.pendingChunks;
       vc.pendingChunks = [];
-      if (!chunks.length) return;
+      if (!chunks.length) {
+        vcDebugLog('FLUSH→ 0 chunks (recorder gave no data)');
+        return;
+      }
 
       var blob = new Blob(chunks, { type: (vc.recorder && vc.recorder.mimeType) || 'audio/webm' });
+      vcDebugLog('BLOB ' + blob.size + 'B type=' + blob.type);
       // Rough duration estimate isn't available from a Blob directly, so we
       // use byte size as a cheap proxy to skip near-empty flushes (long
       // silence produces tiny/empty blobs that aren't worth a Whisper call).
       if (blob.size < 2000) {
+        vcDebugLog('SKIP tiny blob (' + blob.size + 'B < 2000)');
         vcLog('vcMaybeFlush:skip-tiny', 'blob size=' + blob.size + ' bytes — likely silence, not sending');
         return;
       }
 
+      vcDebugLog('→ vcTranscribeChunk');
       vcTranscribeChunk(blob, myGen);
     }, 50);
   }
 
   // ── Send one rolling chunk to Whisper and append the result ───────
   function vcTranscribeChunk(blob, myGen) {
+    vcDebugLog('STT→ sending ' + blob.size + 'B');
     if (myGen !== vc.gen) return;
     vc.transcribeBusy = true;
     vc.interim = '⏳…';
@@ -8012,12 +8037,17 @@ if ('serviceWorker' in navigator) {
     form.append('language', vcResolveRecognitionLang());
 
     fetch('/.netlify/functions/stt', { method: 'POST', body: form })
-      .then(function(res) { return res.json(); })
+      .then(function(res) {
+        vcDebugLog('STT← HTTP ' + res.status);
+        return res.json();
+      })
       .then(function(data) {
+        vcDebugLog('STT← JSON: ' + JSON.stringify(data));
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return; // session ended while this was in flight
         vc.interim = '';
         var text = data && data.transcript ? data.transcript.trim() : '';
+        vcDebugLog('transcript="' + text + '"');
         if (text) {
           vc.transcript = (vc.transcript + ' ' + text).trim();
           vcLog('STT:APPEND', 'chunk transcribed: "' + text + '" — transcript now="' + vc.transcript + '"');
@@ -8027,6 +8057,7 @@ if ('serviceWorker' in navigator) {
         vcRefreshTranscriptUI();
       })
       .catch(function(err) {
+        vcDebugLog('STT← ERROR: ' + (err && err.message));
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return;
         vc.interim = '';
@@ -8261,6 +8292,7 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
+    vcDebugPanel = document.getElementById('vcDebugPanel'); // TEMP
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
