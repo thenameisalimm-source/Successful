@@ -7930,18 +7930,10 @@ if ('serviceWorker' in navigator) {
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
       if (errorHandled) return;    // onerror already decided what happens next
-      // Recognition ended on its own (not via our abort, not via an error).
-      // Android Chrome fires clean onend every few seconds even with continuous=true.
-      //
-      // FIX: Do NOT try rec.start() on an ended instance — on Android Chrome it
-      // always throws InvalidStateError after onend, which caused the fallback
-      // vcStartListening() to run anyway but with vc.starting left dirty in some
-      // race paths, eventually locking the mic in an on/off click loop.
-      //
-      // Instead: always use vcStartListening() which is fully guarded. Use a
-      // 300ms debounce (up from 150ms) to let any concurrent callbacks settle.
-      // The duplicate-start guard inside vcStartListening (starting||listening check)
-      // makes it safe to call from multiple paths.
+      // Clear the dead instance reference so vcStopMic inside vcStartListening
+      // finds vc.rec === null and skips the abort() call — preventing an
+      // unnecessary mic hardware release on an already-ended recognizer.
+      vc.rec = null;
       var _schedGen = myGen;
       setTimeout(function() {
         if (_schedGen !== vc.gen) { vcLog('onend:restart:stale', 'gen ' + _schedGen); return; }
