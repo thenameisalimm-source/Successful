@@ -7642,6 +7642,30 @@ if ('serviceWorker' in navigator) {
     var myGen = vc.gen;     // this instance's generation — captured for every handler below
     vc.starting = true;
 
+    // ── Stuck-starting watchdog ───────────────────────────────────
+    // If vc.starting is still true after 4 seconds for THIS generation,
+    // the recognizer silently failed (e.g. onstart never fired on Android).
+    // Reset and retry once so the UI never locks in a permanent "off" state.
+    ;(function(wdGen) {
+      setTimeout(function() {
+        if (wdGen !== vc.gen) return;          // a newer generation took over — fine
+        if (!vc.active) return;               // user stopped voice chat
+        if (!vc.starting) return;             // onstart fired normally — fine
+        // Still stuck in starting. Force a clean reset.
+        vcLog('vcStartListening:watchdog', 'gen=' + wdGen + ' stuck in starting after 4s — forcing reset');
+        vc.starting = false;
+        vc.listening = false;
+        if (vc.rec) { try { vc.rec.abort(); } catch(e){} vc.rec = null; }
+        // Small delay then retry once.
+        setTimeout(function() {
+          if (wdGen !== vc.gen) return;
+          if (!vc.active || vc.speaking) return;
+          vcLog('vcStartListening:watchdog:retry', 'gen=' + wdGen + ' retrying after reset');
+          vcStartListening();
+        }, 500);
+      }, 4000);
+    })(myGen);
+
     var rec;
     try {
       rec = new SR();
@@ -7844,41 +7868,40 @@ if ('serviceWorker' in navigator) {
           vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
           return;
         case 'no-speech':
-          // Android Chrome fires no-speech every ~5-7 seconds (browser silence
-          // timeout) even with continuous=true, which forces a new recognizer
-          // instance. Each new instance causes vcStopMic → r.abort() which
-          // releases the mic hardware, producing an audible stop/start click.
+          // Android Chrome fires no-speech every ~5-7 seconds of silence even
+          // with continuous=true. Per spec, onerror fires BEFORE onend for the
+          // same event. This means the instance is still alive at this point —
+          // onend has NOT fired yet.
           //
-          // Fix: after no-speech the recognizer is already ended (per spec onend
-          // fires right after onerror), but the SAME instance can be re-started
-          // with .start() instead of being aborted and replaced.  We skip
-          // vcStartListening (which always tears down via vcStopMic) and instead
-          // call .start() directly on the still-valid rec object.  The existing
-          // generation, vc.rec reference, and all handler closures remain live —
-          // no new instance is created, no mic hardware release occurs.
+          // KEY INSIGHT: calling _rec.start() here (during onerror, before onend)
+          // re-arms the SAME instance while it is still valid. The mic hardware
+          // is never released. errorHandled stays true so the onend that follows
+          // immediately after becomes a no-op.
           //
-          // Fallback: if rec is somehow already gone, do a normal restart.
-          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" silence timeout — re-arming same instance (no abort)');
+          // This eliminates the hardware mic release click entirely for the
+          // no-speech case. vcStartListening (which tears down via abort) is only
+          // used as a fallback if the instance somehow can't be re-armed.
+          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" — re-arming same instance before onend fires');
           if (vc.active) {
-            var _rec = rec; // close over THIS instance (myGen already captured)
-            setTimeout(function() {
-              if (myGen !== vc.gen) { vcLog('no-speech:restart:stale', 'gen ' + myGen); return; }
-              if (!vc.active || vc.speaking) return;
-              // Try to re-arm the existing instance without tearing down the mic.
-              try {
-                vc.starting  = true;
-                vc.listening = false;
-                errorHandled = false; // reset so the next onend can still restart if needed
-                _rec.start();
-                vcLog('no-speech:restart:reused', 'gen=' + myGen + ' same instance re-started');
-              } catch (startErr) {
-                // Instance is unusable (e.g. InvalidStateError) — fall back to
-                // a full recreate.  vcStartListening handles all the teardown.
-                vc.starting = false;
-                vcLog('no-speech:restart:fallback', 'gen=' + myGen + ' re-start threw: ' + startErr.message + ' — full restart');
+            try {
+              vc.starting  = true;
+              vc.listening = false;
+              // errorHandled stays true — onend fires next and must be a no-op
+              rec.start();
+              vcLog('no-speech:rearm:ok', 'gen=' + myGen + ' instance re-started before onend');
+            } catch (startErr) {
+              // Instance was already dead (shouldn't happen here, but be safe).
+              vc.starting = false;
+              vcLog('no-speech:rearm:fallback', 'gen=' + myGen + ' threw: ' + startErr.message + ' — full restart after onend');
+              // errorHandled is already true so onend won't restart.
+              // Schedule our own clean restart after onend has had time to fire.
+              var _nspGen = myGen;
+              setTimeout(function() {
+                if (_nspGen !== vc.gen) return;
+                if (!vc.active || vc.speaking || vc.starting || vc.listening) return;
                 vcStartListening();
-              }
-            }, 100);
+              }, 300);
+            }
           }
           return;
         case 'language-not-supported':
@@ -7901,17 +7924,35 @@ if ('serviceWorker' in navigator) {
       vc.starting  = false;
       var wasListening = vc.listening;
       vc.listening = false;
+      // Mark this instance as dead so no-speech handler won't try to re-arm it.
+      rec._ended = true;
       vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
       if (!vc.active) return;
       if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
       if (errorHandled) return;    // onerror already decided what happens next
       // Recognition ended on its own (not via our abort, not via an error).
-      // Even with continuous=true, some engines still end the session on a
-      // short pause — that's fine, it does NOT mean the user is done
-      // talking (only the Send button means that). We just seamlessly start
-      // a fresh recognizer instance; vc.transcript keeps accumulating
-      // across instances and is only submitted when the user taps Send.
-      setTimeout(vcStartListening, 250);
+      // Android Chrome fires clean onend every few seconds even with continuous=true.
+      //
+      // FIX: Do NOT try rec.start() on an ended instance — on Android Chrome it
+      // always throws InvalidStateError after onend, which caused the fallback
+      // vcStartListening() to run anyway but with vc.starting left dirty in some
+      // race paths, eventually locking the mic in an on/off click loop.
+      //
+      // Instead: always use vcStartListening() which is fully guarded. Use a
+      // 300ms debounce (up from 150ms) to let any concurrent callbacks settle.
+      // The duplicate-start guard inside vcStartListening (starting||listening check)
+      // makes it safe to call from multiple paths.
+      var _schedGen = myGen;
+      setTimeout(function() {
+        if (_schedGen !== vc.gen) { vcLog('onend:restart:stale', 'gen ' + _schedGen); return; }
+        if (!vc.active || vc.speaking) return;
+        if (vc.starting || vc.listening) {
+          vcLog('onend:restart:already-active', 'gen ' + _schedGen + ' — skip, already starting/listening');
+          return;
+        }
+        vcLog('onend:restart:new-instance', 'gen=' + _schedGen + ' — full restart (clean path)');
+        vcStartListening();
+      }, 300);
     };
 
     vc.rec = rec;
