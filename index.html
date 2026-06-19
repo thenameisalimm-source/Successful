@@ -7396,11 +7396,6 @@ if ('serviceWorker' in navigator) {
                            // during the current speech-then-pause cycle; 0 means
                            // we are not currently in a quiet streak (last poll
                            // was loud, or we already flushed for this streak).
-    pendingChunks: [],    // Blob parts collected since the last flush (used to detect new data)
-    allChunks:     [],    // ALL Blob parts since session start — Android WebM only writes the
-                           // container header in the first ondataavailable chunk; subsequent
-                           // requestData() chunks are raw Opus frames with no header and are
-                           // rejected by Groq. Building blobs from allChunks keeps the header.
     flushTimer:    null,  // setTimeout handle for the periodic forced flush
     transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
                            // (prevents overlapping requests from racing each other)
@@ -7620,8 +7615,6 @@ if ('serviceWorker' in navigator) {
       try { vc.stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
       vc.stream = null;
     }
-    vc.pendingChunks = [];
-    vc.allChunks     = [];
     vc.transcribeBusy = false;
 
     vcLog('MIC:SESSION_DESTROYED', 'bumped gen to ' + vc.gen + ' (was ' + (vc.gen - 1) + ') reason=' + (reason || ''));
@@ -7678,10 +7671,6 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
-    // Clear out anything buffered-but-unsent so the next chunk starts clean —
-    // the recorder itself is NOT stopped or restarted.
-    vc.pendingChunks = [];
-
     vcSetStatus('processing');
 
     var inp = document.getElementById('chatInput');
@@ -7734,19 +7723,18 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── Start the ONE continuous mic session for this voice chat ─────
-  // Opens getUserMedia exactly once and creates exactly one MediaRecorder
-  // that stays alive for the entire Voice Chat session. There is no restart
-  // loop, no watchdog, and no no-speech recovery path — silence of any
-  // length (10s, 20s, 45s+) simply produces flushes with little or no new
-  // audio; it never tears down or recreates the recorder. The session ends
-  // ONLY via vcStopMic(), which is called by vcStop()/vcStopSpeaking()-driven
-  // teardown, or an unrecoverable getUserMedia error.
+  // Opens getUserMedia exactly once for the whole voice session. The stream
+  // stays open until vcStopMic() tears it down — no repeated permission
+  // prompts. Each audio segment is captured by a short-lived MediaRecorder
+  // that is stopped to finalise a complete, valid WebM file, sent to Groq,
+  // then a fresh recorder is immediately started on the same stream.
+  // This is required because requestData() only writes the WebM container
+  // header into the very first ondataavailable chunk; every subsequent chunk
+  // is a raw headerless Opus stream that Groq rejects as an invalid file.
+  // Calling recorder.stop() always produces a complete, self-contained file.
   function vcStartListening() {
     if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
 
-    // Duplicate-start guard. Without this, overlapping callers could each
-    // try to open a second mic session while one is already starting or
-    // already running.
     if (vc.starting || vc.listening) {
       vcLog('vcStartListening:skip', 'already starting=' + vc.starting + ' listening=' + vc.listening);
       return;
@@ -7767,87 +7755,27 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    var myGen = vc.gen;     // this session's generation — captured for every async callback below
+    var myGen = vc.gen;
     vc.starting = true;
 
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(function(stream) {
         if (myGen !== vc.gen) {
-          // vc was stopped/restarted while permission was pending — discard.
           vcLog('vcStartListening:stale-stream', 'gen ' + myGen + ' — closing unused stream');
           try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
           return;
         }
 
-        vc.stream = stream;
-
-        var recorder;
-        try {
-          recorder = new MediaRecorder(stream);
-        } catch (e) {
-          vcLog('vcStartListening:fatal', 'MediaRecorder constructor threw: ' + e.message);
-          vc.starting = false;
-          try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e2) {}
-          vcSetStatus('error');
-          vcStop();
-          return;
-        }
-
-        recorder.ondataavailable = function(e) {
-          if (myGen !== vc.gen) return; // session torn down — drop late data
-          if (e.data && e.data.size > 0) {
-            vc.pendingChunks.push(e.data); // tracks whether new data arrived since last flush
-            vc.allChunks.push(e.data);     // full session history — keeps WebM header intact
-          }
-        };
-
-        // onstop only fires when vcStopMic() (or an error) intentionally
-        // stops the recorder — never on its own due to silence, since
-        // nothing in this file calls recorder.stop() except vcStopMic().
-        recorder.onstop = function() {
-          vcLog('MIC:RECORDER_STOPPED', 'gen=' + myGen + ' (session end or teardown)');
-        };
-
-        recorder.onerror = function(e) {
-          if (myGen !== vc.gen) return;
-          vcLog('MIC:RECORDER_ERROR', (e && e.error && e.error.message) || 'unknown recorder error');
-          if (typeof toast === 'function') toast('⚠️ Recording error — restarting mic');
-          vcSetStatus('error');
-          // Recover by tearing down and opening a fresh session — this is
-          // the ONLY restart path left, and it only fires on a genuine
-          // MediaRecorder fault, never on silence or a pause.
-          vcStopMic('recorder-error');
-          if (vc.active) setTimeout(vcStartListening, 500);
-        };
-
-        // No timeslice argument: the recorder buffers internally and ONLY
-        // hands data to ondataavailable when WE explicitly call
-        // requestData() (from vcMaybeFlush, driven by the silence watcher
-        // or the backstop timer below). This is deliberate — passing a
-        // timeslice here (e.g. recorder.start(1000)) makes the browser ALSO
-        // auto-flush on its own fixed clock, which collides with the
-        // silence-triggered flush and chops audio into tiny fragments that
-        // are too small to transcribe, get dropped by the blob.size check,
-        // and produce the rapid spinner-flicker-with-empty-transcript bug.
-        // With no timeslice, requestData() is the ONLY thing that ever
-        // moves audio out of the recorder, so each flush corresponds
-        // exactly to one full segment of speech-then-pause.
-        recorder.start();
-        vc.recorder  = recorder;
+        vc.stream    = stream;
         vc.starting  = false;
         vc.listening = true;
 
-        vcLog('MIC:SESSION_STARTED', 'gen=' + myGen + ' continuous MediaRecorder running (manual flush only)');
+        vcLog('MIC:STREAM_OPEN', 'gen=' + myGen + ' — starting recorder cycle');
         vcSetStatus('listening');
 
-        // Set up the silence-aware analyser and TWO complementary triggers:
-        // a fast silence-watcher (flushes almost immediately after the user
-        // stops talking) and a slower backstop timer (guarantees a flush
-        // even if the analyser is unavailable). Neither ever stops the
-        // recorder — they only decide when to call requestData().
         vcSetupAnalyser(stream, myGen);
         vcStartSilenceWatcher(myGen);
-        vcScheduleFlush(myGen);
+        vcCycleRecorder(myGen);
       })
       .catch(function(err) {
         if (myGen !== vc.gen) return;
@@ -7857,6 +7785,70 @@ if ('serviceWorker' in navigator) {
         vcSetStatus('error');
         vcStop();
       });
+  }
+
+  // Starts one fresh MediaRecorder on the already-open vc.stream.
+  // When vcMaybeFlush() calls recorder.stop(), ondataavailable delivers a
+  // complete valid WebM file, onstop sends it to Groq, then calls
+  // vcCycleRecorder() again to begin the next segment immediately.
+  // The microphone stream is never stopped or re-requested here.
+  function vcCycleRecorder(myGen) {
+    if (myGen !== vc.gen || !vc.active || !vc.stream) return;
+
+    var recorder;
+    try {
+      recorder = new MediaRecorder(vc.stream);
+    } catch (e) {
+      vcLog('vcCycleRecorder:fatal', 'MediaRecorder constructor threw: ' + e.message);
+      vcSetStatus('error');
+      vcStop();
+      return;
+    }
+
+    var segChunks = [];
+
+    recorder.ondataavailable = function(e) {
+      if (e.data && e.data.size > 0) segChunks.push(e.data);
+    };
+
+    recorder.onstop = function() {
+      if (myGen !== vc.gen) return; // session ended while this segment was stopping
+      vcLog('MIC:SEGMENT_DONE', 'gen=' + myGen + ' chunks=' + segChunks.length);
+
+      var mimeType = recorder.mimeType || 'audio/webm';
+      var blob = new Blob(segChunks, { type: mimeType });
+      segChunks = [];
+
+      // Start next recorder immediately so we capture audio while this
+      // segment is being transcribed — no gap in mic coverage.
+      vcCycleRecorder(myGen);
+
+      if (blob.size < 2000) {
+        vcLog('MIC:SKIP_TINY', 'blob=' + blob.size + 'B — silence segment, skipping STT');
+        return;
+      }
+
+      if (vc.speaking) {
+        vcLog('MIC:SKIP_SPEAKING', 'AI speaking — discarding segment');
+        return;
+      }
+
+      vcTranscribeChunk(blob, myGen);
+    };
+
+    recorder.onerror = function(e) {
+      if (myGen !== vc.gen) return;
+      vcLog('MIC:RECORDER_ERROR', (e && e.error && e.error.message) || 'unknown recorder error');
+      vcCycleRecorder(myGen); // try a fresh recorder on the same stream
+    };
+
+    recorder.start();
+    vc.recorder = recorder;
+    vcLog('MIC:RECORDER_STARTED', 'gen=' + myGen);
+
+    // Schedule the stop for this segment after FLUSH_INTERVAL_MS.
+    // The silence watcher may call vcMaybeFlush() earlier to stop sooner.
+    vcScheduleFlush(myGen);
   }
 
   // ── Silence-aware analyser (advisory only) ───────────────────────
@@ -7941,73 +7933,45 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── Backstop flush scheduler ──────────────────────────────────────
-  // Fires every FLUSH_INTERVAL_MS for the life of the session as a SAFETY
-  // NET alongside the faster silence-watcher above — guarantees a flush
-  // even on a device where the AudioContext/analyser fails to initialize,
-  // or during continuous speech with no pause long enough to trigger the
-  // silence watcher. This is what replaces "restart on silence" entirely;
-  // silence just means a flush sends a small/empty chunk and reschedules —
-  // the mic itself never stops or restarts.
+  // Called by vcCycleRecorder() each time a new recorder segment starts.
+  // After FLUSH_INTERVAL_MS it stops the recorder via vcMaybeFlush(), which
+  // triggers onstop → send → vcCycleRecorder() → vcScheduleFlush() for the
+  // next segment. The silence watcher may call vcMaybeFlush() sooner, which
+  // also triggers the same cycle; the flushTimer is cancelled in vcStopMic()
+  // so it never fires after the session ends.
   function vcScheduleFlush(myGen) {
     if (myGen !== vc.gen) return;
+    if (vc.flushTimer) clearTimeout(vc.flushTimer);
     vc.flushTimer = setTimeout(function() {
       if (myGen !== vc.gen || !vc.active) return;
       vcMaybeFlush(myGen);
-      vcScheduleFlush(myGen); // reschedule regardless of whether this tick flushed
+      // No reschedule here — vcCycleRecorder() calls vcScheduleFlush() for
+      // the next segment once the current recorder has stopped.
     }, FLUSH_INTERVAL_MS);
   }
 
-  // Asks the MediaRecorder to deliver its buffered data now (via
-  // requestData(), which does NOT stop or pause recording — capture
-  // continues uninterrupted) and, once it arrives, sends it to Whisper.
-  // Skips sending while the AI is speaking (avoids transcribing the AI's
-  // own voice) and skips sending if a previous chunk is still in flight.
+  // Stops the current recorder segment so the browser finalises a complete,
+  // valid WebM file in ondataavailable. The recorder's onstop handler in
+  // vcCycleRecorder() sends that file to Groq and immediately starts the
+  // next recorder on the same stream — no gap in mic coverage, no permission
+  // re-prompt. Skipped when the AI is speaking or a chunk is already in flight.
   function vcMaybeFlush(myGen) {
     if (myGen !== vc.gen || !vc.recorder) return;
     if (vc.recorder.state !== 'recording') return;
     if (vc.speaking) {
-      vcLog('vcMaybeFlush:skip', 'AI speaking — pausing transcription, mic stays open');
+      vcLog('vcMaybeFlush:skip', 'AI speaking — segment will be discarded in onstop');
       return;
     }
     if (vc.transcribeBusy) {
       vcLog('vcMaybeFlush:skip', 'previous chunk still transcribing');
       return;
     }
-
-    // requestData() flushes whatever has been buffered to ondataavailable
-    // WITHOUT stopping the recorder. We snapshot+clear vc.pendingChunks a
-    // tick later so this flush's data is isolated from the next one.
+    vcLog('vcMaybeFlush:stop', 'stopping recorder to finalise segment');
     try {
-      vc.recorder.requestData();
+      vc.recorder.stop();
     } catch (e) {
-      vcLog('vcMaybeFlush:requestData:failed', e.message);
-      return;
+      vcLog('vcMaybeFlush:stop:failed', e.message);
     }
-
-    // requestData()'s dataavailable fires synchronously-ish; defer the
-    // collect-and-send by one tick so it's definitely landed in pendingChunks.
-    setTimeout(function() {
-      if (myGen !== vc.gen) return;
-      // pendingChunks tells us whether new audio arrived since the last flush.
-      var newChunks = vc.pendingChunks;
-      vc.pendingChunks = [];
-      if (!newChunks.length) return;
-
-      // Build the blob from ALL chunks since session start so the WebM container
-      // header (only present in the first ondataavailable chunk on Android) is
-      // always included. Without this every blob after the first is a headerless
-      // Opus stream that Groq rejects as an invalid media file.
-      var blob = new Blob(vc.allChunks, { type: (vc.recorder && vc.recorder.mimeType) || 'audio/webm' });
-      // Rough duration estimate isn't available from a Blob directly, so we
-      // use byte size as a cheap proxy to skip near-empty flushes (long
-      // silence produces tiny/empty blobs that aren't worth a Whisper call).
-      if (blob.size < 2000) {
-        vcLog('vcMaybeFlush:skip-tiny', 'blob size=' + blob.size + ' bytes — likely silence, not sending');
-        return;
-      }
-
-      vcTranscribeChunk(blob, myGen);
-    }, 50);
   }
 
   // ── Send one rolling chunk to Whisper and append the result ───────
