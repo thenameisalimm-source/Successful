@@ -7392,6 +7392,10 @@ if ('serviceWorker' in navigator) {
     audioCtx:      null,  // AudioContext used purely for silence-aware chunk flushing
     analyser:      null,  // AnalyserNode reading mic volume to find a good flush point
     silenceTimer:  null,  // rAF/poll handle for the silence watcher
+    quietSince:    0,     // timestamp (ms) when the mic first read as "quiet"
+                           // during the current speech-then-pause cycle; 0 means
+                           // we are not currently in a quiet streak (last poll
+                           // was loud, or we already flushed for this streak).
     pendingChunks: [],    // Blob parts collected since the last flush to Whisper
     flushTimer:    null,  // setTimeout handle for the periodic forced flush
     transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
@@ -7437,20 +7441,30 @@ if ('serviceWorker' in navigator) {
   };
 
   // ── Tuning constants for the continuous chunk pipeline ───────────
-  // FLUSH_INTERVAL_MS: how often we ask the (still-running) MediaRecorder
-  // for the audio captured so far, regardless of silence — this is the
-  // "rolling chunk" cadence. It does NOT stop or restart recording; it just
-  // periodically hands buffered data off to Whisper while capture continues.
-  var FLUSH_INTERVAL_MS = 6000;
+  // FLUSH_INTERVAL_MS: backstop cadence — how often we ask the
+  // (still-running) MediaRecorder for buffered audio regardless of silence
+  // detection. This is the ceiling on latency when, for whatever reason, the
+  // silence watcher below doesn't fire (e.g. analyser unavailable). It does
+  // NOT stop or restart recording; it just periodically hands buffered data
+  // off to Whisper while capture continues.
+  var FLUSH_INTERVAL_MS = 2000;
   // MIN_CHUNK_MS: don't bother sending a flush to Whisper if less than this
   // much audio has been captured since the last flush (avoids spamming the
   // STT endpoint with near-empty clips during long pauses).
   var MIN_CHUNK_MS = 800;
-  // SILENCE_RMS_THRESHOLD / SILENCE_HOLD_MS are used only to prefer flushing
-  // on a natural lull rather than mid-word — they never stop the recorder
-  // and a long silence (10s, 20s, 45s+) simply means flushes keep firing on
-  // their normal timer with little/no new audio, which is harmless.
+  // SILENCE_RMS_THRESHOLD: mic volume below this is treated as "quiet".
+  // SILENCE_POLL_MS: how often the analyser is sampled while listening —
+  // this drives the FAST path (flush right after the user stops talking)
+  // rather than waiting for the slower backstop timer above.
+  // SILENCE_HOLD_MS: how long the mic must stay quiet before we treat it as
+  // "they paused" and flush — long enough to not cut off a word mid-syllable,
+  // short enough that the transcript catches up almost immediately after a
+  // sentence ends. None of this ever stops the recorder; a silence of any
+  // length (10s, 20s, 45s+) just means the silence-flush fires once shortly
+  // after speech stops, then nothing else happens until speech resumes.
   var SILENCE_RMS_THRESHOLD = 0.02;
+  var SILENCE_POLL_MS = 250;
+  var SILENCE_HOLD_MS = 600;
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
   var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
@@ -7584,7 +7598,8 @@ if ('serviceWorker' in navigator) {
     vc.starting  = false;
 
     if (vc.flushTimer) { clearTimeout(vc.flushTimer); vc.flushTimer = null; }
-    if (vc.silenceTimer) { cancelAnimationFrame(vc.silenceTimer); vc.silenceTimer = null; }
+    if (vc.silenceTimer) { clearInterval(vc.silenceTimer); vc.silenceTimer = null; }
+    vc.quietSince = 0;
 
     if (vc.recorder) {
       try {
@@ -7808,9 +7823,13 @@ if ('serviceWorker' in navigator) {
         vcLog('MIC:SESSION_STARTED', 'gen=' + myGen + ' continuous MediaRecorder running');
         vcSetStatus('listening');
 
-        // Set up the silence-aware analyser (advisory only — never stops
-        // the recorder) and the periodic forced-flush timer.
+        // Set up the silence-aware analyser and TWO complementary triggers:
+        // a fast silence-watcher (flushes almost immediately after the user
+        // stops talking) and a slower backstop timer (guarantees a flush
+        // even if the analyser is unavailable). Neither ever stops the
+        // recorder — they only decide when to call requestData().
         vcSetupAnalyser(stream, myGen);
+        vcStartSilenceWatcher(myGen);
         vcScheduleFlush(myGen);
       })
       .catch(function(err) {
@@ -7866,11 +7885,52 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── Periodic flush scheduler ──────────────────────────────────────
-  // Fires every FLUSH_INTERVAL_MS for the life of the session and asks the
-  // (still-running) recorder for whatever has been buffered. This is what
-  // replaces "restart on silence" — silence just means the flush sends a
-  // small/empty chunk and reschedules; the mic itself never stops.
+  // ── Fast path: flush as soon as the user pauses ──────────────────
+  // Polls mic volume every SILENCE_POLL_MS. The moment a quiet streak holds
+  // for SILENCE_HOLD_MS, triggers vcMaybeFlush() immediately instead of
+  // waiting for the slower vcScheduleFlush() backstop. This is what makes
+  // the transcript catch up right after a sentence ends rather than lagging
+  // up to a full backstop interval behind. It NEVER stops the recorder —
+  // during a long pause (10s, 20s, 45s+) it simply fires the flush once
+  // when the pause begins, then sits idle (quietSince stays set, so the
+  // "already quiet" streak doesn't re-trigger) until speech resumes and
+  // goes quiet again.
+  function vcStartSilenceWatcher(myGen) {
+    if (myGen !== vc.gen) return;
+    if (vc.silenceTimer) { clearInterval(vc.silenceTimer); vc.silenceTimer = null; }
+    vc.quietSince = 0;
+    vc.silenceTimer = setInterval(function() {
+      if (myGen !== vc.gen || !vc.active) return;
+      if (vc.speaking || vc.transcribeBusy) { vc.quietSince = 0; return; }
+
+      var quiet = vcIsQuietNow();
+      var now = Date.now();
+      if (!quiet) {
+        vc.quietSince = 0; // still talking — reset the streak
+        return;
+      }
+      if (!vc.quietSince) {
+        vc.quietSince = now; // just went quiet — start timing the streak
+        return;
+      }
+      if (now - vc.quietSince >= SILENCE_HOLD_MS) {
+        // Held quiet long enough — flush now, then wait for the NEXT speech
+        // → quiet transition before flushing again (avoids re-flushing an
+        // already-empty buffer every poll tick during a long pause).
+        vc.quietSince = 0;
+        vcMaybeFlush(myGen);
+      }
+    }, SILENCE_POLL_MS);
+  }
+
+  // ── Backstop flush scheduler ──────────────────────────────────────
+  // Fires every FLUSH_INTERVAL_MS for the life of the session as a SAFETY
+  // NET alongside the faster silence-watcher above — guarantees a flush
+  // even on a device where the AudioContext/analyser fails to initialize,
+  // or during continuous speech with no pause long enough to trigger the
+  // silence watcher. This is what replaces "restart on silence" entirely;
+  // silence just means a flush sends a small/empty chunk and reschedules —
+  // the mic itself never stops or restarts.
   function vcScheduleFlush(myGen) {
     if (myGen !== vc.gen) return;
     vc.flushTimer = setTimeout(function() {
