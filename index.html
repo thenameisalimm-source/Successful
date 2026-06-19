@@ -2279,7 +2279,7 @@
   }
   .vc-stop-speech-btn:hover  { background: rgba(255,255,255,0.13); transform: scale(1.06); }
   .vc-stop-speech-btn:active { transform: scale(0.94); }
-  .vc-stop-speech-btn.dim    { opacity: 0.35; pointer-events: none; }
+  .vc-stop-speech-btn.dim    { opacity: 0.35; }
 
   /* Button labels */
   .vc-btn-group {
@@ -2765,7 +2765,7 @@
           <div class="vc-avatar-wrap">
             <div class="vc-avatar-ring" id="vcUiRing"></div>
             <div class="vc-avatar-inner">
-              <div class="vc-avatar-face">🤖</div>
+              <div class="vc-avatar-face"><img src="" id="vcUiAvatarImg" alt="ALEEM AI" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;"></div>
             </div>
             <div class="vc-pulse-rings hidden" id="vcUiPulse">
               <span></span><span></span><span></span>
@@ -8056,6 +8056,13 @@ if ('serviceWorker' in navigator) {
         vc.langPref = vcLangSelect.value;
         try { lss('aleem_vc_lang', vc.langPref); } catch (e) {}
         vcLog('vcLangSelect:change', 'langPref="' + vc.langPref + '"');
+        // [FIX] If Voice Chat is active, restart the recognizer immediately
+        // so the new language takes effect without requiring End Call.
+        // Transcript is preserved (vcStopMic only stops the recognizer instance).
+        if (vc.active && (vc.listening || vc.starting)) {
+          vcStopMic('lang-change');
+          vcStartListening();
+        }
       });
     }
 
@@ -8125,6 +8132,12 @@ if ('serviceWorker' in navigator) {
       var uiEndBtn      = document.getElementById('vcUiEndBtn');
       var uiStopSpeech  = document.getElementById('vcUiStopSpeechBtn');
       var vcInstr       = document.getElementById('vcInstructions');
+
+      // Set avatar to ALEEM_LOGO_SRC (the base64 PNG used throughout the app)
+      var uiAvatarImg = document.getElementById('vcUiAvatarImg');
+      if (uiAvatarImg && typeof ALEEM_LOGO_SRC === 'string' && ALEEM_LOGO_SRC) {
+        uiAvatarImg.src = ALEEM_LOGO_SRC;
+      }
 
       // ── State ────────────────────────────────────────────────────
       var timerSec  = 0;
@@ -8312,9 +8325,7 @@ if ('serviceWorker' in navigator) {
       // ── Stop-speech proxy button — calls existing vcStopSpeaking ──
       if (uiStopSpeech) {
         uiStopSpeech.addEventListener('click', function() {
-          if (!uiStopSpeech.classList.contains('dim')) {
-            if (typeof vcStopSpeaking === 'function') vcStopSpeaking();
-          }
+          if (typeof vcStopSpeaking === 'function') vcStopSpeaking();
         });
       }
 
