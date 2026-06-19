@@ -8458,5 +8458,34 @@ if ('serviceWorker' in navigator) {
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
+<!-- ── TEMPORARY STT TEST BUTTON — remove after verification ──────── -->
+<button id="stt-test-btn" onclick="(async()=>{
+  const btn=document.getElementById('stt-test-btn');
+  btn.disabled=true; btn.textContent='⏺ Recording…';
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const recorder=new MediaRecorder(stream);
+    const chunks=[];
+    recorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+    recorder.start();
+    await new Promise(r=>setTimeout(r,5000));
+    recorder.stop();
+    await new Promise(r=>recorder.onstop=r);
+    stream.getTracks().forEach(t=>t.stop());
+    btn.textContent='⏳ Sending…';
+    const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
+    const form=new FormData();
+    form.append('audio',blob,'test.webm');
+    const res=await fetch('/.netlify/functions/stt',{method:'POST',body:form});
+    const data=await res.json();
+    alert(data.transcript?'✅ STT RESULT:\n\n\"'+data.transcript+'\"':'❌ ERROR:\n\n'+JSON.stringify(data,null,2));
+  }catch(err){
+    alert('❌ EXCEPTION:\n\n'+err.message);
+  }finally{
+    btn.disabled=false; btn.textContent='🎤 Test STT (5s)';
+  }
+})()" style="position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;background:#38bdf8;color:#000;font-weight:700;font-size:14px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 18px rgba(56,189,248,0.5);">🎤 Test STT (5s)</button>
+<!-- ── END TEMPORARY STT TEST BUTTON ──────────────────────────────── -->
+
 </body>
 </html>
