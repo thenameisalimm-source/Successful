@@ -5577,26 +5577,92 @@ function updateVoiceBtn() {
 }
 
 function toggleMic() { S.micOn ? stopMic() : startMic(); }
+
+// ── STT via Groq Whisper (/.netlify/functions/stt) ────────────────
+// S.mic now holds the MediaRecorder instance when recording.
+// S.micStream holds the raw MediaStream so we can stop tracks cleanly.
 function startMic() {
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('⚠️ Voice input not supported in this browser'); return; }
-  S.mic = new SR();
-  S.mic.continuous = false; S.mic.interimResults = false; S.mic.lang = 'en-US';
-  S.mic.onresult = function(e) {
-    document.getElementById('chatInput').value = e.results[0][0].transcript;
-    stopMic(); handleSend();
-  };
-  S.mic.onerror = stopMic; S.mic.onend = stopMic;
-  S.mic.start();
-  S.micOn = true;
-  document.getElementById('micBtn').classList.add('rec');
-  toast('🎤 Listening… speak now');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('⚠️ Microphone not supported in this browser'); return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(function(stream) {
+      S.micStream = stream;
+      var chunks  = [];
+      var recorder = new MediaRecorder(stream);
+
+      recorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = function() {
+        // Stop all tracks so mic indicator light goes off
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        S.micOn = false;
+        var btn = document.getElementById('micBtn');
+        if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
+
+        if (!chunks.length) { toast('⚠️ No audio captured'); return; }
+
+        var mimeType = recorder.mimeType || 'audio/webm';
+        var blob     = new Blob(chunks, { type: mimeType });
+
+        // Show "transcribing" state
+        var inputEl = document.getElementById('chatInput');
+        var prev    = inputEl ? inputEl.value : '';
+        if (inputEl) inputEl.placeholder = '⏳ Transcribing…';
+        toast('⏳ Transcribing…');
+
+        var form = new FormData();
+        form.append('audio', blob, 'audio.webm');
+
+        fetch('/.netlify/functions/stt', { method: 'POST', body: form })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (inputEl) inputEl.placeholder = 'Ask ALEEM AI…';
+            if (data.transcript && data.transcript.trim()) {
+              if (inputEl) inputEl.value = data.transcript.trim();
+              handleSend(); // auto-send the transcribed message
+            } else {
+              if (inputEl) inputEl.value = prev;
+              toast('⚠️ Could not transcribe audio. Please try again.');
+            }
+          })
+          .catch(function(err) {
+            if (inputEl) { inputEl.placeholder = 'Ask ALEEM AI…'; inputEl.value = prev; }
+            toast('⚠️ STT error: ' + err.message);
+          });
+      };
+
+      recorder.onerror = function(e) {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        S.micOn = false;
+        var btn = document.getElementById('micBtn');
+        if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
+        toast('⚠️ Recording error');
+      };
+
+      recorder.start();
+      S.mic   = recorder;
+      S.micOn = true;
+      var btn = document.getElementById('micBtn');
+      if (btn) { btn.classList.add('rec'); btn.title = 'Tap to stop'; }
+      toast('🎤 Listening… tap 🎤 to stop');
+    })
+    .catch(function(err) {
+      toast('⚠️ Microphone access denied: ' + err.message);
+    });
 }
+
 function stopMic() {
-  try { if (S.mic) S.mic.stop(); } catch(e){}
+  try { if (S.mic && S.mic.state !== 'inactive') S.mic.stop(); } catch(e){}
+  // Stream tracks are stopped inside recorder.onstop to avoid a race,
+  // but if stop() throws or state is already inactive, clean up here too.
+  try { if (S.micStream) S.micStream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
   S.micOn = false;
+  S.micStream = null;
   var btn = document.getElementById('micBtn');
-  if (btn) btn.classList.remove('rec');
+  if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
 }
 
 // ── SETTINGS PAGE ─────────────────────────────────────────────────
@@ -8458,88 +8524,7 @@ if ('serviceWorker' in navigator) {
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
-<!-- ── TEMPORARY STT DEBUG BUTTON — remove after verification ─────── -->
-<button id="stt-test-btn" style="position:fixed;bottom:24px;right:24px;z-index:99999;padding:12px 20px;background:#38bdf8;color:#000;font-weight:700;font-size:14px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 18px rgba(56,189,248,0.5);">🎤 Test STT (5s)</button>
-<script>
-(function() {
-  var btn = document.getElementById('stt-test-btn');
-  if (!btn) { console.error('[STT DEBUG] Button element not found.'); return; }
 
-  btn.addEventListener('click', function() {
-    alert('[1/8] Button clicked.');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Working…';
-
-    alert('[2/8] Requesting microphone access…');
-
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(function(stream) {
-        alert('[3/8] Microphone granted. Starting recorder…');
-
-        var recorder = new MediaRecorder(stream);
-        var chunks   = [];
-
-        recorder.ondataavailable = function(e) {
-          if (e.data && e.data.size > 0) chunks.push(e.data);
-        };
-
-        recorder.onstop = function() {
-          alert('[5/8] Recording stopped. Chunks collected: ' + chunks.length + '. Building blob…');
-
-          var mimeType = recorder.mimeType || 'audio/webm';
-          var blob     = new Blob(chunks, { type: mimeType });
-
-          alert('[6/8] Sending to /.netlify/functions/stt\nBlob size: ' + blob.size + ' bytes\nMIME type: ' + mimeType);
-
-          var form = new FormData();
-          form.append('audio', blob, 'test.webm');
-
-          fetch('/.netlify/functions/stt', { method: 'POST', body: form })
-            .then(function(res) {
-              alert('[7/8] Response received. HTTP status: ' + res.status + '. Parsing JSON…');
-              return res.json();
-            })
-            .then(function(data) {
-              if (data.transcript) {
-                alert('[8/8] ✅ TRANSCRIPT:\n\n"' + data.transcript + '"');
-              } else {
-                alert('[8/8] ❌ No transcript in response:\n\n' + JSON.stringify(data, null, 2));
-              }
-            })
-            .catch(function(err) {
-              alert('[ERROR] fetch() failed:\n\n' + err.message);
-            })
-            .finally(function() {
-              btn.disabled = false;
-              btn.textContent = '🎤 Test STT (5s)';
-            });
-        };
-
-        recorder.onerror = function(e) {
-          alert('[ERROR] MediaRecorder error:\n\n' + (e.error ? e.error.message : JSON.stringify(e)));
-          stream.getTracks().forEach(function(t) { t.stop(); });
-          btn.disabled = false;
-          btn.textContent = '🎤 Test STT (5s)';
-        };
-
-        recorder.start();
-        alert('[4/8] Recording started. Speak now.\n\nThe recording runs for 5 seconds in the background — tap OK and speak.');
-
-        setTimeout(function() {
-          stream.getTracks().forEach(function(t) { t.stop(); });
-          recorder.stop();
-        }, 5000);
-      })
-      .catch(function(err) {
-        alert('[ERROR] Microphone access denied or failed:\n\n' + err.message);
-        btn.disabled = false;
-        btn.textContent = '🎤 Test STT (5s)';
-      });
-  });
-})();
-</script>
-<!-- ── END TEMPORARY STT DEBUG BUTTON ─────────────────────────────── -->
 
 </body>
 </html>
