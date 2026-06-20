@@ -811,6 +811,136 @@
   }
   /* ── [END ADDED] ── */
 
+  /* ── [ADDED] PREMIUM PERSONALITY PICKER (trigger button + popup + cards) ──
+     This is a pure presentation layer on top of the existing, unmodified
+     #personalitySelect / #voicePersonalitySelect <select> elements (which
+     stay in the DOM, visually hidden, as the single source of truth — see
+     the JS "PREMIUM PERSONALITY PICKER" block). Nothing here touches
+     selection state, storage, or prompts. */
+  .pers-trigger-row {
+    display: flex; align-items: center;
+    gap: 6px; margin-top: 5px;
+    width: 100%; max-width: 800px;
+    box-sizing: border-box;
+  }
+  .pers-trigger-label {
+    font-size: 0.7rem; color: var(--text-3);
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .pers-trigger-btn {
+    flex: 1; min-width: 0; width: 0;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--r-sm); color: var(--text-1);
+    font-family: var(--font-body); font-size: 0.78rem;
+    padding: 6px 10px; cursor: pointer; outline: none;
+    transition: border-color var(--t), transform 0.15s ease;
+    touch-action: manipulation;
+  }
+  .pers-trigger-btn:hover, .pers-trigger-btn:focus { border-color: var(--border-hi); }
+  .pers-trigger-btn:active { transform: scale(0.98); }
+  .pers-trigger-icon { font-size: 1rem; flex-shrink: 0; }
+  .pers-trigger-name {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; text-align: left; font-weight: 600;
+  }
+  .pers-trigger-chev {
+    flex-shrink: 0; color: var(--text-3); font-size: 0.7rem;
+    transition: transform var(--t);
+  }
+  .pers-trigger-btn[aria-expanded="true"] .pers-trigger-chev { transform: rotate(180deg); }
+
+  /* Popup overlay — bottom sheet on mobile, centered modal from 640px up */
+  .pers-popup-overlay {
+    position: fixed; inset: 0; z-index: 9500;
+    background: rgba(2,5,12,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+  .pers-popup-overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
+
+  .pers-popup {
+    width: 100%; max-width: 560px; max-height: 82vh;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; overflow: hidden;
+    transform: translateY(24px); opacity: 0;
+    transition: transform 0.28s cubic-bezier(0.16,1,0.3,1), opacity 0.25s ease;
+  }
+  .pers-popup-overlay.show .pers-popup { transform: translateY(0); opacity: 1; }
+
+  @media (min-width: 640px) {
+    .pers-popup-overlay { align-items: center; }
+    .pers-popup { border-radius: var(--r-lg); transform: translateY(12px) scale(0.97); }
+    .pers-popup-overlay.show .pers-popup { transform: translateY(0) scale(1); }
+  }
+
+  .pers-popup-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .pers-popup-title {
+    font-family: var(--font-display); font-weight: 700; font-size: 1rem;
+    color: var(--text-1);
+  }
+  .pers-popup-close {
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 50%;
+    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+    color: var(--text-2); cursor: pointer; font-size: 0.9rem; flex-shrink: 0;
+    transition: border-color var(--t), color var(--t), transform 0.15s ease;
+    touch-action: manipulation;
+  }
+  .pers-popup-close:hover { border-color: var(--border-hi); color: var(--text-1); }
+  .pers-popup-close:active { transform: scale(0.9); }
+
+  /* Card grid — scrolls independently so long lists work on small screens */
+  .pers-grid {
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  }
+  @media (min-width: 460px) { .pers-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .pers-card {
+    position: relative; display: flex; flex-direction: column; align-items: flex-start;
+    gap: 4px; text-align: left;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 14px 12px 12px;
+    cursor: pointer; color: var(--text-2); font-family: var(--font-body);
+    transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
+    touch-action: manipulation;
+  }
+  .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
+  .pers-card:active { transform: translateY(0) scale(0.97); }
+  .pers-card.selected {
+    border-color: var(--card-color, var(--a1));
+    box-shadow: 0 0 0 1px var(--card-color, var(--a1)), 0 0 18px var(--card-glow, var(--glow1));
+  }
+  .pers-card-icon { font-size: 1.5rem; line-height: 1; }
+  .pers-card-name { font-size: 0.82rem; font-weight: 600; color: var(--text-1); }
+  .pers-card-desc { font-size: 0.68rem; line-height: 1.4; color: var(--text-3); }
+  .pers-card-check {
+    position: absolute; top: 8px; right: 8px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--card-color, var(--a1)); color: #06121f;
+    font-size: 0.62rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: scale(0.5);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  .pers-card.selected .pers-card-check { opacity: 1; transform: scale(1); }
+
+  @media (max-width: 480px) {
+    .pers-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .pers-card { padding: 12px 10px 10px; }
+  }
+  /* ── [END ADDED] ── */
+
   /* ================================================================
      DASHBOARD PAGE
   ================================================================ */
@@ -2499,31 +2629,100 @@
         <!-- [END ADDED] -->
 
         <!-- [ADDED] Personality selector — placed directly below model selector;
-             saved to localStorage and restored on page refresh -->
-        <div class="personality-selector-row">
+             saved to localStorage and restored on page refresh.
+             [UPGRADED] The visible control is now the premium card popup
+             below (#personalityPopupOverlay). #personalitySelect itself is
+             UNCHANGED in behavior — only visually hidden (display:none) —
+             and remains the single source of truth. Its 'change' listener,
+             persistence, and storage key are completely untouched. New
+             <option> values are purely additive; the 5 original values are
+             unchanged so any previously saved selection keeps working. -->
+        <div class="personality-selector-row" style="display:none;" aria-hidden="true">
           <span class="personality-selector-label">🎭 AI Personality:</span>
           <select id="personalitySelect">
-            <option value="friendly">😊 Friendly</option>
+            <option value="friendly">😊 Friendly Assistant</option>
             <option value="teacher">👨‍🏫 Teacher</option>
             <option value="coding">💻 Coding Expert</option>
             <option value="writer">✍️ Writer</option>
             <option value="motivator">🚀 Motivator</option>
+            <option value="funny">😂 Funny Friend</option>
+            <option value="fitness">🏋️ Fitness Coach</option>
+            <option value="business">💼 Business Advisor</option>
+            <option value="creative">🎨 Creative Genius</option>
+            <option value="deepthinker">🧠 Deep Thinker</option>
+            <option value="news">📰 News Analyst</option>
+            <option value="travel">🌍 Travel Guide</option>
           </select>
+        </div>
+        <div class="pers-trigger-row">
+          <span class="pers-trigger-label">🎭 AI Personality:</span>
+          <button type="button" class="pers-trigger-btn" id="personalityTriggerBtn"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="personalityPopupOverlay">
+            <span class="pers-trigger-icon" id="personalityTriggerIcon">😊</span>
+            <span class="pers-trigger-name" id="personalityTriggerName">Friendly Assistant</span>
+            <span class="pers-trigger-chev">▾</span>
+          </button>
         </div>
         <!-- [END ADDED] -->
 
         <!-- [ADDED] Voice Personality selector — separate from AI Personality;
-             controls SpeechSynthesisUtterance rate/pitch/voice. Saved to localStorage. -->
-        <div class="personality-selector-row">
+             controls SpeechSynthesisUtterance rate/pitch/voice. Saved to localStorage.
+             [UPGRADED] Same premium-popup treatment as AI Personality above.
+             #voicePersonalitySelect is UNCHANGED in behavior — only visually
+             hidden — and remains the single source of truth. 'calm' and
+             'assistant' options are kept (though not shown as cards in the
+             new popup) purely so previously saved values keep working. -->
+        <div class="personality-selector-row" style="display:none;" aria-hidden="true">
           <span class="personality-selector-label">🎙️ Voice Personality:</span>
           <select id="voicePersonalitySelect">
             <option value="friendly">😊 Friendly</option>
-            <option value="professional">💼 Professional</option>
+            <option value="professional">🎩 Professional</option>
             <option value="energetic">⚡ Energetic</option>
             <option value="calm">😌 Calm</option>
             <option value="assistant">🤖 Assistant</option>
+            <option value="confident">😎 Confident</option>
+            <option value="teacher">🎓 Teacher</option>
+            <option value="funny">😂 Funny</option>
+            <option value="caring">❤️ Caring</option>
           </select>
         </div>
+        <div class="pers-trigger-row">
+          <span class="pers-trigger-label">🎙️ Voice Personality:</span>
+          <button type="button" class="pers-trigger-btn" id="voicePersonalityTriggerBtn"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="voicePersonalityPopupOverlay">
+            <span class="pers-trigger-icon" id="voicePersonalityTriggerIcon">😊</span>
+            <span class="pers-trigger-name" id="voicePersonalityTriggerName">Friendly</span>
+            <span class="pers-trigger-chev">▾</span>
+          </button>
+        </div>
+
+        <!-- [ADDED] Premium AI Personality picker popup. Pure presentation
+             layer: card clicks only set #personalitySelect.value and
+             dispatch a native 'change' event (see bindPersonalityPopup() in
+             JS) — no separate state is kept here. No history.pushState /
+             popstate is used anywhere in this popup, so Android hardware
+             back-button behavior is completely unaffected. -->
+        <div class="pers-popup-overlay" id="personalityPopupOverlay">
+          <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="personalityPopupTitle">
+            <div class="pers-popup-header">
+              <span class="pers-popup-title" id="personalityPopupTitle">🎭 Choose AI Personality</span>
+              <button type="button" class="pers-popup-close" id="personalityPopupClose" aria-label="Close">✕</button>
+            </div>
+            <div class="pers-grid" id="personalityGrid"></div>
+          </div>
+        </div>
+
+        <!-- [ADDED] Premium Voice Personality picker popup — same pattern. -->
+        <div class="pers-popup-overlay" id="voicePersonalityPopupOverlay">
+          <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="voicePersonalityPopupTitle">
+            <div class="pers-popup-header">
+              <span class="pers-popup-title" id="voicePersonalityPopupTitle">🎙️ Choose Voice Personality</span>
+              <button type="button" class="pers-popup-close" id="voicePersonalityPopupClose" aria-label="Close">✕</button>
+            </div>
+            <div class="pers-grid" id="voicePersonalityGrid"></div>
+          </div>
+        </div>
+        <!-- [END ADDED] -->
         <!-- Voice selector: choose actual installed TTS voice by name/locale.
              Populated dynamically from speechSynthesis.getVoices(). -->
         <div class="personality-selector-row">
@@ -3165,12 +3364,56 @@ const MEMORY_HONESTY_INSTRUCTION = ' Regarding memory: only treat information as
 const IDENTITY_INSTRUCTION = ' Your own name is "ALEEM AI" — that is who you are. Aleem Sudamaniya is your creator/founder/developer, NOT your name. If the user asks your name (in any language, e.g. "What is your name?", "आपका नाम क्या है?", "तुझे नाव काय आहे?"), always answer that your name is ALEEM AI (e.g. "My name is ALEEM AI.", "मेरा नाम ALEEM AI है।", "माझे नाव ALEEM AI आहे."). You may optionally add that you were created by Aleem Sudamaniya, but never say that Aleem Sudamaniya is your own name or refer to yourself by that name.';
 
 const PERSONALITIES = {
-  friendly:  { label: '😊 Friendly',       sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  friendly:  { label: '😊 Friendly Assistant', sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
   teacher:   { label: '👨‍🏫 Teacher',        sys: 'You are ALEEM AI in Teacher mode, created by Aleem Sudamaniya. Explain every concept step by step in an educational style. Use clear examples, analogies, and break down complex ideas so anyone can understand. Encourage curiosity and deeper learning.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
   coding:    { label: '💻 Coding Expert',   sys: 'You are ALEEM AI in Coding Expert mode, created by Aleem Sudamaniya. Focus on programming and software development. Include relevant code examples, snippets, and explanations whenever useful. Cover all languages and tech stacks with precision.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
   writer:    { label: '✍️ Writer',           sys: 'You are ALEEM AI in Writer mode, created by Aleem Sudamaniya. Use a detailed, eloquent writing style. Help craft better articles, essays, stories, and creative content. Pay close attention to structure, word choice, and narrative flow.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
   motivator: { label: '🚀 Motivator',       sys: 'You are ALEEM AI in Motivator mode, created by Aleem Sudamaniya. Give positive, encouraging, and uplifting responses. Inspire action, build confidence, and always highlight the person\'s potential. Use energetic and empowering language.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  // [ADDED] 7 new personalities — same established pattern (role instruction
+  // + the 3 shared instructions). Existing 5 entries above are untouched
+  // except the 'friendly' display label, which now reads "Friendly Assistant"
+  // per the requested personality list; its 'sys' prompt text is unchanged.
+  funny:       { label: '😂 Funny Friend',     sys: 'You are ALEEM AI in Funny Friend mode, created by Aleem Sudamaniya. Be humorous, witty, and entertaining. Use playful language, light jokes, and a fun conversational style while still being genuinely helpful and accurate. Keep things upbeat and never mean-spirited.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  fitness:     { label: '🏋️ Fitness Coach',   sys: 'You are ALEEM AI in Fitness Coach mode, created by Aleem Sudamaniya. Focus on workouts, exercise technique, training plans, and general diet and fitness guidance. Be encouraging and practical. For medical concerns, injuries, or specific clinical nutrition needs, recommend the person consult a doctor or certified professional.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  business:    { label: '💼 Business Advisor', sys: 'You are ALEEM AI in Business Advisor mode, created by Aleem Sudamaniya. Focus on business strategy, productivity, entrepreneurship, marketing, and professional advice. Be clear, structured, and pragmatic, offering actionable insights grounded in sound business thinking.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  creative:    { label: '🎨 Creative Genius',  sys: 'You are ALEEM AI in Creative Genius mode, created by Aleem Sudamaniya. Focus on creative ideation — brainstorming, storytelling, original concepts, and imaginative angles. Be inventive and expressive while keeping ideas useful and well-structured.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  deepthinker: { label: '🧠 Deep Thinker',     sys: 'You are ALEEM AI in Deep Thinker mode, created by Aleem Sudamaniya. Provide analytical, detailed, and well-reasoned responses. Break down complex topics from multiple angles, consider nuance and trade-offs, and favor depth and rigor over brevity.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  news:        { label: '📰 News Analyst',     sys: 'You are ALEEM AI in News Analyst mode, created by Aleem Sudamaniya. Summarize and analyze news and current events in a balanced, neutral, fact-focused way. Present multiple relevant perspectives where appropriate and avoid editorializing or political bias.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  travel:      { label: '🌍 Travel Guide',     sys: 'You are ALEEM AI in Travel Guide mode, created by Aleem Sudamaniya. Focus on travel planning — destinations, itineraries, local tips, budgeting, and practical recommendations. Be enthusiastic and helpful, like a knowledgeable local guide.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
 };
+// ── [END ADDED] ───────────────────────────────────────────────────
+
+// ── [ADDED] PREMIUM PERSONALITY PICKER DATA ─────────────────────────
+// Presentation-only metadata for the new card popup — subtitle text and a
+// category color per personality (per the requested color scheme). Reading
+// this data never affects PERSONALITIES, S.personality, or storage; it only
+// feeds buildPersonalityCards() below to render the popup UI.
+const PERSONALITY_ORDER = ['friendly','teacher','coding','writer','motivator','funny','fitness','business','creative','deepthinker','news','travel'];
+const PERSONALITY_META = {
+  friendly:    { desc: 'Casual, warm and conversational',               color: '#3b82f6' }, // Blue
+  teacher:     { desc: 'Explains concepts clearly and step-by-step',     color: '#22c55e' }, // Green
+  coding:      { desc: 'Programming, debugging and development help',   color: '#a855f7' }, // Purple
+  writer:      { desc: 'Writing, editing and content creation',         color: '#f97316' }, // Orange
+  motivator:   { desc: 'Encouraging and goal-oriented responses',       color: '#eab308' }, // Gold
+  funny:       { desc: 'Humorous and entertaining conversations',       color: '#ec4899' }, // Pink
+  fitness:     { desc: 'Workout, diet and fitness guidance',            color: '#ef4444' }, // Red
+  business:    { desc: 'Business, productivity and strategy advice',    color: '#06b6d4' }, // Cyan
+  creative:    { desc: 'Creative ideas, storytelling and brainstorming',color: '#8b5cf6' }, // Violet
+  deepthinker: { desc: 'Analytical and detailed reasoning',             color: '#6366f1' }, // Indigo
+  news:        { desc: 'News summaries and balanced analysis',          color: '#14b8a6' }, // Teal
+  travel:      { desc: 'Travel planning and recommendations',           color: '#0ea5e9' }, // Sky Blue
+};
+
+// Small helper so each card's colored glow (box-shadow) can be derived from
+// its hex color without relying on the CSS color-mix() function, which is
+// not reliably supported on older Android WebViews this app targets.
+function hexToRgba(hex, alpha) {
+  var h = String(hex).replace('#', '');
+  var r = parseInt(h.substring(0, 2), 16);
+  var g = parseInt(h.substring(2, 4), 16);
+  var b = parseInt(h.substring(4, 6), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
 // ── [END ADDED] ───────────────────────────────────────────────────
 
 // ── ALEEM AI LOGO AVATAR ─────────────────────────────────────────
@@ -3664,14 +3907,58 @@ function bindAllEvents() {
     voicePersonalitySelect.addEventListener('change', function(e) {
       S.voicePersonality = e.target.value;
       persist();
-      var vpLabels = {
-        friendly: '😊 Friendly', professional: '💼 Professional',
-        energetic: '⚡ Energetic', calm: '😌 Calm', assistant: '🤖 Assistant'
-      };
-      toast('🎙️ Voice: ' + (vpLabels[S.voicePersonality] || S.voicePersonality));
+      // [MODIFIED] Label now read from VOICE_PERSONALITIES[key].label (which
+      // now carries a 'label' field, same pattern as PERSONALITIES) instead
+      // of a separate hardcoded lookup, so newly added voice personalities
+      // don't need their label duplicated in two places. rateMul values for
+      // every existing key are completely unchanged.
+      var vp = VOICE_PERSONALITIES[S.voicePersonality];
+      toast('🎙️ Voice: ' + (vp ? vp.label : S.voicePersonality));
       dbg('voicePersonalitySelect change → ' + S.voicePersonality);
     });
   }
+  // [END ADDED]
+
+  // [ADDED] Premium personality popup wiring — pure UI layer on top of the
+  // existing #personalitySelect / #voicePersonalitySelect. Card clicks only
+  // set select.value + dispatch 'change' (see bindPersonalityPopup()); the
+  // two listeners directly above remain the only code that ever writes to
+  // S.personality / S.voicePersonality or localStorage. This block also
+  // attaches a second, independent 'change' listener on each select purely
+  // to refresh the trigger-button text + selected-card glow — it does not
+  // replace or alter the listeners above in any way.
+  buildPersonalityCards();
+  buildVoicePersonalityCards();
+  bindPersonalityPopup(
+    document.getElementById('personalityPopupOverlay'),
+    document.getElementById('personalityTriggerBtn'),
+    document.getElementById('personalityPopupClose'),
+    document.getElementById('personalityGrid'),
+    personalitySelect
+  );
+  bindPersonalityPopup(
+    document.getElementById('voicePersonalityPopupOverlay'),
+    document.getElementById('voicePersonalityTriggerBtn'),
+    document.getElementById('voicePersonalityPopupClose'),
+    document.getElementById('voicePersonalityGrid'),
+    voicePersonalitySelect
+  );
+  if (personalitySelect) personalitySelect.addEventListener('change', syncPersonalityTrigger);
+  if (voicePersonalitySelect) voicePersonalitySelect.addEventListener('change', syncVoicePersonalityTrigger);
+  syncPersonalityTrigger();
+  syncVoicePersonalityTrigger();
+
+  // Escape closes whichever personality popup is currently open. This is a
+  // new, scoped 'keydown' listener on document — it does not touch
+  // chatInput's/searchInput's existing keydown handlers, and it never calls
+  // history.back()/pushState, so it has no effect on the Android back button.
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var pOv = document.getElementById('personalityPopupOverlay');
+    var vOv = document.getElementById('voicePersonalityPopupOverlay');
+    if (pOv && pOv.classList.contains('show')) closePersPopup(pOv, document.getElementById('personalityTriggerBtn'));
+    if (vOv && vOv.classList.contains('show')) closePersPopup(vOv, document.getElementById('voicePersonalityTriggerBtn'));
+  });
   // [END ADDED]
 
   // Voice selector — lets user pick any available TTS voice by name/locale.
@@ -3855,6 +4142,168 @@ function updatePLabel() {
   var el = document.getElementById('pLabel');
   if (el) el.textContent = PERSONALITIES[S.personality].label;
 }
+
+// ── [ADDED] PREMIUM PERSONALITY PICKER (UI only) ────────────────────
+// Everything in this block is presentation-only. The hidden
+// #personalitySelect / #voicePersonalitySelect elements remain the single
+// source of truth: card clicks only set their .value and dispatch a native
+// 'change' event, which the ORIGINAL, unmodified listeners in
+// bindAllEvents() handle (S.personality/S.voicePersonality assignment,
+// persist(), updatePLabel(), toast()). No personality/voice-personality
+// state is read, written, or duplicated anywhere in this block — it only
+// reflects whatever the <select> already contains.
+
+// Builds the AI Personality card grid from PERSONALITIES + PERSONALITY_META.
+function buildPersonalityCards() {
+  var grid = document.getElementById('personalityGrid');
+  if (!grid) return;
+  grid.innerHTML = PERSONALITY_ORDER.map(function(key) {
+    var p = PERSONALITIES[key];
+    var meta = PERSONALITY_META[key];
+    if (!p || !meta) return '';
+    var sp = p.label.indexOf(' ');
+    var icon = sp > -1 ? p.label.slice(0, sp) : '🎭';
+    var name = sp > -1 ? p.label.slice(sp + 1) : p.label;
+    var style = '--card-color:' + meta.color + ';--card-glow:' + hexToRgba(meta.color, 0.38) + ';';
+    return '<button type="button" class="pers-card" data-key="' + key + '" style="' + style + '">' +
+             '<span class="pers-card-icon">' + icon + '</span>' +
+             '<span class="pers-card-name">' + name + '</span>' +
+             '<span class="pers-card-desc">' + meta.desc + '</span>' +
+             '<span class="pers-card-check">✓</span>' +
+           '</button>';
+  }).join('');
+}
+
+// Builds the Voice Personality card grid from VOICE_PERSONALITIES +
+// VOICE_PERSONALITY_DESC + VOICE_PERSONALITY_ORDER (defined near
+// VOICE_PERSONALITIES). Legacy 'calm'/'assistant' keys are intentionally
+// excluded from VOICE_PERSONALITY_ORDER, so they never appear as cards —
+// they still exist as valid <option> values for backward compatibility.
+function buildVoicePersonalityCards() {
+  var grid = document.getElementById('voicePersonalityGrid');
+  if (!grid || typeof VOICE_PERSONALITY_ORDER === 'undefined') return;
+  grid.innerHTML = VOICE_PERSONALITY_ORDER.map(function(key) {
+    var vp = VOICE_PERSONALITIES[key];
+    var desc = VOICE_PERSONALITY_DESC[key];
+    if (!vp || !desc) return '';
+    var sp = vp.label.indexOf(' ');
+    var icon = sp > -1 ? vp.label.slice(0, sp) : '🎙️';
+    var name = sp > -1 ? vp.label.slice(sp + 1) : vp.label;
+    return '<button type="button" class="pers-card" data-key="' + key + '">' +
+             '<span class="pers-card-icon">' + icon + '</span>' +
+             '<span class="pers-card-name">' + name + '</span>' +
+             '<span class="pers-card-desc">' + desc + '</span>' +
+             '<span class="pers-card-check">✓</span>' +
+           '</button>';
+  }).join('');
+}
+
+// Reflects the CURRENT value of #personalitySelect into the trigger button
+// text and the matching card's selected/glow state. Called once at startup
+// (after the select has been restored from localStorage) and again on every
+// 'change' event — i.e. it only ever reads from the select, never writes to it.
+function syncPersonalityTrigger() {
+  var sel = document.getElementById('personalitySelect');
+  if (!sel) return;
+  var key = sel.value;
+  var p = PERSONALITIES[key];
+  var label = p ? p.label : key;
+  var sp = label.indexOf(' ');
+  var icon = sp > -1 ? label.slice(0, sp) : '🎭';
+  var name = sp > -1 ? label.slice(sp + 1) : label;
+  var iconEl = document.getElementById('personalityTriggerIcon');
+  var nameEl = document.getElementById('personalityTriggerName');
+  if (iconEl) iconEl.textContent = icon;
+  if (nameEl) nameEl.textContent = name;
+  var grid = document.getElementById('personalityGrid');
+  if (grid) {
+    var cards = grid.querySelectorAll('.pers-card');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.toggle('selected', cards[i].getAttribute('data-key') === key);
+    }
+  }
+}
+
+// Same idea for #voicePersonalitySelect. Legacy values ('assistant', 'calm')
+// have no card of their own, so VOICE_PERSONALITY_ALIAS maps them to the
+// closest equivalent card purely for highlighting — the select's actual
+// stored value is never changed by this.
+function syncVoicePersonalityTrigger() {
+  var sel = document.getElementById('voicePersonalitySelect');
+  if (!sel || typeof VOICE_PERSONALITY_ALIAS === 'undefined') return;
+  var key = sel.value;
+  var vp = VOICE_PERSONALITIES[key];
+  var label = vp ? vp.label : key;
+  var sp = label.indexOf(' ');
+  var icon = sp > -1 ? label.slice(0, sp) : '🎙️';
+  var name = sp > -1 ? label.slice(sp + 1) : label;
+  var iconEl = document.getElementById('voicePersonalityTriggerIcon');
+  var nameEl = document.getElementById('voicePersonalityTriggerName');
+  if (iconEl) iconEl.textContent = icon;
+  if (nameEl) nameEl.textContent = name;
+  var highlightKey = VOICE_PERSONALITY_ALIAS[key] || key;
+  var grid = document.getElementById('voicePersonalityGrid');
+  if (grid) {
+    var cards = grid.querySelectorAll('.pers-card');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.toggle('selected', cards[i].getAttribute('data-key') === highlightKey);
+    }
+  }
+}
+
+function openPersPopup(overlay, btn) {
+  if (!overlay) return;
+  overlay.classList.add('show');
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+}
+function closePersPopup(overlay, btn) {
+  if (!overlay) return;
+  overlay.classList.remove('show');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+// Wires one trigger button + popup + grid to one <select>. Card clicks ONLY
+// set select.value and dispatch a native 'change' event — they never touch
+// S.personality/S.voicePersonality or localStorage directly, so there is
+// exactly one place (the original listeners in bindAllEvents()) that owns
+// that state. No history.pushState/popstate is used, so the Android
+// hardware back button is unaffected by this popup.
+function bindPersonalityPopup(overlay, btn, closeBtn, grid, select) {
+  if (!overlay || !btn || !select) return;
+
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (overlay.classList.contains('show')) closePersPopup(overlay, btn);
+    else openPersPopup(overlay, btn);
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closePersPopup(overlay, btn);
+    });
+  }
+
+  // Tapping the dimmed backdrop (not the panel itself) closes the popup.
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closePersPopup(overlay, btn);
+  });
+
+  if (grid) {
+    grid.addEventListener('click', function(e) {
+      var card = e.target.closest ? e.target.closest('.pers-card') : null;
+      if (!card) return;
+      var key = card.getAttribute('data-key');
+      if (!key) return;
+      if (select.value !== key) {
+        select.value = key;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      closePersPopup(overlay, btn);
+    });
+  }
+}
+// ── [END ADDED] ───────────────────────────────────────────────────
 
 // ── SEARCH ────────────────────────────────────────────────────────
 function doSearch() {
@@ -5389,13 +5838,43 @@ function speakEl(id) {
 
 // Voice Personality presets — control rate only. Pitch is always 1.0 (natural).
 // Independent of AI Personality.
+// [MODIFIED] Added a 'label' field to every entry (icon + name, same pattern
+// PERSONALITIES already uses) so the toast text and the new card popup can
+// read it directly instead of keeping a second hardcoded label list in
+// sync. rateMul values for all 5 original keys are completely unchanged.
+// 4 new keys (confident, teacher, funny, caring) are purely additive.
+// 'calm' and 'assistant' are kept (not just for rateMul, but as valid,
+// selectable values) solely so previously saved localStorage values keep
+// working — they are simply not shown as cards in the new popup.
 const VOICE_PERSONALITIES = {
-  friendly:     { rateMul: 1.03 },
-  professional: { rateMul: 1.0  },
-  energetic:    { rateMul: 1.08 },
-  calm:         { rateMul: 0.95 },
-  assistant:    { rateMul: 1.0  },
+  friendly:     { label: '😊 Friendly',     rateMul: 1.03 },
+  professional: { label: '🎩 Professional', rateMul: 1.0  },
+  energetic:    { label: '⚡ Energetic',    rateMul: 1.08 },
+  calm:         { label: '😌 Calm',         rateMul: 0.95 }, // legacy — kept for backward compatibility
+  assistant:    { label: '🤖 Assistant',    rateMul: 1.0  }, // legacy — kept for backward compatibility (default)
+  confident:    { label: '😎 Confident',    rateMul: 0.98 },
+  teacher:      { label: '🎓 Teacher',      rateMul: 0.93 },
+  funny:        { label: '😂 Funny',        rateMul: 1.06 },
+  caring:       { label: '❤️ Caring',       rateMul: 0.97 },
 };
+
+// [ADDED] Presentation-only metadata for the Voice Personality card popup.
+// Cards are shown in this order; 'calm'/'assistant' are deliberately left
+// out of VOICE_PERSONALITY_ORDER (legacy values only, see comment above).
+const VOICE_PERSONALITY_ORDER = ['professional', 'friendly', 'energetic', 'confident', 'teacher', 'funny', 'caring'];
+const VOICE_PERSONALITY_DESC = {
+  professional: 'Clear, composed and businesslike tone',
+  friendly:     'Warm and casual speaking style',
+  energetic:    'Upbeat and lively delivery',
+  confident:    'Assured, steady and self-assured tone',
+  teacher:      'Measured, explanatory pace for clarity',
+  funny:        'Playful and animated delivery',
+  caring:       'Gentle, warm and reassuring tone',
+};
+// Maps legacy values to the closest new card, used ONLY by
+// syncVoicePersonalityTrigger() to decide which card glows — it never
+// changes the select's actual stored value.
+const VOICE_PERSONALITY_ALIAS = { assistant: 'professional', calm: 'professional' };
 
 // [ADDED] Detect the dominant script/language of a text string so the
 // right speech-synthesis voice/lang can be chosen automatically.
