@@ -2831,7 +2831,10 @@
 
         <!-- Live transcript card (ID UNCHANGED, shown/hidden by existing vcSetStatus) -->
         <div id="vcTranscriptCard" style="display:none;background:rgba(0,0,0,0.18);border:1px solid rgba(99,179,237,0.2);border-radius:12px;padding:16px 18px;margin-bottom:16px;min-height:56px;">
-          <div style="font-size:0.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Your transcript — edit before sending</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:0.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;">Your transcript — edit before sending</div>
+            <div id="vcLangBadge" style="font-size:0.65rem;font-family:var(--font-mono);background:rgba(56,189,248,0.12);color:var(--a1);border:1px solid rgba(56,189,248,0.28);border-radius:4px;padding:1px 7px;letter-spacing:0.5px;display:none;"></div>
+          </div>
           <textarea id="vcTranscriptText" rows="3" style="width:100%;background:transparent;border:none;outline:none;resize:vertical;font-size:0.98rem;color:var(--text-1);line-height:1.6;font-family:var(--font-body);padding:0;min-height:48px;" placeholder="Listening for your voice…"></textarea>
         </div>
 
@@ -5615,16 +5618,6 @@ function startMic() {
 
         var form = new FormData();
         form.append('audio', blob, 'audio.webm');
-        // Pass the language selected in Voice Chat's language dropdown as an
-        // explicit ISO 639-1 hint to Whisper. Without this, Whisper auto-detects
-        // and frequently misidentifies Hindi/Marathi/Gujarati/Urdu as Russian or
-        // Spanish. Strip the BCP-47 region subtag (e.g. "hi-IN" → "hi") because
-        // Whisper only accepts ISO 639-1 codes; region subtags cause silent fallback
-        // to auto-detection.
-        var _micLangEl   = document.getElementById('vcLangSelect');
-        var _micLangBcp  = _micLangEl ? _micLangEl.value : '';
-        var _micLangHint = _micLangBcp ? _micLangBcp.split('-')[0].toLowerCase() : '';
-        if (_micLangHint) form.append('language', _micLangHint);
 
         fetch('/.netlify/functions/stt', { method: 'POST', body: form })
           .then(function(res) { return res.json(); })
@@ -7723,55 +7716,59 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── Convert any BCP-47 tag to the ISO 639-1 code Whisper expects ──
-  // Whisper's language parameter must be a plain ISO 639-1 code (e.g. "hi",
-  // "gu", "mr", "ur", "en"). BCP-47 region subtags like "-IN" cause Whisper
-  // to silently fall back to auto-detection, which is the root cause of
-  // mis-identification of Hindi/Marathi/Gujarati/Urdu as Russian or Spanish.
+  // ── Convert BCP-47 tag → ISO 639-1 code that Whisper actually accepts ──
+  // Whisper's `language` param MUST be a plain ISO 639-1 code (e.g. "hi",
+  // "gu", "mr", "ur"). Passing BCP-47 region subtags like "hi-IN" causes
+  // Whisper to silently ignore the hint and auto-detect — which is the root
+  // cause of Hindi/Marathi/Gujarati/Urdu being mis-transcribed as Russian,
+  // Spanish, or other unrelated languages.
   function vcToWhisperLang(bcp47) {
     if (!bcp47) return '';
-    // Strip region subtag: "hi-IN" → "hi", "en-IN" → "en", "ur-IN" → "ur"
     return bcp47.split('-')[0].toLowerCase();
   }
 
-  // ── Resolve which language hint to give Whisper ──────────────────
-  // Whisper (via /.netlify/functions/stt) can be hinted with a language
-  // code to improve accuracy. An explicit user selection always wins and is
-  // passed as an ISO 639-1 code. Auto-mode falls back through heuristics.
+  // ── Resolve the language code to send to Whisper ─────────────────
+  // HARD-LOCK RULE: when the user has explicitly selected a language from
+  // the dropdown (vc.langPref !== ''), that language is used unconditionally.
+  // No heuristic, no fallback, no override. Auto-detection is disabled.
   //
-  // Auto-mode strategy (langPref = ''):
-  //   1. If the user's last-SENT transcript was positively identified as a
-  //      SPECIFIC non-English language (native script detected), use that
-  //      locale — it's the most reliable signal we have.
-  //   2. If the AI's last reply was in a confirmed non-English language, use
-  //      that locale as a weaker hint.
-  //   3. Otherwise default to 'en' so Indian-accented English isn't
-  //      mis-hinted toward a different script.
+  // Auto-mode (vc.langPref === '') falls back through:
+  //   1. Last non-English language detected from user's own transcript.
+  //   2. Last non-English language from AI reply.
+  //   3. 'en' as default (not 'en-IN' — Whisper ignores region subtags).
+  //
+  // The returned value is ALWAYS an ISO 639-1 code ("hi", "gu", "mr",
+  // "ur", "en") — never a BCP-47 tag. This is verified in STT:REQUEST log.
   function vcResolveRecognitionLang() {
     var resolved, reason;
+
     if (vc.langPref) {
-      // Explicit pin always wins — convert to ISO 639-1 for Whisper.
+      // ── PINNED: user selected a specific language — hard-lock, no fallback ──
       resolved = vcToWhisperLang(vc.langPref);
-      reason   = 'pinned';
+      reason   = 'PINNED(no-auto-detect)';
     } else if (vc.userUtteranceLang &&
                vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en') {
-      // Confirmed non-English language detected from the user's own speech.
       resolved = vcToWhisperLang(vc.userUtteranceLang);
-      reason   = 'lastUserSpeech(non-en)';
+      reason   = 'auto:lastUserSpeech';
     } else if (vc.lastDetectedLang &&
                vc.lastDetectedLang.slice(0, 2).toLowerCase() !== 'en') {
-      // AI replied in a non-English language — weakly suggests user intent.
       resolved = vcToWhisperLang(vc.lastDetectedLang);
-      reason   = 'lastAIReply(non-en)';
+      reason   = 'auto:lastAIReply';
     } else {
       resolved = 'en';
-      reason   = 'default(en)';
+      reason   = 'auto:default';
     }
+
+    // ── Verify the resolved code is a clean ISO 639-1 code (2–3 lowercase letters) ──
+    // If it somehow still contains a hyphen or uppercase, strip it now.
+    resolved = resolved.split('-')[0].toLowerCase();
+
     vcLog('vcResolveRecognitionLang',
       'RESOLVED="' + resolved + '" reason=' + reason +
-      ' | langPref="' + vc.langPref + '"' +
+      ' | langPref(raw)="' + vc.langPref + '"' +
       ' userUtteranceLang="' + vc.userUtteranceLang + '"' +
       ' lastDetectedLang="' + vc.lastDetectedLang + '"');
+
     return resolved;
   }
 
@@ -8042,13 +8039,33 @@ if ('serviceWorker' in navigator) {
 
     var form = new FormData();
     form.append('audio', blob, 'chunk.webm');
-    // Advisory language hint — same resolution logic as before, now used
-    // by Whisper instead of a SpeechRecognition locale. Backend may ignore
-    // this field if it doesn't support it.
     var langHint = vcResolveRecognitionLang();
     form.append('language', langHint);
-    // [LOG] Exact request payload size/lang right before the network call.
-    vcLog('STT:REQUEST', 'POST /.netlify/functions/stt blob=' + blob.size + 'B lang=' + langHint);
+
+    // ── Show exact language code being sent — visible in the transcript card ──
+    // This badge is the ground truth: it shows the ISO 639-1 code that is
+    // appended to the FormData and POSTed to /.netlify/functions/stt.
+    // "PINNED" prefix confirms auto-detection is disabled for this request.
+    var vcLangBadge = document.getElementById('vcLangBadge');
+    if (vcLangBadge) {
+      var isPinned = !!vc.langPref;
+      vcLangBadge.textContent = (isPinned ? '🔒 ' : '⚙ ') + langHint;
+      vcLangBadge.title = isPinned
+        ? 'Language locked: auto-detection disabled. Sending language=' + langHint + ' to Whisper.'
+        : 'Auto-detected language hint: ' + langHint;
+      vcLangBadge.style.display = '';
+      vcLangBadge.style.background = isPinned
+        ? 'rgba(52,211,153,0.13)'   // green tint = locked
+        : 'rgba(56,189,248,0.12)';  // blue tint = auto
+      vcLangBadge.style.color      = isPinned ? 'var(--a3)' : 'var(--a1)';
+      vcLangBadge.style.borderColor = isPinned
+        ? 'rgba(52,211,153,0.32)'
+        : 'rgba(56,189,248,0.28)';
+    }
+
+    // [LOG] Exact payload right before the network call — verify in DevTools console.
+    // The "lang=" value here is EXACTLY what is in the FormData field "language".
+    vcLog('STT:REQUEST', 'POST /.netlify/functions/stt blob=' + blob.size + 'B lang=' + langHint + (vc.langPref ? ' [PINNED — auto-detect OFF]' : ' [auto]'));
 
     // [FIX] Hard ceiling on this request so a fetch that never resolves or
     // rejects can't lock vc.transcribeBusy/vc.interim forever. If nothing
