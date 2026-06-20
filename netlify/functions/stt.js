@@ -31,6 +31,28 @@
 const Groq = require('groq-sdk');   // or: const { Groq } = require('groq-sdk');
 const Busboy = require('busboy');
 
+// ── Server-side timeout budget ──────────────────────────────────────────────
+// Client aborts at STT_TIMEOUT_MS = 12000ms (index.html). 4s + 6s = 10s,
+// leaving ~2s margin so a JSON error always beats the client's own timeout.
+const PARSE_TIMEOUT_MS = 4000;
+const GROQ_TIMEOUT_MS  = 6000;
+
+// Races any promise against a hard deadline. Does not depend on the losing
+// promise actually cancelling its own work — it just stops waiting on it,
+// which is what guarantees this function responds in time regardless of
+// what parseForm/Groq are doing internally.
+function withTimeout(promise, ms, label) {
+  return new Promise(function(resolve, reject) {
+    var t = setTimeout(function() {
+      reject(new Error(label + ' timed out after ' + ms + 'ms'));
+    }, ms);
+    promise.then(
+      function(v) { clearTimeout(t); resolve(v); },
+      function(e) { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
@@ -38,7 +60,9 @@ exports.handler = async function(event) {
 
   try {
     // ── Parse multipart/form-data ─────────────────────────────────
-    const { audioBuffer, audioMime, language } = await parseForm(event);
+    console.log('[STT] stage=parseForm:start');
+    const { audioBuffer, audioMime, language } = await withTimeout(parseForm(event), PARSE_TIMEOUT_MS, 'parseForm');
+    console.log('[STT] stage=parseForm:done');
 
     // ── AUDIT POINT 1: Log what the frontend actually sent ────────
     // Check your Netlify function logs for this line.
@@ -48,7 +72,7 @@ exports.handler = async function(event) {
     console.log('[STT] audio size:', audioBuffer.length, 'bytes');
 
     // ── Build Groq transcription request ─────────────────────────
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: GROQ_TIMEOUT_MS, maxRetries: 0 });
 
     // The audio field must be a File-like object. Groq SDK accepts a Blob
     // or a File. We reconstruct one from the raw buffer.
@@ -84,7 +108,13 @@ exports.handler = async function(event) {
     }));
 
     // ── Call Groq ─────────────────────────────────────────────────
-    const result = await groq.audio.transcriptions.create(transcriptionParams);
+    console.log('[STT] stage=groq:start');
+    const result = await withTimeout(
+      groq.audio.transcriptions.create(transcriptionParams),
+      GROQ_TIMEOUT_MS,
+      'groq.transcriptions.create'
+    );
+    console.log('[STT] stage=groq:done');
 
     console.log('[STT] Groq transcript:', JSON.stringify(result.text));
 
