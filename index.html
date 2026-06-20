@@ -7843,6 +7843,7 @@ if ('serviceWorker' in navigator) {
 
     var segChunks = [];
     vc.hadSpeechInSegment = false;
+    vc.speechTicks = 0;
 
     recorder.ondataavailable = function(e) {
       if (e.data && e.data.size > 0) segChunks.push(e.data);
@@ -7864,6 +7865,11 @@ if ('serviceWorker' in navigator) {
 
       if (blob.size < 2000) {
         vcLog('MIC:SKIP_TINY', 'blob=' + blob.size + 'B — silence segment, skipping STT');
+        return;
+      }
+
+      if (vc.analyser && !vc.hadSpeechInSegment) {
+        vcLog('MIC:SKIP_SILENT', 'blob=' + blob.size + 'B but no above-threshold RMS seen this segment — skipping STT');
         return;
       }
 
@@ -7955,7 +7961,14 @@ if ('serviceWorker' in navigator) {
       var now = Date.now();
       if (!quiet) {
         vc.quietSince = 0; // still talking — reset the streak
-        vc.hadSpeechInSegment = true;
+        // Require 2 above-threshold ticks total in this segment (not
+        // necessarily consecutive — a brief quiet dip mid-word no longer
+        // resets the count) before treating it as having real speech. A
+        // single isolated 250ms blip (one tick, ever) still can't satisfy
+        // this on its own, but short words with a natural micro-pause are
+        // no longer penalized.
+        vc.speechTicks = (vc.speechTicks || 0) + 1;
+        if (vc.speechTicks >= 2) vc.hadSpeechInSegment = true;
         return;
       }
       if (!vc.quietSince) {
