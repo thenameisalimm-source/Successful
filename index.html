@@ -7944,6 +7944,34 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  // ── SILENCE-RECOVERY WATCHDOG ─────────────────────────────────────
+  // Android Chrome fires onerror{no-speech} and ends the recognizer after
+  // ~7–9 s of silence even with continuous=true. The onerror:no-speech
+  // handler schedules a 300 ms restart, but that callback is silently
+  // dropped whenever vc.starting or vc.listening happens to be true at
+  // the moment it fires. This watchdog is the safety net: every 2 seconds
+  // it checks whether the mic is dead while voice mode is active and
+  // restarts it. It is the only change in this patch — all other code
+  // paths (transcript, language, Gemini, UI, TTS) are untouched.
+  //
+  // Guard logic (mirrors vcStartListening's own duplicate-start guards):
+  //   vc.active   — voice mode must be on
+  //   vc.speaking — AI is speaking; mic is intentionally off
+  //   vc.starting — a new recognizer is already being set up
+  //   vc.listening — recognizer is live and healthy; nothing to do
+  // All four must be in the "mic is dead" state before we act.
+  ;(function() {
+    setInterval(function() {
+      if (!vc.active)   return;
+      if (vc.speaking)  return;
+      if (vc.starting)  return;
+      if (vc.listening) return;
+      vcLog('WATCHDOG:restart', 'mic dead while active — restarting gen=' + vc.gen);
+      vcStartListening();
+    }, 2000);
+  })();
+  // ── END SILENCE-RECOVERY WATCHDOG ─────────────────────────────────
+
   // ── Speak AI reply, then return to listening ─────────────────────
   // Called by the patched speakText replacement below. mySpeakGen lets the
   // Stop button (vcStopSpeaking) invalidate this utterance's onend/onerror
