@@ -7400,6 +7400,15 @@ if ('serviceWorker' in navigator) {
     transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
                            // (prevents overlapping requests from racing each other)
 
+    // [FIX] Per-segment speech detection — reset every time vcCycleRecorder()
+    // starts a fresh recorder, set true by the silence watcher the moment it
+    // observes mic volume above SILENCE_RMS_THRESHOLD during that segment.
+    // Segments that never see real volume (pure silence/room noise) are
+    // skipped instead of being sent to Whisper, which otherwise hallucinates
+    // filler phrases ("Thank you.", "Merci.") on non-speech audio.
+    segStartTime:  0,
+    segHadSpeech:  false,
+
     // Live transcript, accumulated across as many Whisper chunk responses as
     // it takes. The mic itself never stops while vc.active is true, no matter
     // how long the user pauses — only the act of flushing+transcribing a
@@ -7819,12 +7828,30 @@ if ('serviceWorker' in navigator) {
       var blob = new Blob(segChunks, { type: mimeType });
       segChunks = [];
 
+      // [FIX] Capture THIS segment's duration + speech-detected flag before
+      // vcCycleRecorder() below starts the next recorder, which immediately
+      // resets vc.segStartTime/vc.segHadSpeech for the next segment.
+      var segDurationMs  = Date.now() - vc.segStartTime;
+      var segHadRealSpeech = vc.segHadSpeech;
+
       // Start next recorder immediately so we capture audio while this
       // segment is being transcribed — no gap in mic coverage.
       vcCycleRecorder(myGen);
 
       if (blob.size < 2000) {
         vcLog('MIC:SKIP_TINY', 'blob=' + blob.size + 'B — silence segment, skipping STT');
+        return;
+      }
+
+      // [FIX] The byte-size check above doesn't reliably catch silence —
+      // Opus encodes room tone/background noise at a size well above 2000B
+      // for any segment longer than ~500ms. Whisper hallucinates filler
+      // phrases ("Thank you.", "Merci.") when fed audio with no real speech,
+      // which is what was showing up in the transcript. Skip any segment
+      // that never registered mic volume above the silence threshold, or
+      // that's too short to plausibly contain a spoken word.
+      if (!segHadRealSpeech || segDurationMs < MIN_CHUNK_MS) {
+        vcLog('MIC:SKIP_NO_SPEECH', 'duration=' + segDurationMs + 'ms hadSpeech=' + segHadRealSpeech + ' — skipping STT');
         return;
       }
 
@@ -7844,6 +7871,8 @@ if ('serviceWorker' in navigator) {
 
     recorder.start();
     vc.recorder = recorder;
+    vc.segStartTime = Date.now();  // [FIX] mark when this segment began
+    vc.segHadSpeech = false;       // [FIX] reset speech-detected flag for this segment
     vcLog('MIC:RECORDER_STARTED', 'gen=' + myGen);
 
     // Schedule the stop for this segment after FLUSH_INTERVAL_MS.
@@ -7916,6 +7945,7 @@ if ('serviceWorker' in navigator) {
       var now = Date.now();
       if (!quiet) {
         vc.quietSince = 0; // still talking — reset the streak
+        vc.segHadSpeech = true; // [FIX] this segment has real mic volume in it
         return;
       }
       if (!vc.quietSince) {
