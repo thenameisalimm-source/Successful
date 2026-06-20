@@ -631,52 +631,137 @@
 
   .chat-welcome {
     text-align: center;
-    padding: 50px 16px 20px;
+    padding: 30px 16px 16px;
     flex-shrink: 0;
   }
-  .av-ring {
-    width: 100px; height: 100px; border-radius: 50%;
-    margin: 0 auto 16px;
-    background: linear-gradient(135deg,#38bdf8,#818cf8,#34d399);
-    padding: 2.5px;
-    animation: avSpin 7s linear infinite;
+
+  /* ── [ADDED] PREMIUM ANIMATED LOGO ──
+     .av-wrap is the new positioning context. .av-ring and the breathing
+     glow are separate layers behind .av-inner so the ring/glow rotate and
+     pulse on their own — the logo image itself never spins. Transform +
+     opacity only (no animated filter/box-shadow) for mobile performance. */
+  .av-wrap {
+    position: relative;
+    width: 100px; height: 100px;
+    margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
   }
-  @keyframes avSpin {
-    0%,100%{ filter: hue-rotate(0deg)   drop-shadow(0 0 10px rgba(56,189,248,0.4)); }
-    50%    { filter: hue-rotate(55deg)  drop-shadow(0 0 18px rgba(129,140,248,0.5)); }
+  .av-wrap::before {
+    content: '';
+    position: absolute; inset: -12px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56,189,248,0.30), transparent 70%);
+    filter: blur(9px);
+    animation: avBreathe 3.6s ease-in-out infinite;
+    z-index: 0;
+  }
+  .av-ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #38bdf8, #818cf8, #34d399, #38bdf8);
+    animation: avSpin 8s linear infinite;
+    z-index: 1;
   }
   .av-inner {
-    width:100%; height:100%; border-radius:50%;
+    position: relative; z-index: 2;
+    width: 94px; height: 94px; border-radius: 50%;
     background: #050811;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:2rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem;
     overflow: hidden;
   }
   .av-inner img { width:100%; height:100%; object-fit:cover; display:block; border-radius:50%; }
+  @keyframes avSpin { to { transform: rotate(360deg); } }
+  @keyframes avBreathe {
+    0%, 100% { opacity: 0.55; transform: scale(0.975); }
+    50%      { opacity: 0.85; transform: scale(1.025); }
+  }
+  /* ── [END ADDED] ── */
+
   .chat-welcome h2 {
     font-family: var(--font-display); font-size: 1.75rem; font-weight: 800;
-    background: linear-gradient(135deg,#38bdf8,#818cf8);
+    letter-spacing: -0.3px; line-height: 1.18;
+    background: linear-gradient(135deg,#38bdf8,#818cf8 55%,#34d399);
     -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-    margin-bottom: 7px;
+    margin-bottom: 9px;
   }
-  .chat-welcome p { color: var(--text-2); font-size: 0.9rem; margin-bottom: 22px; }
+
+  /* ── [ADDED] TECH BADGE ROW ──
+     Small static glassmorphism chips — same gradient-border + blur
+     language as .pers-trigger-icon / the selector system, reused here at
+     a smaller, non-interactive scale. Purely decorative; no JS hooks. */
+  .hero-badges {
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 7px;
+    max-width: 460px; margin: 0 auto 14px;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 24px; padding: 0 11px 0 9px;
+    border-radius: 999px;
+    background:
+      linear-gradient(var(--bg-input), var(--bg-input)) padding-box,
+      linear-gradient(135deg, var(--badge-color, var(--border-hi)), transparent 65%) border-box;
+    border: 1px solid transparent;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+    font-size: 0.68rem; font-weight: 600; color: var(--text-2);
+    white-space: nowrap;
+  }
+  .hero-badge-icon { font-size: 0.78rem; line-height: 1; }
+  .hero-badge--gemini { --badge-color: #38bdf8; }
+  .hero-badge--groq   { --badge-color: #22d3ee; }
+  .hero-badge--memory { --badge-color: #a78bfa; }
+  .hero-badge--voice  { --badge-color: #34d399; }
+  /* ── [END ADDED] ── */
+
+  .chat-welcome p { color: var(--text-2); font-size: 0.84rem; margin-bottom: 20px; opacity: 0.92; }
 
   .suggest-grid {
     display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr));
-    gap: 9px; max-width: 680px; margin: 0 auto;
+    align-items: stretch;
+    gap: 10px; max-width: 680px; margin: 0 auto;
   }
+
+  /* ── [UPGRADED] PREMIUM SUGGESTION CARDS ──
+     Same gradient-border glass language as .pers-card / .pers-trigger-btn.
+     .chip class + data-suggest attribute (used by the existing
+     t.closest('.chip') click delegation) are unchanged — only the visual
+     treatment and an inner .chip-text wrapper for consistent card height. */
   .chip {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 11px 13px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    min-height: 82px; box-sizing: border-box;
+    background:
+      linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+      linear-gradient(135deg, var(--border-hi), transparent 65%) border-box;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    padding: 13px 14px;
     font-size: 0.8rem; color: var(--text-2);
     cursor: pointer; text-align: left;
-    transition: all var(--t); backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 10px rgba(0,0,0,0.16);
+    transition: transform 0.15s ease, box-shadow 0.25s ease;
     touch-action: manipulation;
   }
-  .chip:hover { border-color: var(--a1); color: var(--text-1); transform: translateY(-2px); box-shadow: 0 4px 14px var(--glow1); }
-  .chip-icon { font-size: 1.05rem; margin-bottom: 3px; display: block; }
+  .chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px var(--a1), 0 6px 18px var(--glow1), 0 2px 10px rgba(0,0,0,0.16);
+  }
+  .chip:active { transform: translateY(0) scale(0.97); }
+  .chip-icon {
+    width: 30px; height: 30px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.02rem; line-height: 1; border-radius: 9px;
+    background: linear-gradient(155deg, var(--glow1), transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-hi) 70%, transparent);
+  }
+  .chip-text {
+    color: var(--text-1); font-weight: 500; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* ── [END UPGRADED] ── */
 
   .msg { display: flex; gap: 12px; max-width: 800px; }
   .msg.user { flex-direction: row-reverse; margin-left: auto; }
@@ -715,52 +800,132 @@
   @keyframes tdBounce { 0%,80%,100%{transform:scale(1);opacity:.6} 40%{transform:scale(1.35);opacity:1} }
 
   .chat-input-bar {
-    padding: 13px 22px 16px;
+    padding: 12px 18px 14px;
     background: var(--glass);
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--glass-border);
     flex-shrink: 0;
+    box-sizing: border-box;
   }
-  .chat-input-row { display: flex; align-items: flex-end; gap: 9px; max-width: 800px; }
+  .chat-input-row {
+    display: flex; align-items: center; gap: 11px;
+    width: 100%; max-width: 800px;
+    box-sizing: border-box;
+  }
   .input-wrap {
-    flex: 1;
+    flex: 1; min-width: 0;
     background: var(--bg-input); border: 1px solid var(--border);
     border-radius: var(--r-lg);
-    display: flex; align-items: flex-end; gap: 7px;
-    padding: 10px 13px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 6px 6px 14px;
+    box-sizing: border-box;
     transition: border-color var(--t), box-shadow var(--t);
   }
   .input-wrap:focus-within { border-color: var(--a1); box-shadow: 0 0 0 3px var(--glow1); }
   #chatInput {
-    flex: 1; background: none; border: none; outline: none;
+    flex: 1; min-width: 0; background: none; border: none; outline: none;
     font-family: var(--font-body); font-size: 0.875rem;
     color: var(--text-1); resize: none;
     min-height: 21px; max-height: 130px;
     line-height: 1.5;
+    padding: 6px 0;
   }
   #chatInput::placeholder { color: var(--text-3); }
+
+  /* ── [ADDED] PREMIUM GLASSMORPHISM ACTION BUTTONS (image / mic) ──
+     Pure visual layer on top of the existing, unmodified .iact-btn /
+     #imgUploadBtn / #micBtn markup — same gradient-border + blur
+     language as .pers-trigger-btn / .pers-trigger-icon. No IDs,
+     classes used by JS, or event listeners are touched. */
   .iact-btn {
-    background: none; border: none; cursor: pointer;
-    color: var(--text-3); font-size: 1.05rem; padding: 1px;
-    border-radius: 5px; line-height: 1;
-    transition: color var(--t); flex-shrink: 0;
+    width: 32px; height: 32px; flex-shrink: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      linear-gradient(var(--bg-input), var(--bg-input)) padding-box,
+      linear-gradient(135deg, var(--iact-color, var(--border-hi)), transparent 65%) border-box;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.16);
+    color: var(--text-2); font-size: 0.92rem; line-height: 1;
+    cursor: pointer;
+    transition: box-shadow 0.25s ease, transform 0.15s ease, color var(--t);
     touch-action: manipulation;
   }
-  .iact-btn:hover { color: var(--a1); }
-  .iact-btn.rec { color: #ef4444; animation: recPulse 1s ease infinite; }
-  @keyframes recPulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .iact-btn:hover, .iact-btn:focus-visible {
+    color: var(--text-1); transform: translateY(-1px);
+    box-shadow: 0 0 0 1px var(--iact-color, var(--border-hi)), 0 4px 12px var(--iact-glow, var(--glow1));
+  }
+  .iact-btn:active { transform: translateY(0) scale(0.90); }
+  .iact-btn.img-btn { --iact-color: #34d399; --iact-glow: rgba(52,211,153,0.28); }
+  #micBtn           { --iact-color: #a78bfa; --iact-glow: rgba(167,139,250,0.28); }
+  .iact-btn.rec {
+    color: #ef4444; --iact-color: #ef4444; --iact-glow: rgba(239,68,68,0.32);
+    box-shadow: 0 0 0 1px #ef4444, 0 4px 12px rgba(239,68,68,0.3);
+    animation: recPulse 1.1s ease infinite;
+  }
+  @keyframes recPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+  /* ── [END ADDED] ── */
+
   .send-btn {
-    width: 42px; height: 42px; border-radius: 50%;
+    width: 36px; height: 36px; border-radius: 50%;
     background: linear-gradient(135deg,#38bdf8,#818cf8);
     border: none; cursor: pointer; color: #000;
-    font-size: 1rem; flex-shrink: 0;
+    font-size: 0.92rem; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 3px 12px var(--glow1);
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.4), 0 4px 14px var(--glow1);
     transition: transform var(--t), box-shadow var(--t);
     touch-action: manipulation;
   }
-  .send-btn:hover { transform: scale(1.08); box-shadow: 0 5px 18px var(--glow1); }
-  .chat-hint { font-size: 0.7rem; color: var(--text-3); margin-top: 7px; text-align: center; max-width: 800px; }
+  .send-btn:hover { transform: translateY(-1px) scale(1.06); box-shadow: 0 0 0 1px rgba(56,189,248,0.55), 0 5px 18px var(--glow1); }
+  .send-btn:active { transform: translateY(0) scale(0.94); }
+
+  /* ── [ADDED] SUBTLE COMPACT STATUS LINE ──
+     Replaces the old "Enter to send · Shift+Enter…" debug-style hint.
+     Deliberately understated — flat text + thin dot separators, no
+     card backgrounds, blur, or glow, so it stays a quiet caption under
+     the input rather than another settings row competing for attention.
+     #pLabel keeps its id + textContent contract with the existing,
+     unmodified updatePLabel(); the model text is mirrored read-only via
+     syncModelTrigger() (presentation-only); the image item's visibility
+     is driven purely by the existing .img-preview-strip "has-image"
+     class toggle in renderPreviewStrip() — nothing new added there. */
+  .chat-status-bar {
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 0 9px;
+    margin-top: 6px;
+    width: 100%; max-width: 800px;
+    box-sizing: border-box;
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.66rem; font-weight: 500; color: var(--text-3);
+    white-space: nowrap; max-width: 100%;
+    opacity: 0.82;
+  }
+  .status-pill-icon { font-size: 0.7rem; line-height: 1; flex-shrink: 0; opacity: 0.8; }
+  .status-pill-text {
+    color: var(--text-2); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .status-pill + .status-pill { position: relative; }
+  .status-pill + .status-pill::before {
+    content: "·"; margin-right: 9px; color: var(--text-3); opacity: 0.4;
+  }
+  .status-pill--image { display: none; }
+  .img-preview-strip.has-image ~ .chat-status-bar .status-pill--image {
+    display: inline-flex;
+  }
+  @media (max-width: 480px) {
+    .chat-status-bar { gap: 0 7px; }
+    .status-pill { font-size: 0.62rem; }
+    .status-pill-icon { font-size: 0.66rem; }
+    .status-pill--model .status-pill-text { max-width: 120px; }
+  }
+  @media (max-width: 360px) {
+    .status-pill--model .status-pill-text { max-width: 86px; }
+  }
+  /* ── [END ADDED] ── */
 
   /* ── [ADDED] MODEL / PERSONALITY / VOICE SELECTOR ROWS ── */
   /* Shared row: full width, never overflows, label stays on one line */
@@ -861,30 +1026,43 @@
        .pers-trigger-row--voicepersonality cyan
        .pers-trigger-row--voice            green
        .pers-trigger-row--lang             amber               */
-  .pers-trigger-row--model            { --trig-color: #38bdf8; --trig-glow: rgba(56,189,248,0.30); }
-  .pers-trigger-row--personality      { --trig-color: #a78bfa; --trig-glow: rgba(167,139,250,0.32); }
-  .pers-trigger-row--voicepersonality { --trig-color: #22d3ee; --trig-glow: rgba(34,211,238,0.32); }
-  .pers-trigger-row--voice            { --trig-color: #34d399; --trig-glow: rgba(52,211,153,0.30); }
-  .pers-trigger-row--lang             { --trig-color: #f59e0b; --trig-glow: rgba(245,158,11,0.30); }
+  .pers-trigger-row--model            { --trig-color: #38bdf8; --trig-glow: rgba(56,189,248,0.26); }
+  .pers-trigger-row--personality      { --trig-color: #a78bfa; --trig-glow: rgba(167,139,250,0.27); }
+  .pers-trigger-row--voicepersonality { --trig-color: #22d3ee; --trig-glow: rgba(34,211,238,0.27); }
+  .pers-trigger-row--voice            { --trig-color: #34d399; --trig-glow: rgba(52,211,153,0.26); }
+  .pers-trigger-row--lang             { --trig-color: #f59e0b; --trig-glow: rgba(245,158,11,0.26); }
 
   /* Uniform vertical rhythm between all 5 rows, regardless of page */
   .pers-trigger-row { margin-top: 10px; margin-bottom: 10px; }
 
+  /* Fixed-width label column shared by ALL 5 selector rows — sized to
+     fully fit the longest label ("Voice Personality") without wrapping
+     or clipping, so every row's label start position, button start
+     position, and button width behave identically regardless of which
+     row it is. No row (including Spoken Language) gets its own width,
+     margin, max-width, offset, or transform — they all share this rule. */
   .pers-trigger-label-wrap {
     display: flex; flex-direction: column; gap: 1px;
-    flex-shrink: 0; max-width: 38%;
+    flex-shrink: 0;
+    width: 152px;
+    overflow: visible;
   }
   .pers-trigger-row .pers-trigger-label {
     font-weight: 700; font-size: 0.72rem;
     letter-spacing: 0.3px; color: var(--text-2);
-    text-shadow: 0 0 12px var(--trig-glow, transparent);
+    opacity: 0.92;
     white-space: nowrap;
+    overflow: visible;
   }
   .pers-trigger-subtitle {
     font-size: 0.58rem; font-weight: 500; color: var(--text-3);
     letter-spacing: 0.2px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
+    overflow: visible;
   }
+
+  /* The button always fills whatever space remains after the fixed
+     label column, identically across all 5 rows. */
+  .pers-trigger-row .pers-trigger-btn { flex: 1; min-width: 0; }
 
   /* Uniform height across all 5 trigger buttons, fixed icon size */
   .pers-trigger-row .pers-trigger-btn {
@@ -900,12 +1078,12 @@
   }
   .pers-trigger-row .pers-trigger-btn:hover,
   .pers-trigger-row .pers-trigger-btn:focus-visible {
-    box-shadow: 0 0 0 1px var(--trig-color, var(--border-hi)), 0 4px 16px var(--trig-glow, var(--glow1));
+    box-shadow: 0 0 0 1px var(--trig-color, var(--border-hi)), 0 4px 14px var(--trig-glow, var(--glow1));
     transform: translateY(-1px);
   }
   .pers-trigger-row .pers-trigger-btn:active { transform: translateY(0) scale(0.98); }
   .pers-trigger-row .pers-trigger-btn[aria-expanded="true"] {
-    box-shadow: 0 0 0 1.5px var(--trig-color, var(--border-hi)), 0 0 20px var(--trig-glow, var(--glow1));
+    box-shadow: 0 0 0 1.5px var(--trig-color, var(--border-hi)), 0 0 17px var(--trig-glow, var(--glow1));
   }
 
   .pers-trigger-row .pers-trigger-icon {
@@ -919,14 +1097,20 @@
   .pers-trigger-row .pers-trigger-name {
     font-weight: 700; letter-spacing: 0.1px;
     color: #ffffff;
+    line-height: 1;
+    display: flex; align-items: center;
   }
-  .pers-trigger-row .pers-trigger-chev { color: var(--trig-color, var(--text-3)); opacity: 0.85; }
+  .pers-trigger-row .pers-trigger-chev {
+    color: var(--trig-color, var(--text-3)); opacity: 0.85;
+    line-height: 1;
+    display: flex; align-items: center;
+  }
 
   /* Mobile widths 360px–480px: keep all 5 rows readable and non-overflowing */
   @media (max-width: 480px) {
     .pers-trigger-row { gap: 8px; }
-    .pers-trigger-label-wrap { max-width: 34%; }
-    .pers-trigger-row .pers-trigger-label { font-size: 0.66rem; }
+    .pers-trigger-label-wrap { width: 128px; }
+    .pers-trigger-row .pers-trigger-label { font-size: 0.64rem; }
     .pers-trigger-subtitle { font-size: 0.54rem; }
     .pers-trigger-row .pers-trigger-btn { height: 40px; gap: 7px; padding: 0 9px 0 6px; }
     .pers-trigger-row .pers-trigger-icon { width: 23px; height: 23px; font-size: 0.92rem; }
@@ -934,7 +1118,8 @@
   }
   @media (max-width: 380px) {
     .pers-trigger-subtitle { display: none; }
-    .pers-trigger-label-wrap { max-width: 30%; }
+    .pers-trigger-label-wrap { width: 108px; }
+    .pers-trigger-row .pers-trigger-label { font-size: 0.6rem; letter-spacing: 0.1px; }
   }
   /* ── [END ADDED: PREMIUM SELECTOR ROW POLISH] ── */
 
@@ -1508,6 +1693,12 @@
     .about-hero { padding: 28px 16px; }
     .premium-hero { padding: 32px 16px; }
     .profile-hero { padding: 32px 16px; }
+    .chat-welcome { padding: 22px 12px 14px; }
+    .av-wrap { width: 84px; height: 84px; margin-bottom: 12px; }
+    .av-inner { width: 79px; height: 79px; font-size: 1.7rem; }
+    .hero-badges { gap: 6px; margin-bottom: 12px; }
+    .hero-badge { height: 22px; font-size: 0.62rem; padding: 0 9px 0 7px; }
+    .chip { min-height: 72px; padding: 11px 12px; }
   }
   @media(max-width:360px){
     .topbar { padding: 10px 12px; }
@@ -1813,12 +2004,20 @@
     .suggest-grid {
       grid-template-columns: 1fr;
     }
+    .av-wrap { width: 76px; height: 76px; }
+    .av-inner { width: 71px; height: 71px; font-size: 1.5rem; }
+    .hero-badges { gap: 5px; }
+    .hero-badge { font-size: 0.58rem; padding: 0 8px 0 6px; }
     .stats-grid {
       grid-template-columns: 1fr;
     }
     .chat-input-bar {
       padding: 10px 10px 12px;
     }
+    .chat-input-row { gap: 8px; }
+    .input-wrap { padding: 5px 5px 5px 12px; }
+    .send-btn { width: 34px; height: 34px; font-size: 0.86rem; }
+    .iact-btn { width: 30px; height: 30px; font-size: 0.86rem; }
   }
   /* ── END MOBILE OVERFLOW FIXES ── */
 
@@ -2674,9 +2873,18 @@
     <section id="page-chat" class="page active">
       <div class="chat-messages" id="chatMessages">
         <div class="chat-welcome" id="chatWelcome">
-          <div class="av-ring"><div class="av-inner" id="welcomeAvInner"></div></div>
+          <div class="av-wrap">
+            <div class="av-ring"></div>
+            <div class="av-inner" id="welcomeAvInner"></div>
+          </div>
           <h2>Hi, I'm ALEEM AI</h2>
-          <p>Your personal knowledge assistant — ask me anything!</p>
+          <div class="hero-badges">
+            <span class="hero-badge hero-badge--gemini"><span class="hero-badge-icon">⚡</span>Gemini Powered</span>
+            <span class="hero-badge hero-badge--groq"><span class="hero-badge-icon">🦙</span>Groq Ready</span>
+            <span class="hero-badge hero-badge--memory"><span class="hero-badge-icon">🧠</span>Smart Memory</span>
+            <span class="hero-badge hero-badge--voice"><span class="hero-badge-icon">🎤</span>Voice Enabled</span>
+          </div>
+          <p>Powered by Gemini &amp; Groq • Voice, Vision &amp; Memory Enabled</p>
           <div class="suggest-grid" id="suggestGrid"></div>
         </div>
       </div>
@@ -2703,10 +2911,27 @@
           </div>
           <button class="send-btn" id="sendBtn" title="Send">➤</button>
         </div>
-        <div class="chat-hint">
-          Personality: <strong id="pLabel">Friendly</strong> &nbsp;·&nbsp;
-          Enter to send &nbsp;·&nbsp; Shift+Enter for new line &nbsp;·&nbsp;
-          🖼️ Image analysis available on Gemini models
+        <!-- [UPGRADED] Status area — premium compact pill bar replacing the
+             old "Enter to send · Shift+Enter…" developer-style hint text.
+             #pLabel keeps its id + textContent contract with the existing,
+             unmodified updatePLabel(). The model pill is mirrored read-only
+             via syncModelTrigger() (presentation-only, model logic
+             untouched). The image-ready pill's visibility is driven purely
+             by the existing .img-preview-strip "has-image" class (see CSS) —
+             nothing new added to the upload logic. -->
+        <div class="chat-status-bar" id="chatStatusBar">
+          <span class="status-pill status-pill--personality">
+            <span class="status-pill-icon">🎭</span>
+            <span class="status-pill-text" id="pLabel">Friendly</span>
+          </span>
+          <span class="status-pill status-pill--model">
+            <span class="status-pill-icon" id="statusModelIcon">⚡</span>
+            <span class="status-pill-text" id="statusModelName">Gemini 2.5 Flash Lite</span>
+          </span>
+          <span class="status-pill status-pill--image">
+            <span class="status-pill-icon">🖼️</span>
+            <span class="status-pill-text">Image Ready</span>
+          </span>
         </div>
         <!-- [UPGRADED] Model selector — hidden <select> stays source of truth;
              premium popup trigger replaces the raw dropdown visually. -->
@@ -4344,7 +4569,8 @@ function buildSuggestions() {
   if (!el) return;
   el.innerHTML = SUGGESTIONS.map(function(s) {
     return '<button class="chip" data-suggest="' + s.text.replace(/"/g,'&quot;') + '">' +
-           '<span class="chip-icon">' + s.icon + '</span>' + esc(s.text) + '</button>';
+           '<span class="chip-icon">' + s.icon + '</span>' +
+           '<span class="chip-text">' + esc(s.text) + '</span></button>';
   }).join('');
 }
 
@@ -4562,6 +4788,11 @@ function syncModelTrigger() {
   var nameEl = document.getElementById('modelTriggerName');
   if (iconEl) iconEl.textContent = meta ? meta.icon : '🤖';
   if (nameEl) nameEl.textContent = meta ? meta.name : (MODEL_LABELS[val] || val || 'Select Model');
+  // [ADDED] Mirror into the compact status-bar pill — presentation only.
+  var statusIconEl = document.getElementById('statusModelIcon');
+  var statusNameEl = document.getElementById('statusModelName');
+  if (statusIconEl) statusIconEl.textContent = meta ? meta.icon : '🤖';
+  if (statusNameEl) statusNameEl.textContent = meta ? meta.name : (MODEL_LABELS[val] || val || 'Select Model');
   var grid = document.getElementById('modelGrid');
   if (grid) {
     grid.querySelectorAll('.pers-card').forEach(function(c) {
@@ -4684,11 +4915,11 @@ function buildVoiceCards() {
     var opt = sel.options[oi];
     var val = opt.value;
     var lbl = opt.textContent;
-    // Derive flag from the voice's locale (stored as the option value for
-    // non-default options; speechSynthesis populates it as voice.name).
-    // We parse the locale from the "(xx-XX)" portion of the label text.
-    var localeMatch = lbl.match(/\(([a-zA-Z]{2,3}[-_][a-zA-Z]{2,3})\)/);
-    var locale = localeMatch ? localeMatch[1] : '';
+    // Derive flag from the ACTUAL voice locale (data-lang, set from
+    // speechSynthesis voice.lang in populateVoiceSelect) — not from
+    // parsing the visible label text, which can contain its own
+    // parentheses or multi-segment tags that break a text-based regex.
+    var locale = opt.getAttribute('data-lang') || '';
     var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
     // Short display name: strip locale suffix and ★
     var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim();
@@ -4711,10 +4942,11 @@ function syncVoiceTrigger() {
   var sel = document.getElementById('voiceSelect');
   if (!sel) return;
   var val = sel.value;
-  var lbl = (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].textContent) || '';
-  // Parse locale from label "(xx-XX)" to get the correct flag
-  var localeMatch = lbl.match(/\(([a-zA-Z]{2,3}[-_][a-zA-Z]{2,3})\)/);
-  var locale = localeMatch ? localeMatch[1] : '';
+  var selOpt = sel.options[sel.selectedIndex];
+  var lbl = (selOpt && selOpt.textContent) || '';
+  // Real locale from data-lang (set from speechSynthesis voice.lang in
+  // populateVoiceSelect), not parsed from the label text.
+  var locale = (selOpt && selOpt.getAttribute('data-lang')) || '';
   var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
   var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim() || 'Default (Auto)';
   var iconEl = document.getElementById('voiceTriggerIcon');
@@ -6271,9 +6503,18 @@ function clearChat() {
   var area = document.getElementById('chatMessages');
   area.innerHTML =
     '<div class="chat-welcome" id="chatWelcome">' +
-      '<div class="av-ring"><div class="av-inner" id="welcomeAvInner"></div></div>' +
+      '<div class="av-wrap">' +
+        '<div class="av-ring"></div>' +
+        '<div class="av-inner" id="welcomeAvInner"></div>' +
+      '</div>' +
       '<h2>Hi, I\'m ALEEM AI</h2>' +
-      '<p>Your personal knowledge assistant — ask me anything!</p>' +
+      '<div class="hero-badges">' +
+        '<span class="hero-badge hero-badge--gemini"><span class="hero-badge-icon">⚡</span>Gemini Powered</span>' +
+        '<span class="hero-badge hero-badge--groq"><span class="hero-badge-icon">🦙</span>Groq Ready</span>' +
+        '<span class="hero-badge hero-badge--memory"><span class="hero-badge-icon">🧠</span>Smart Memory</span>' +
+        '<span class="hero-badge hero-badge--voice"><span class="hero-badge-icon">🎤</span>Voice Enabled</span>' +
+      '</div>' +
+      '<p>Powered by Gemini &amp; Groq • Voice, Vision &amp; Memory Enabled</p>' +
       '<div class="suggest-grid" id="suggestGrid"></div>' +
     '</div>';
   // Re-inject ALEEM AI avatar after clearing
@@ -6507,6 +6748,10 @@ function populateVoiceSelect() {
     if (v.lang) localLabel += ' (' + v.lang + ')';
     if (v.localService) localLabel += ' ★';  // ★ = local/offline voice
     opt.textContent = localLabel;
+    // [ADDED] Real locale, straight from the SpeechSynthesisVoice object —
+    // used by buildVoiceCards()/syncVoiceTrigger() for flag lookup so we
+    // never have to parse it back out of the label text.
+    opt.setAttribute('data-lang', v.lang || '');
     if (v.name === current) opt.selected = true;
     sel.appendChild(opt);
   });
