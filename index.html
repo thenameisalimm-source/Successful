@@ -2835,6 +2835,16 @@
           <textarea id="vcTranscriptText" rows="3" style="width:100%;background:transparent;border:none;outline:none;resize:vertical;font-size:0.98rem;color:var(--text-1);line-height:1.6;font-family:var(--font-body);padding:0;min-height:48px;" placeholder="Listening for your voice…"></textarea>
         </div>
 
+        <!-- TEMPORARY on-screen debug log (mirrors vcLog console output for on-device debugging).
+             Pure display, read-only ring buffer, no effect on voice chat logic. Safe to delete later. -->
+        <div id="vcDebugBox" style="display:none;background:#0b0f14;border:1px solid rgba(99,179,237,0.25);border-radius:10px;padding:10px 12px;margin-bottom:16px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:0.68rem;line-height:1.45;color:#8fe3a3;white-space:pre-wrap;word-break:break-word;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;font-family:var(--font-body);font-size:0.65rem;">Debug log (last 20)</span>
+            <button id="vcDebugClearBtn" style="font-family:var(--font-body);font-size:0.65rem;background:transparent;border:1px solid rgba(255,255,255,0.2);color:var(--text-3);border-radius:6px;padding:2px 8px;cursor:pointer;">Clear</button>
+          </div>
+          <div id="vcDebugLines"></div>
+        </div>
+
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
@@ -7574,7 +7584,10 @@ if ('serviceWorker' in navigator) {
       if (!vc._userEdited) {
         vcTranscriptText.value = live.trim();
         vcTranscriptText.placeholder = 'Listening for your voice…';
+        vcLog('UI:TRANSCRIPT_BOX_WRITTEN', 'value="' + vcTranscriptText.value + '"');
       }
+    } else {
+      vcLog('UI:TRANSCRIPT_BOX_MISSING', 'vcTranscriptText is null — DOM element not found, box cannot update');
     }
     // Send button enabled whenever the textarea has any text (user-edited or recognised)
     if (vcSendBtn) {
@@ -7584,8 +7597,10 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── VOICE DEBUG LOGGING (internal/dev only) ──────────────────────
-  // Console-only trace for development; never touches the DOM.
+  // Console-only trace for development; mirrored to an on-screen box
+  // (#vcDebugBox) for on-device debugging without devtools.
   var _vcT0 = Date.now();
+  var _vcDebugLines = []; // ring buffer, last 20 messages
 
   function vcLog(event, detail) {
     try {
@@ -7599,6 +7614,15 @@ if ('serviceWorker' in navigator) {
                  ' transcript=' + txt;
 
       console.log('[ALEEM-VC] ' + line);
+
+      _vcDebugLines.push(line);
+      if (_vcDebugLines.length > 20) _vcDebugLines.shift();
+      var _dbgEl = document.getElementById('vcDebugLines');
+      if (_dbgEl) {
+        _dbgEl.textContent = _vcDebugLines.join('\n');
+        var _dbgBox = document.getElementById('vcDebugBox');
+        if (_dbgBox) _dbgBox.scrollTop = _dbgBox.scrollHeight;
+      }
     } catch(ex) { /* never break voice chat */ }
   }
 
@@ -7712,7 +7736,14 @@ if ('serviceWorker' in navigator) {
     var inp = document.getElementById('chatInput');
     if (inp) {
       inp.value = transcript;
-      if (typeof handleSend === 'function') handleSend();
+      if (typeof handleSend === 'function') {
+        vcLog('HANDOFF:TO_CHAT', 'chatInput found, handleSend exists — calling it now');
+        handleSend();
+      } else {
+        vcLog('HANDOFF:FAILED', 'chatInput found but handleSend is not a function — text stuck in input, never sent');
+      }
+    } else {
+      vcLog('HANDOFF:FAILED', 'chatInput element not found — transcript never left voice chat');
     }
   }
 
@@ -7806,7 +7837,10 @@ if ('serviceWorker' in navigator) {
         vc.starting  = false;
         vc.listening = true;
 
-        vcLog('MIC:STREAM_OPEN', 'gen=' + myGen + ' — starting recorder cycle');
+        var _track = stream.getAudioTracks()[0];
+        vcLog('MIC:STREAM_OPEN', 'gen=' + myGen + ' — starting recorder cycle' +
+          (_track ? ' track.enabled=' + _track.enabled + ' track.muted=' + _track.muted +
+            ' track.readyState=' + _track.readyState : ' NO AUDIO TRACK ON STREAM'));
         vcSetStatus('listening');
 
         vcSetupAnalyser(stream, myGen);
@@ -8251,6 +8285,8 @@ if ('serviceWorker' in navigator) {
     vc.interim    = '';
     vc._userEdited = false;
     vcLog('vcStart', 'Voice Chat Mode enabled — opening continuous mic session');
+    var _dbgBoxStart = document.getElementById('vcDebugBox');
+    if (_dbgBoxStart) _dbgBoxStart.style.display = 'block';
     vcUpdateToggleUI();
     if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — speak any time, pauses are fine, tap Send when ready');
     vcStartListening();
@@ -8264,6 +8300,8 @@ if ('serviceWorker' in navigator) {
   function vcStop() {
     vc.active = false;
     vcLog('vcStop', 'Voice Chat Mode disabled — closing mic session');
+    var _dbgBoxStop = document.getElementById('vcDebugBox');
+    if (_dbgBoxStop) _dbgBoxStop.style.display = 'none';
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
@@ -8338,6 +8376,14 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
+    var _vcDebugClearBtn = document.getElementById('vcDebugClearBtn');
+    if (_vcDebugClearBtn) {
+      _vcDebugClearBtn.addEventListener('click', function() {
+        _vcDebugLines.length = 0;
+        var _dbgEl = document.getElementById('vcDebugLines');
+        if (_dbgEl) _dbgEl.textContent = '';
+      });
+    }
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
