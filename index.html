@@ -7902,11 +7902,6 @@ if ('serviceWorker' in navigator) {
         return;
       }
 
-      if (vc.analyser && !vc.hadSpeechInSegment) {
-        vcLog('MIC:SKIP_SILENT', 'blob=' + blob.size + 'B but no above-threshold RMS seen this segment — skipping STT');
-        return;
-      }
-
       if (vc.speaking) {
         vcLog('MIC:SKIP_SPEAKING', 'AI speaking — discarding segment');
         return;
