@@ -2836,9 +2836,14 @@
         </div>
 
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
+        <!-- vcStopBtn duplicated the "STOP AI" control already present in the
+             voice call controls (vcUiStopSpeechBtn). It is force-hidden here
+             via !important so it no longer renders, while its id, JS
+             listeners, and vcSetStatus() display toggling remain 100%
+             intact and untouched — no voice/recognition/TTS logic changed. -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
-          <button id="vcStopBtn" class="btn-sec" style="display:none;color:#ef4444;border-color:rgba(239,68,68,0.35);">⏹ Stop</button>
+          <button id="vcStopBtn" class="btn-sec" style="display:none !important;color:#ef4444;border-color:rgba(239,68,68,0.35);">⏹ Stop</button>
         </div>
 
         <!-- Instructions (collapsed when call screen is active) -->
