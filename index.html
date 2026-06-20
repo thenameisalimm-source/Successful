@@ -2352,6 +2352,22 @@
     word-break: break-all;
     border-bottom: 1px solid rgba(255,255,255,0.04);
   }
+  #vcDebugToggleBtn {
+    position: fixed;
+    top: 10px; right: 10px;
+    z-index: 100000;
+    background: rgba(245,158,11,0.18);
+    border: 1px solid #f59e0b;
+    color: #f59e0b;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 1;
+    user-select: none;
+    -webkit-user-select: none;
+  }
   /* ── END VC DEBUG PANEL ───────────────────────────────────── */
   </style>
 </head>
@@ -8584,24 +8600,7 @@ if ('serviceWorker' in navigator) {
   </div>
   <ul></ul>
 </div>
-<script>
-// ── VC DEBUG PANEL TOGGLE ──────────────────────────────────────────────
-// Triple-tap anywhere on screen to show/hide the panel.
-// Completely separate from all voice logic.
-(function() {
-  var taps = [], THRESH = 600; // ms window for triple-tap
-  document.addEventListener('touchend', function(e) {
-    var now = Date.now();
-    taps.push(now);
-    taps = taps.filter(function(t) { return now - t < THRESH; });
-    if (taps.length >= 3) {
-      taps = [];
-      var panel = document.getElementById('vcDebugPanel');
-      if (panel) panel.classList.toggle('vc-debug-hidden');
-    }
-  }, { passive: true });
-})();
-</script>
+<button id="vcDebugToggleBtn" onclick="(function(){var p=document.getElementById('vcDebugPanel');if(p)p.classList.toggle('vc-debug-hidden');})()">🐞 DBG</button>
 <!-- ── END VC DEBUG PANEL HTML ──────────────────────────────────────── -->
 </body>
 </html>
