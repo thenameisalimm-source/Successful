@@ -2836,14 +2836,16 @@
         </div>
 
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
-        <!-- vcStopBtn duplicated the "STOP AI" control already present in the
-             voice call controls (vcUiStopSpeechBtn). It is force-hidden here
-             via !important so it no longer renders, while its id, JS
-             listeners, and vcSetStatus() display toggling remain 100%
-             intact and untouched — no voice/recognition/TTS logic changed. -->
+        <!-- vcStopBtn (the duplicate bottom "Stop" button) has been removed
+             from the DOM entirely. It duplicated the "STOP AI" control
+             already present in the voice call controls (vcUiStopSpeechBtn).
+             Every JS reference to vcStopBtn elsewhere in this file is
+             already guarded with `if (vcStopBtn) ...`, so with the element
+             gone, document.getElementById('vcStopBtn') simply returns null
+             and those guards make every reference a safe no-op. No other
+             logic, IDs, or behavior were changed. -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
-          <button id="vcStopBtn" class="btn-sec" style="display:none !important;color:#ef4444;border-color:rgba(239,68,68,0.35);">⏹ TEST123</button>
         </div>
 
         <!-- Instructions (collapsed when call screen is active) -->
