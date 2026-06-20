@@ -2299,76 +2299,6 @@
     .vc-mute-btn, .vc-stop-speech-btn { width: 52px; height: 52px; font-size: 1.25rem; }
   }
   /* ── END VOICE CHAT PREMIUM CSS ── */
-
-  /* ── VC DEBUG PANEL ──────────────────────────────────────── */
-  #vcDebugPanel {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 99999;
-    background: rgba(0,0,0,0.88);
-    border-top: 1px solid #f59e0b;
-    max-height: 38vh;
-    display: flex;
-    flex-direction: column;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    pointer-events: auto;
-  }
-  #vcDebugPanel.vc-debug-hidden { display: none; }
-  #vcDebugPanelHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 8px;
-    background: rgba(245,158,11,0.15);
-    border-bottom: 1px solid rgba(245,158,11,0.3);
-    flex-shrink: 0;
-  }
-  #vcDebugPanelHeader span {
-    color: #f59e0b;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-  }
-  #vcDebugPanelHeader button {
-    background: none;
-    border: 1px solid rgba(245,158,11,0.4);
-    color: #f59e0b;
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: 'JetBrains Mono', monospace;
-  }
-  #vcDebugPanel ul {
-    list-style: none;
-    margin: 0; padding: 4px 8px 6px;
-    overflow-y: auto;
-    flex: 1;
-  }
-  #vcDebugPanel ul li {
-    padding: 1px 0;
-    line-height: 1.4;
-    word-break: break-all;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  #vcDebugToggleBtn {
-    position: fixed;
-    top: 10px; right: 10px;
-    z-index: 100000;
-    background: rgba(245,158,11,0.18);
-    border: 1px solid #f59e0b;
-    color: #f59e0b;
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    padding: 4px 9px;
-    border-radius: 6px;
-    cursor: pointer;
-    line-height: 1;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-  /* ── END VC DEBUG PANEL ───────────────────────────────────── */
   </style>
 </head>
 <body>
@@ -5106,10 +5036,23 @@ async function callGemini(imgsData) {
 
           var bubId = addMsg('ai', reply, true);
           setConnStatus('online', 'Online');
+
+          // [PATCH — voice-chat dead-air fix] Speak immediately. The full
+          // reply is already captured by addMsg() above, so TTS no longer
+          // has to wait for the cosmetic chunk-by-chunk typing animation to
+          // finish. typeMessage's reveal can run ~1.5–5.5s on a normal-length
+          // reply (baseInterval up to 38ms x chunk count, +2.2x per sentence
+          // end) and, in Voice Chat Mode, that animation plays on a chat
+          // bubble nobody is looking at — it was pure dead air between
+          // REC:DESTROYED(sending-transcript) and the AI's voice starting.
+          // Moving the call here doesn't touch vcSpeakAndRestart/
+          // speechSynthesis at all, so playback itself (full text, voice,
+          // language selection, the 480-char cap) is unchanged.
+          if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0, 480));
+
           typeMessage(bubId, reply, function() {
             autoSaveConversation();
             S.busy = false;
-            if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0, 480));
           });
           return;
         }
@@ -5225,10 +5168,15 @@ async function callGroqDirect() {
       showActiveModelUsed('groq');
       var bubId = addMsg('ai', reply, true);
       setConnStatus('online', 'Online');
+
+      // [PATCH — voice-chat dead-air fix] Same move as the Gemini success
+      // path: speak as soon as the reply text exists, in parallel with the
+      // cosmetic typing animation, instead of waiting on it.
+      if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0,480));
+
       typeMessage(bubId, reply, function() {
         autoSaveConversation();
         S.busy = false;
-        if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0,480));
       });
     } else {
       rmEl(typId);
@@ -5327,10 +5275,14 @@ async function callGroqVisionFallback(imgs) {
       showActiveModelUsed('groq-vision');
       var bubId = addMsg('ai', reply, true);
       setConnStatus('online', 'Online');
+
+      // [PATCH — voice-chat dead-air fix] Same move as the other two
+      // success paths — speak immediately, don't wait on typeMessage.
+      if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0,480));
+
       typeMessage(bubId, reply, function() {
         autoSaveConversation();
         S.busy = false;
-        if (S.voiceOn) speakText(reply.replace(/\*\*/g,'').replace(/\*/g,'').replace(/`/g,'').slice(0,480));
       });
       return true;
     }
@@ -7514,35 +7466,6 @@ if ('serviceWorker' in navigator) {
                  ' transcript=' + txt;
 
       console.log('[ALEEM-VC] ' + line);
-
-      // ── On-screen debug panel ─────────────────────────────────────
-      // Push to the rolling 20-entry buffer and refresh the panel.
-      // Colour-code by event prefix so critical events stand out.
-      if (!window._vcDebugLines) window._vcDebugLines = [];
-      window._vcDebugLines.push({ event: event, line: line });
-      if (window._vcDebugLines.length > 20) window._vcDebugLines.shift();
-      var panel = document.getElementById('vcDebugPanel');
-      if (panel) {
-        var ul = panel.querySelector('ul');
-        if (ul) {
-          ul.innerHTML = '';
-          window._vcDebugLines.slice().reverse().forEach(function(e) {
-            var li = document.createElement('li');
-            li.textContent = e.line;
-            if (e.event.indexOf('WATCHDOG')   !== -1) li.style.color = '#f59e0b';
-            else if (e.event.indexOf('ERROR') !== -1 ||
-                     e.event.indexOf('error') !== -1 ||
-                     e.event.indexOf('dropped') !== -1) li.style.color = '#f87171';
-            else if (e.event.indexOf('STARTED') !== -1 ||
-                     e.event.indexOf('ENTER')   !== -1) li.style.color = '#34d399';
-            else if (e.event.indexOf('ENDED')   !== -1 ||
-                     e.event.indexOf('firing')  !== -1) li.style.color = '#38bdf8';
-            else li.style.color = '#94a3b8';
-            ul.appendChild(li);
-          });
-        }
-      }
-      // ── END on-screen debug panel ─────────────────────────────────
     } catch(ex) { /* never break voice chat */ }
   }
 
@@ -8591,16 +8514,5 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
-
-<!-- ── VC DEBUG PANEL HTML ─────────────────────────────────────────── -->
-<div id="vcDebugPanel" class="vc-debug-hidden">
-  <div id="vcDebugPanelHeader">
-    <span>&#x1F41E; VC DEBUG (last 20 logs)</span>
-    <button onclick="document.getElementById('vcDebugPanel').classList.add('vc-debug-hidden')">&#x2715; Close</button>
-  </div>
-  <ul></ul>
-</div>
-<button id="vcDebugToggleBtn" onclick="(function(){var p=document.getElementById('vcDebugPanel');if(p)p.classList.toggle('vc-debug-hidden');})()">🐞 DBG</button>
-<!-- ── END VC DEBUG PANEL HTML ──────────────────────────────────────── -->
 </body>
 </html>
