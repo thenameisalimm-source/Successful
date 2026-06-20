@@ -7400,15 +7400,6 @@ if ('serviceWorker' in navigator) {
     transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
                            // (prevents overlapping requests from racing each other)
 
-    // [FIX] Per-segment speech detection — reset every time vcCycleRecorder()
-    // starts a fresh recorder, set true by the silence watcher the moment it
-    // observes mic volume above SILENCE_RMS_THRESHOLD during that segment.
-    // Segments that never see real volume (pure silence/room noise) are
-    // skipped instead of being sent to Whisper, which otherwise hallucinates
-    // filler phrases ("Thank you.", "Merci.") on non-speech audio.
-    segStartTime:  0,
-    segHadSpeech:  false,
-
     // Live transcript, accumulated across as many Whisper chunk responses as
     // it takes. The mic itself never stops while vc.active is true, no matter
     // how long the user pauses — only the act of flushing+transcribing a
@@ -7473,6 +7464,39 @@ if ('serviceWorker' in navigator) {
   var SILENCE_RMS_THRESHOLD = 0.02;
   var SILENCE_POLL_MS = 250;
   var SILENCE_HOLD_MS = 600;
+
+  // STT_TIMEOUT_MS: hard ceiling on how long a single STT fetch is allowed
+  // to stay pending. Pure network-level safety net — if the request hasn't
+  // resolved or rejected on its own by this point, it is aborted so
+  // vc.transcribeBusy/vc.interim can never get stuck forever. Does not
+  // affect the recorder, silence watcher, or flush cadence in any way.
+  var STT_TIMEOUT_MS = 12000;
+
+  // ── Known Whisper silence/noise hallucination guard ───────────────
+  // Whisper-family STT models (incl. Groq's) are well-documented to
+  // hallucinate a small, predictable set of stock phrases when fed audio
+  // that contains no real speech (silence, room tone, breathing) — an
+  // artifact of sign-off lines in their training data. This does NOT touch
+  // the recorder/flush pipeline at all; it only inspects the TEXT Groq
+  // returns, after the fact, at the single point it would be appended to
+  // vc.transcript. If the ENTIRE returned chunk (trimmed, case/punctuation-
+  // insensitive) matches one of these known stock phrases, it's treated the
+  // same as an empty result and discarded instead of appended. A real
+  // utterance that merely contains one of these phrases among other words
+  // is untouched — only an exact, whole-chunk match is filtered.
+  var HALLUCINATION_PHRASES = [
+    'thank you', 'thank you so much', 'thanks for watching',
+    'thank you for watching', 'thank you for watching this video',
+    'please subscribe', "don't forget to subscribe", 'subscribe',
+    'merci', "merci d'avoir regardé", 'merci beaucoup',
+    'bye', 'goodbye', 'see you next time', "i'll see you next time",
+    'okay', 'ok', 'yeah', 'um', 'uh', 'hmm', 'mm-hmm',
+    'you', '.', '...', '♪', '[music]', '[blank_audio]', '(silence)'
+  ];
+  function vcIsHallucinatedFiller(text) {
+    var norm = text.toLowerCase().replace(/[.!?,]+$/g, '').trim();
+    return HALLUCINATION_PHRASES.indexOf(norm) !== -1;
+  }
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
   var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
@@ -7822,17 +7846,13 @@ if ('serviceWorker' in navigator) {
 
     recorder.onstop = function() {
       if (myGen !== vc.gen) return; // session ended while this segment was stopping
+      // [LOG] Confirms recorder.onstop fired at all, before any other work.
+      vcLog('RECORDER:ONSTOP_FIRED', 'gen=' + myGen + ' chunks=' + segChunks.length);
       vcLog('MIC:SEGMENT_DONE', 'gen=' + myGen + ' chunks=' + segChunks.length);
 
       var mimeType = recorder.mimeType || 'audio/webm';
       var blob = new Blob(segChunks, { type: mimeType });
       segChunks = [];
-
-      // [FIX] Capture THIS segment's duration + speech-detected flag before
-      // vcCycleRecorder() below starts the next recorder, which immediately
-      // resets vc.segStartTime/vc.segHadSpeech for the next segment.
-      var segDurationMs  = Date.now() - vc.segStartTime;
-      var segHadRealSpeech = vc.segHadSpeech;
 
       // Start next recorder immediately so we capture audio while this
       // segment is being transcribed — no gap in mic coverage.
@@ -7840,18 +7860,6 @@ if ('serviceWorker' in navigator) {
 
       if (blob.size < 2000) {
         vcLog('MIC:SKIP_TINY', 'blob=' + blob.size + 'B — silence segment, skipping STT');
-        return;
-      }
-
-      // [FIX] The byte-size check above doesn't reliably catch silence —
-      // Opus encodes room tone/background noise at a size well above 2000B
-      // for any segment longer than ~500ms. Whisper hallucinates filler
-      // phrases ("Thank you.", "Merci.") when fed audio with no real speech,
-      // which is what was showing up in the transcript. Skip any segment
-      // that never registered mic volume above the silence threshold, or
-      // that's too short to plausibly contain a spoken word.
-      if (!segHadRealSpeech || segDurationMs < MIN_CHUNK_MS) {
-        vcLog('MIC:SKIP_NO_SPEECH', 'duration=' + segDurationMs + 'ms hadSpeech=' + segHadRealSpeech + ' — skipping STT');
         return;
       }
 
@@ -7871,8 +7879,6 @@ if ('serviceWorker' in navigator) {
 
     recorder.start();
     vc.recorder = recorder;
-    vc.segStartTime = Date.now();  // [FIX] mark when this segment began
-    vc.segHadSpeech = false;       // [FIX] reset speech-detected flag for this segment
     vcLog('MIC:RECORDER_STARTED', 'gen=' + myGen);
 
     // Schedule the stop for this segment after FLUSH_INTERVAL_MS.
@@ -7945,7 +7951,6 @@ if ('serviceWorker' in navigator) {
       var now = Date.now();
       if (!quiet) {
         vc.quietSince = 0; // still talking — reset the streak
-        vc.segHadSpeech = true; // [FIX] this segment has real mic volume in it
         return;
       }
       if (!vc.quietSince) {
@@ -8007,6 +8012,10 @@ if ('serviceWorker' in navigator) {
   // ── Send one rolling chunk to Whisper and append the result ───────
   function vcTranscribeChunk(blob, myGen) {
     if (myGen !== vc.gen) return;
+    // [LOG] Confirms this function was actually entered (i.e. the segment
+    // passed every skip gate above) and shows the exact blob being sent.
+    vcLog('STT:CALLED', 'blob=' + blob.size + 'B type=' + blob.type);
+
     vc.transcribeBusy = true;
     vc.interim = '⏳…';
     vcRefreshTranscriptUI();
@@ -8016,24 +8025,66 @@ if ('serviceWorker' in navigator) {
     // Advisory language hint — same resolution logic as before, now used
     // by Whisper instead of a SpeechRecognition locale. Backend may ignore
     // this field if it doesn't support it.
-    form.append('language', vcResolveRecognitionLang());
+    var langHint = vcResolveRecognitionLang();
+    form.append('language', langHint);
+    // [LOG] Exact request payload size/lang right before the network call.
+    vcLog('STT:REQUEST', 'POST /.netlify/functions/stt blob=' + blob.size + 'B lang=' + langHint);
 
-    fetch('/.netlify/functions/stt', { method: 'POST', body: form })
-      .then(function(res) { return res.json(); })
+    // [FIX] Hard ceiling on this request so a fetch that never resolves or
+    // rejects can't lock vc.transcribeBusy/vc.interim forever. If nothing
+    // has settled within STT_TIMEOUT_MS, abort — the resulting AbortError
+    // falls into the existing .catch() below, which already clears
+    // transcribeBusy/interim and refreshes the UI, letting the next flush
+    // proceed normally. No effect at all on requests that settle normally
+    // (the timer is cleared the instant they do).
+    var sttController   = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var sttTimedOut      = false;
+    var sttTimeoutHandle = sttController ? setTimeout(function() {
+      sttTimedOut = true;
+      vcLog('STT:TIMEOUT', 'no response after ' + STT_TIMEOUT_MS + 'ms — aborting request');
+      try { sttController.abort(); } catch (e) {}
+    }, STT_TIMEOUT_MS) : null;
+
+    fetch('/.netlify/functions/stt', {
+        method: 'POST',
+        body: form,
+        signal: sttController ? sttController.signal : undefined
+      })
+      .then(function(res) {
+        if (sttTimeoutHandle) clearTimeout(sttTimeoutHandle);
+        // [LOG] HTTP status of the response, before attempting to parse it.
+        vcLog('STT:HTTP_STATUS', 'status=' + res.status + ' ok=' + res.ok);
+        return res.json();
+      })
       .then(function(data) {
+        // [LOG] Exact JSON body returned by the function.
+        vcLog('STT:RESPONSE_JSON', (function() { try { return JSON.stringify(data); } catch (e) { return '(unstringifiable: ' + e.message + ')'; } })());
+
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return; // session ended while this was in flight
         vc.interim = '';
         var text = data && data.transcript ? data.transcript.trim() : '';
+        if (text && vcIsHallucinatedFiller(text)) {
+          vcLog('STT:FILTERED_HALLUCINATION', 'discarded stock phrase: "' + text + '"');
+          text = '';
+        }
         if (text) {
+          // [LOG] Exact point vc.transcript is mutated, with before/after values.
+          var before = vc.transcript;
           vc.transcript = (vc.transcript + ' ' + text).trim();
-          vcLog('STT:APPEND', 'chunk transcribed: "' + text + '" — transcript now="' + vc.transcript + '"');
+          vcLog('TRANSCRIPT:UPDATE', 'before="' + before + '" appended="' + text + '" after="' + vc.transcript + '"');
         } else {
           vcLog('STT:EMPTY', 'chunk returned no transcript (likely silence)');
         }
         vcRefreshTranscriptUI();
       })
       .catch(function(err) {
+        if (sttTimeoutHandle) clearTimeout(sttTimeoutHandle);
+        // [LOG] Fires on network failure, a timeout-triggered abort, or if
+        // res.json() couldn't parse the response body (e.g. a non-JSON
+        // error page from a 404/500).
+        vcLog(sttTimedOut ? 'STT:TIMEOUT_ABORTED' : 'STT:CATCH', (err && err.message) || String(err));
+
         vc.transcribeBusy = false;
         if (myGen !== vc.gen) return;
         vc.interim = '';
@@ -8043,6 +8094,7 @@ if ('serviceWorker' in navigator) {
         vcRefreshTranscriptUI();
       });
   }
+
 
   // ── Speak AI reply, then return to listening ─────────────────────
   // Called by the patched speakText replacement below. mySpeakGen lets the
