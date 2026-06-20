@@ -5615,6 +5615,16 @@ function startMic() {
 
         var form = new FormData();
         form.append('audio', blob, 'audio.webm');
+        // Pass the language selected in Voice Chat's language dropdown as an
+        // explicit ISO 639-1 hint to Whisper. Without this, Whisper auto-detects
+        // and frequently misidentifies Hindi/Marathi/Gujarati/Urdu as Russian or
+        // Spanish. Strip the BCP-47 region subtag (e.g. "hi-IN" → "hi") because
+        // Whisper only accepts ISO 639-1 codes; region subtags cause silent fallback
+        // to auto-detection.
+        var _micLangEl   = document.getElementById('vcLangSelect');
+        var _micLangBcp  = _micLangEl ? _micLangEl.value : '';
+        var _micLangHint = _micLangBcp ? _micLangBcp.split('-')[0].toLowerCase() : '';
+        if (_micLangHint) form.append('language', _micLangHint);
 
         fetch('/.netlify/functions/stt', { method: 'POST', body: form })
           .then(function(res) { return res.json(); })
@@ -7713,11 +7723,21 @@ if ('serviceWorker' in navigator) {
     }
   }
 
+  // ── Convert any BCP-47 tag to the ISO 639-1 code Whisper expects ──
+  // Whisper's language parameter must be a plain ISO 639-1 code (e.g. "hi",
+  // "gu", "mr", "ur", "en"). BCP-47 region subtags like "-IN" cause Whisper
+  // to silently fall back to auto-detection, which is the root cause of
+  // mis-identification of Hindi/Marathi/Gujarati/Urdu as Russian or Spanish.
+  function vcToWhisperLang(bcp47) {
+    if (!bcp47) return '';
+    // Strip region subtag: "hi-IN" → "hi", "en-IN" → "en", "ur-IN" → "ur"
+    return bcp47.split('-')[0].toLowerCase();
+  }
+
   // ── Resolve which language hint to give Whisper ──────────────────
   // Whisper (via /.netlify/functions/stt) can be hinted with a language
-  // code to improve accuracy, similarly to how the old SpeechRecognition
-  // locale worked — except Whisper handles many languages well even without
-  // a hint, so this is advisory, not load-bearing.
+  // code to improve accuracy. An explicit user selection always wins and is
+  // passed as an ISO 639-1 code. Auto-mode falls back through heuristics.
   //
   // Auto-mode strategy (langPref = ''):
   //   1. If the user's last-SENT transcript was positively identified as a
@@ -7725,27 +7745,27 @@ if ('serviceWorker' in navigator) {
   //      locale — it's the most reliable signal we have.
   //   2. If the AI's last reply was in a confirmed non-English language, use
   //      that locale as a weaker hint.
-  //   3. Otherwise default to 'en-IN' so Indian-accented English isn't
+  //   3. Otherwise default to 'en' so Indian-accented English isn't
   //      mis-hinted toward a different script.
   function vcResolveRecognitionLang() {
     var resolved, reason;
     if (vc.langPref) {
-      // Explicit pin always wins.
-      resolved = vc.langPref;
+      // Explicit pin always wins — convert to ISO 639-1 for Whisper.
+      resolved = vcToWhisperLang(vc.langPref);
       reason   = 'pinned';
     } else if (vc.userUtteranceLang &&
                vc.userUtteranceLang.slice(0, 2).toLowerCase() !== 'en') {
       // Confirmed non-English language detected from the user's own speech.
-      resolved = vc.userUtteranceLang;
+      resolved = vcToWhisperLang(vc.userUtteranceLang);
       reason   = 'lastUserSpeech(non-en)';
     } else if (vc.lastDetectedLang &&
                vc.lastDetectedLang.slice(0, 2).toLowerCase() !== 'en') {
       // AI replied in a non-English language — weakly suggests user intent.
-      resolved = vc.lastDetectedLang;
+      resolved = vcToWhisperLang(vc.lastDetectedLang);
       reason   = 'lastAIReply(non-en)';
     } else {
-      resolved = 'en-IN';
-      reason   = 'default(en-IN)';
+      resolved = 'en';
+      reason   = 'default(en)';
     }
     vcLog('vcResolveRecognitionLang',
       'RESOLVED="' + resolved + '" reason=' + reason +
