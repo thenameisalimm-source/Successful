@@ -888,6 +888,10 @@
     font-family: var(--font-display); font-weight: 700; font-size: 1rem;
     color: var(--text-1);
   }
+  .pers-popup-subtitle {
+    font-size: 0.72rem; color: var(--text-3);
+    margin-top: 2px; letter-spacing: 0.2px;
+  }
   .pers-popup-close {
     background: var(--bg-input); border: 1px solid var(--border); border-radius: 50%;
     width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
@@ -2616,8 +2620,9 @@
           Enter to send &nbsp;·&nbsp; Shift+Enter for new line &nbsp;·&nbsp;
           🖼️ Image analysis available on Gemini models
         </div>
-        <!-- [ADDED] Model selector — lets user pick Gemini model; saved to localStorage -->
-        <div class="model-selector-row">
+        <!-- [UPGRADED] Model selector — hidden <select> stays source of truth;
+             premium popup trigger replaces the raw dropdown visually. -->
+        <div class="model-selector-row" style="display:none;" aria-hidden="true">
           <span class="model-selector-label">🤖 Model:</span>
           <select id="modelSelect">
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
@@ -2626,7 +2631,29 @@
             <option value="gemini-2.5-pro">Gemini 2.5 Pro (May require paid quota)</option>
           </select>
         </div>
-        <!-- [END ADDED] -->
+        <div class="pers-trigger-row">
+          <span class="pers-trigger-label">🤖 Model:</span>
+          <button type="button" class="pers-trigger-btn" id="modelTriggerBtn"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="modelPopupOverlay">
+            <span class="pers-trigger-icon" id="modelTriggerIcon">⚡</span>
+            <span class="pers-trigger-name" id="modelTriggerName">Gemini 2.5 Flash Lite</span>
+            <span class="pers-trigger-chev">▾</span>
+          </button>
+        </div>
+        <!-- Model picker popup -->
+        <div class="pers-popup-overlay" id="modelPopupOverlay">
+          <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="modelPopupTitle">
+            <div class="pers-popup-header">
+              <div>
+                <span class="pers-popup-title" id="modelPopupTitle">🤖 Choose AI Model</span>
+                <div class="pers-popup-subtitle">Select the AI engine powering your responses</div>
+              </div>
+              <button type="button" class="pers-popup-close" id="modelPopupClose" aria-label="Close">✕</button>
+            </div>
+            <div class="pers-grid" id="modelGrid"></div>
+          </div>
+        </div>
+        <!-- [END UPGRADED] -->
 
         <!-- [ADDED] Personality selector — placed directly below model selector;
              saved to localStorage and restored on page refresh.
@@ -2723,15 +2750,38 @@
           </div>
         </div>
         <!-- [END ADDED] -->
-        <!-- Voice selector: choose actual installed TTS voice by name/locale.
-             Populated dynamically from speechSynthesis.getVoices(). -->
-        <div class="personality-selector-row">
+        <!-- [UPGRADED] Voice selector — hidden <select> stays source of truth;
+             premium popup trigger replaces the raw dropdown visually.
+             voiceDebugPanel kept in DOM (hidden) so runVoiceDiagnostic() still works. -->
+        <div class="personality-selector-row" style="display:none;" aria-hidden="true">
           <span class="personality-selector-label">🗣️ Voice:</span>
           <select id="voiceSelect">
             <option value="">🔄 Default</option>
           </select>
         </div>
-        <!-- voiceDebugPanel kept in DOM (hidden) so runVoiceDiagnostic() still works
+        <div class="pers-trigger-row">
+          <span class="pers-trigger-label">🗣️ Voice:</span>
+          <button type="button" class="pers-trigger-btn" id="voiceTriggerBtn"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="voicePopupOverlay">
+            <span class="pers-trigger-icon" id="voiceTriggerIcon">🔄</span>
+            <span class="pers-trigger-name" id="voiceTriggerName">Default (Auto)</span>
+            <span class="pers-trigger-chev">▾</span>
+          </button>
+        </div>
+        <!-- Voice picker popup -->
+        <div class="pers-popup-overlay" id="voicePopupOverlay">
+          <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="voicePopupTitle">
+            <div class="pers-popup-header">
+              <div>
+                <span class="pers-popup-title" id="voicePopupTitle">🗣️ Choose Voice</span>
+                <div class="pers-popup-subtitle">Pick a TTS voice for AI speech output</div>
+              </div>
+              <button type="button" class="pers-popup-close" id="voicePopupClose" aria-label="Close">✕</button>
+            </div>
+            <div class="pers-grid" id="voiceGrid"></div>
+          </div>
+        </div>
+        <!-- [END UPGRADED] -->
              if called from the browser console during development. -->
         <div id="voiceDebugPanel" style="display:none; margin-top:10px; padding:12px 14px; background:rgba(0,0,0,0.35); border:1px solid rgba(99,179,237,0.25); border-radius:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-2); max-height:260px; overflow-y:auto; text-align:left; line-height:1.7;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -2937,8 +2987,9 @@
           <span id="vcToggleLabel" style="font-size:1rem;color:var(--text-1);">Voice Chat Mode: <strong>Off</strong></span>
         </div>
 
-        <!-- Spoken Language selector (ID and logic UNCHANGED) -->
-        <div class="personality-selector-row" style="margin-bottom:20px;max-width:360px;">
+        <!-- [UPGRADED] Spoken Language selector — hidden <select> stays source of truth;
+             premium popup trigger replaces the raw dropdown visually. -->
+        <div class="personality-selector-row" style="display:none;margin-bottom:20px;max-width:360px;" aria-hidden="true">
           <span class="personality-selector-label">🌐 Spoken Language:</span>
           <select id="vcLangSelect">
             <option value="">🔄 Auto — Recommended: Select your language manually for maximum accuracy.</option>
@@ -2949,6 +3000,29 @@
             <option value="ur-IN">Urdu (اردو)</option>
           </select>
         </div>
+        <div class="pers-trigger-row" style="margin-bottom:20px;max-width:400px;">
+          <span class="pers-trigger-label">🌐 Language:</span>
+          <button type="button" class="pers-trigger-btn" id="langTriggerBtn"
+                  aria-haspopup="true" aria-expanded="false" aria-controls="langPopupOverlay">
+            <span class="pers-trigger-icon" id="langTriggerIcon">🔄</span>
+            <span class="pers-trigger-name" id="langTriggerName">Auto</span>
+            <span class="pers-trigger-chev">▾</span>
+          </button>
+        </div>
+        <!-- Spoken Language picker popup -->
+        <div class="pers-popup-overlay" id="langPopupOverlay">
+          <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="langPopupTitle">
+            <div class="pers-popup-header">
+              <div>
+                <span class="pers-popup-title" id="langPopupTitle">🌐 Spoken Language</span>
+                <div class="pers-popup-subtitle">Select for best speech recognition accuracy</div>
+              </div>
+              <button type="button" class="pers-popup-close" id="langPopupClose" aria-label="Close">✕</button>
+            </div>
+            <div class="pers-grid" id="langGrid"></div>
+          </div>
+        </div>
+        <!-- [END UPGRADED] -->
 
         <!-- ══════════════════════════════════════════════════════
              PREMIUM VOICE CALL SCREEN — visual-only addition.
@@ -3948,6 +4022,45 @@ function bindAllEvents() {
   syncPersonalityTrigger();
   syncVoicePersonalityTrigger();
 
+  // [ADDED] Model popup wiring
+  buildModelCards();
+  bindPersonalityPopup(
+    document.getElementById('modelPopupOverlay'),
+    document.getElementById('modelTriggerBtn'),
+    document.getElementById('modelPopupClose'),
+    document.getElementById('modelGrid'),
+    modelSelect
+  );
+  if (modelSelect) modelSelect.addEventListener('change', syncModelTrigger);
+  syncModelTrigger();
+
+  // [ADDED] Voice picker popup wiring — cards are built by syncVoiceCards()
+  // which is called after populateVoiceSelect() so the TTS voices list is ready.
+  buildVoiceCards();
+  bindPersonalityPopup(
+    document.getElementById('voicePopupOverlay'),
+    document.getElementById('voiceTriggerBtn'),
+    document.getElementById('voicePopupClose'),
+    document.getElementById('voiceGrid'),
+    document.getElementById('voiceSelect')
+  );
+  var vsEl = document.getElementById('voiceSelect');
+  if (vsEl) vsEl.addEventListener('change', syncVoiceTrigger);
+  syncVoiceTrigger();
+
+  // [ADDED] Spoken Language popup wiring
+  buildLangCards();
+  var vcLangSel = document.getElementById('vcLangSelect');
+  bindPersonalityPopup(
+    document.getElementById('langPopupOverlay'),
+    document.getElementById('langTriggerBtn'),
+    document.getElementById('langPopupClose'),
+    document.getElementById('langGrid'),
+    vcLangSel
+  );
+  if (vcLangSel) vcLangSel.addEventListener('change', syncLangTrigger);
+  syncLangTrigger();
+
   // Escape closes whichever personality popup is currently open. This is a
   // new, scoped 'keydown' listener on document — it does not touch
   // chatInput's/searchInput's existing keydown handlers, and it never calls
@@ -3956,8 +4069,14 @@ function bindAllEvents() {
     if (e.key !== 'Escape') return;
     var pOv = document.getElementById('personalityPopupOverlay');
     var vOv = document.getElementById('voicePersonalityPopupOverlay');
+    var mOv = document.getElementById('modelPopupOverlay');
+    var vsOv = document.getElementById('voicePopupOverlay');
+    var lOv = document.getElementById('langPopupOverlay');
     if (pOv && pOv.classList.contains('show')) closePersPopup(pOv, document.getElementById('personalityTriggerBtn'));
     if (vOv && vOv.classList.contains('show')) closePersPopup(vOv, document.getElementById('voicePersonalityTriggerBtn'));
+    if (mOv && mOv.classList.contains('show')) closePersPopup(mOv, document.getElementById('modelTriggerBtn'));
+    if (vsOv && vsOv.classList.contains('show')) closePersPopup(vsOv, document.getElementById('voiceTriggerBtn'));
+    if (lOv && lOv.classList.contains('show')) closePersPopup(lOv, document.getElementById('langTriggerBtn'));
   });
   // [END ADDED]
 
@@ -4305,7 +4424,230 @@ function bindPersonalityPopup(overlay, btn, closeBtn, grid, select) {
 }
 // ── [END ADDED] ───────────────────────────────────────────────────
 
-// ── SEARCH ────────────────────────────────────────────────────────
+// ── [ADDED] PREMIUM MODEL / VOICE / LANGUAGE PICKERS ──────────────
+// Same presentation-only pattern as the AI Personality / Voice Personality
+// pickers above. Hidden <select> elements remain the single source of truth.
+// Card clicks only set .value + dispatch 'change' via bindPersonalityPopup().
+
+// ── Model Picker ──
+var MODEL_CARD_META = [
+  { value: 'gemini-2.5-flash-lite', icon: '⚡', name: 'Flash Lite',    desc: 'Fast & free-tier friendly — best for everyday questions', color: '#38bdf8' },
+  { value: 'gemini-2.5-flash',      icon: '🚀', name: 'Flash',         desc: 'Balanced speed and capability for complex tasks',          color: '#818cf8' },
+  { value: 'groq',                   icon: '🦙', name: 'Groq · Llama', desc: 'Llama 3.3 via Groq — text only, lightning fast',          color: '#34d399' },
+  { value: 'gemini-2.5-pro',        icon: '💎', name: 'Pro',           desc: 'Most capable — may require paid quota',                   color: '#f59e0b' },
+];
+
+function buildModelCards() {
+  var grid = document.getElementById('modelGrid');
+  if (!grid) return;
+  grid.innerHTML = MODEL_CARD_META.map(function(m) {
+    var style = '--card-color:' + m.color + ';--card-glow:' + hexToRgba(m.color, 0.38) + ';';
+    return '<button type="button" class="pers-card" data-key="' + m.value + '" style="' + style + '">' +
+             '<span class="pers-card-icon">' + m.icon + '</span>' +
+             '<span class="pers-card-name">' + m.name + '</span>' +
+             '<span class="pers-card-desc">' + m.desc + '</span>' +
+             '<span class="pers-card-check">✓</span>' +
+           '</button>';
+  }).join('');
+}
+
+function syncModelTrigger() {
+  var sel = document.getElementById('modelSelect');
+  if (!sel) return;
+  var val = sel.value;
+  var meta = MODEL_CARD_META.filter(function(m) { return m.value === val; })[0];
+  var iconEl = document.getElementById('modelTriggerIcon');
+  var nameEl = document.getElementById('modelTriggerName');
+  if (iconEl) iconEl.textContent = meta ? meta.icon : '🤖';
+  if (nameEl) nameEl.textContent = meta ? meta.name : (MODEL_LABELS[val] || val || 'Select Model');
+  var grid = document.getElementById('modelGrid');
+  if (grid) {
+    grid.querySelectorAll('.pers-card').forEach(function(c) {
+      c.classList.toggle('selected', c.getAttribute('data-key') === val);
+    });
+  }
+}
+
+// Also keep the trigger in sync when showActiveModelUsed() temporarily
+// changes the hidden select's displayed value.
+function _origSyncModelTrigger() { syncModelTrigger(); }
+
+// ── Voice Picker ──
+// Built dynamically from the hidden #voiceSelect options so it always
+// mirrors whatever populateVoiceSelect() loaded from speechSynthesis.
+// ── [ADDED] Locale → country flag emoji map (UI only, no logic changes) ──
+// Covers every locale code that appears in SpeechSynthesis voices on
+// Android + iOS + desktop Chrome/Safari. Keyed by the BCP-47 region suffix
+// (case-insensitive). Unknown locales fall back to 🔊.
+var VOICE_FLAG_MAP = {
+  'AU': '🇦🇺', 'US': '🇺🇸', 'GB': '🇬🇧', 'IN': '🇮🇳', 'CA': '🇨🇦',
+  'NZ': '🇳🇿', 'IE': '🇮🇪', 'ZA': '🇿🇦', 'PH': '🇵🇭', 'SG': '🇸🇬',
+  'HK': '🇭🇰', 'TW': '🇹🇼', 'CN': '🇨🇳', 'JP': '🇯🇵', 'KR': '🇰🇷',
+  'FR': '🇫🇷', 'DE': '🇩🇪', 'ES': '🇪🇸', 'IT': '🇮🇹', 'PT': '🇵🇹',
+  'BR': '🇧🇷', 'MX': '🇲🇽', 'AR': '🇦🇷', 'CO': '🇨🇴', 'CL': '🇨🇱',
+  'RU': '🇷🇺', 'PL': '🇵🇱', 'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴',
+  'DK': '🇩🇰', 'FI': '🇫🇮', 'TR': '🇹🇷', 'SA': '🇸🇦', 'IL': '🇮🇱',
+  'TH': '🇹🇭', 'ID': '🇮🇩', 'MY': '🇲🇾', 'VN': '🇻🇳', 'PK': '🇵🇰',
+  'BD': '🇧🇩', 'LK': '🇱🇰', 'NP': '🇳🇵', 'NG': '🇳🇬', 'KE': '🇰🇪',
+  'GH': '🇬🇭', 'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'CZ': '🇨🇿',
+  'HU': '🇭🇺', 'RO': '🇷🇴', 'BG': '🇧🇬', 'HR': '🇭🇷', 'SK': '🇸🇰',
+  'UA': '🇺🇦', 'GR': '🇬🇷', 'PT': '🇵🇹',
+};
+
+// Returns a flag emoji for a BCP-47 locale string (e.g. "en-AU" → "🇦🇺").
+// Falls back to a language-based flag for common Indic languages without
+// a country code, and ultimately to 🔊 if nothing matches.
+function voiceFlagForLocale(locale) {
+  if (!locale) return '🔄';
+  // Normalise underscores (some Android voices use "en_IN" not "en-IN")
+  var norm = locale.replace(/_/g, '-');
+  // Try region suffix first: "en-AU" → "AU"
+  var parts = norm.split('-');
+  if (parts.length >= 2) {
+    var region = parts[parts.length - 1].toUpperCase();
+    if (VOICE_FLAG_MAP[region]) return VOICE_FLAG_MAP[region];
+  }
+  // Fall back by primary language tag for Indian languages that may lack a region
+  var primary = parts[0].toLowerCase();
+  var LANG_FLAGS = { hi:'🇮🇳', mr:'🇮🇳', gu:'🇮🇳', pa:'🇮🇳', bn:'🇮🇳',
+                     ur:'🇵🇰', ta:'🇱🇰', te:'🇮🇳', kn:'🇮🇳', ml:'🇮🇳',
+                     zh:'🇨🇳', ja:'🇯🇵', ko:'🇰🇷', ar:'🇸🇦', fr:'🇫🇷',
+                     de:'🇩🇪', es:'🇪🇸', it:'🇮🇹', pt:'🇵🇹', ru:'🇷🇺',
+                     tr:'🇹🇷', nl:'🇳🇱', pl:'🇵🇱', sv:'🇸🇪', da:'🇩🇰',
+                     fi:'🇫🇮', no:'🇳🇴', el:'🇬🇷', he:'🇮🇱', th:'🇹🇭',
+                     id:'🇮🇩', ms:'🇲🇾', vi:'🇻🇳' };
+  return LANG_FLAGS[primary] || '🔊';
+}
+
+// Also returns a human-readable accent/dialect label from a locale string,
+// used as the card subtitle when no better description is available.
+function voiceAccentLabel(locale) {
+  if (!locale) return 'Auto-selected by language';
+  var norm = locale.replace(/_/g, '-').toLowerCase();
+  var ACCENT_LABELS = {
+    'en-au': 'Natural Australian accent',
+    'en-us': 'American accent',
+    'en-gb': 'Professional UK accent',
+    'en-in': 'Indian accent',
+    'en-ca': 'Canadian accent',
+    'en-nz': 'New Zealand accent',
+    'en-ie': 'Irish accent',
+    'en-za': 'South African accent',
+    'en-ph': 'Philippine accent',
+    'en-sg': 'Singapore accent',
+    'hi-in': 'हिंदी — Devanagari',
+    'mr-in': 'मराठी — Devanagari',
+    'gu-in': 'ગુજરાતી script',
+    'ur-in': 'اردو script',
+    'ur-pk': 'اردو script',
+    'ta-in': 'தமிழ் script',
+    'te-in': 'తెలుగు script',
+    'kn-in': 'ಕನ್ನಡ script',
+    'ml-in': 'മലയാളം script',
+    'bn-in': 'বাংলা script',
+    'pa-in': 'ਪੰਜਾਬੀ script',
+  };
+  return ACCENT_LABELS[norm] || locale;
+}
+// ── [END ADDED: flag helpers] ──────────────────────────────────────
+
+function buildVoiceCards() {
+  var grid = document.getElementById('voiceGrid');
+  var sel  = document.getElementById('voiceSelect');
+  if (!grid || !sel) return;
+  var VOICE_COLORS = ['#38bdf8','#818cf8','#34d399','#f59e0b','#ec4899','#a855f7','#06b6d4','#ef4444','#22c55e','#6366f1','#14b8a6','#f97316'];
+  var html = '';
+  var idx = 0;
+  for (var oi = 0; oi < sel.options.length; oi++) {
+    var opt = sel.options[oi];
+    var val = opt.value;
+    var lbl = opt.textContent;
+    // Derive flag from the voice's locale (stored as the option value for
+    // non-default options; speechSynthesis populates it as voice.name).
+    // We parse the locale from the "(xx-XX)" portion of the label text.
+    var localeMatch = lbl.match(/\(([a-zA-Z]{2,3}[-_][a-zA-Z]{2,3})\)/);
+    var locale = localeMatch ? localeMatch[1] : '';
+    var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
+    // Short display name: strip locale suffix and ★
+    var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim();
+    var color = VOICE_COLORS[idx % VOICE_COLORS.length];
+    var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
+    // Subtitle: prefer accent label derived from locale, fall back to raw label remainder
+    var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
+    html += '<button type="button" class="pers-card" data-key="' + val.replace(/"/g, '&quot;') + '" data-locale="' + locale + '" style="' + style + '">' +
+              '<span class="pers-card-icon">' + flag + '</span>' +
+              '<span class="pers-card-name">' + shortName + '</span>' +
+              '<span class="pers-card-desc">' + desc + '</span>' +
+              '<span class="pers-card-check">✓</span>' +
+            '</button>';
+    idx++;
+  }
+  grid.innerHTML = html || '<p style="color:var(--text-3);font-size:0.82rem;padding:16px;">No voices available yet — try again after the page fully loads.</p>';
+}
+
+function syncVoiceTrigger() {
+  var sel = document.getElementById('voiceSelect');
+  if (!sel) return;
+  var val = sel.value;
+  var lbl = (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].textContent) || '';
+  // Parse locale from label "(xx-XX)" to get the correct flag
+  var localeMatch = lbl.match(/\(([a-zA-Z]{2,3}[-_][a-zA-Z]{2,3})\)/);
+  var locale = localeMatch ? localeMatch[1] : '';
+  var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
+  var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim() || 'Default (Auto)';
+  var iconEl = document.getElementById('voiceTriggerIcon');
+  var nameEl = document.getElementById('voiceTriggerName');
+  if (iconEl) iconEl.textContent = flag;
+  if (nameEl) nameEl.textContent = shortName;
+  var grid = document.getElementById('voiceGrid');
+  if (grid) {
+    grid.querySelectorAll('.pers-card').forEach(function(c) {
+      c.classList.toggle('selected', c.getAttribute('data-key') === val);
+    });
+  }
+}
+
+// ── Spoken Language Picker ──
+var LANG_CARD_META = [
+  { value: '',      icon: '🔄', name: 'Auto',     desc: 'Browser detects language automatically',          color: '#38bdf8' },
+  { value: 'en-IN', icon: '🇬🇧', name: 'English',  desc: 'English — best accuracy for English speech',     color: '#818cf8' },
+  { value: 'hi-IN', icon: '🇮🇳', name: 'Hindi',    desc: 'हिंदी — Devanagari speech recognition',           color: '#f97316' },
+  { value: 'mr-IN', icon: '🇮🇳', name: 'Marathi',  desc: 'मराठी — Marathi speech recognition',              color: '#a855f7' },
+  { value: 'ur-IN', icon: '🇵🇰', name: 'Urdu',     desc: 'اردو — Urdu speech recognition',                  color: '#ec4899' },
+  { value: 'gu-IN', icon: '🇮🇳', name: 'Gujarati', desc: 'ગુજરાતી — Gujarati speech recognition',           color: '#34d399' },
+];
+
+function buildLangCards() {
+  var grid = document.getElementById('langGrid');
+  if (!grid) return;
+  grid.innerHTML = LANG_CARD_META.map(function(l) {
+    var style = '--card-color:' + l.color + ';--card-glow:' + hexToRgba(l.color, 0.32) + ';';
+    return '<button type="button" class="pers-card" data-key="' + l.value + '" style="' + style + '">' +
+             '<span class="pers-card-icon">' + l.icon + '</span>' +
+             '<span class="pers-card-name">' + l.name + '</span>' +
+             '<span class="pers-card-desc">' + l.desc + '</span>' +
+             '<span class="pers-card-check">✓</span>' +
+           '</button>';
+  }).join('');
+}
+
+function syncLangTrigger() {
+  var sel = document.getElementById('vcLangSelect');
+  if (!sel) return;
+  var val = sel.value;
+  var meta = LANG_CARD_META.filter(function(l) { return l.value === val; })[0];
+  var iconEl = document.getElementById('langTriggerIcon');
+  var nameEl = document.getElementById('langTriggerName');
+  if (iconEl) iconEl.textContent = meta ? meta.icon : '🌐';
+  if (nameEl) nameEl.textContent = meta ? meta.name : (val || 'Auto');
+  var grid = document.getElementById('langGrid');
+  if (grid) {
+    grid.querySelectorAll('.pers-card').forEach(function(c) {
+      c.classList.toggle('selected', c.getAttribute('data-key') === val);
+    });
+  }
+}
+// ── [END ADDED: model/voice/lang pickers] ─────────────────────────
 function doSearch() {
   var input = document.getElementById('searchInput');
   if (!input) return;
@@ -5178,6 +5520,8 @@ function showActiveModelUsed(usedModel) {
     if (hasOption) sel.value = usedModel;
   }
   // [END MODIFIED]
+  // [ADDED] Sync premium model trigger button to reflect the temporary active model
+  if (typeof syncModelTrigger === 'function') syncModelTrigger();
 
   var fromLabel = MODEL_LABELS[preferred] || preferred;
   var toLabel   = MODEL_LABELS[usedModel] || usedModel;
@@ -5191,6 +5535,8 @@ function showActiveModelUsed(usedModel) {
 function restoreSelectedModelDisplay() {
   var sel = document.getElementById('modelSelect');
   if (sel) sel.value = S.model || 'gemini-2.5-flash-lite';
+  // [ADDED] Also restore the premium trigger button label
+  if (typeof syncModelTrigger === 'function') syncModelTrigger();
 }
 
 var MAX_RETRIES   = 3;
@@ -6042,6 +6388,10 @@ function populateVoiceSelect() {
     if (v.name === current) opt.selected = true;
     sel.appendChild(opt);
   });
+  // [ADDED] Rebuild premium voice picker cards and sync trigger label
+  // whenever the voice list is populated/updated.
+  buildVoiceCards();
+  syncVoiceTrigger();
 }
 
 function speakText(t) {
