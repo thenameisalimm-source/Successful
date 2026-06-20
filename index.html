@@ -2835,16 +2835,6 @@
           <textarea id="vcTranscriptText" rows="3" style="width:100%;background:transparent;border:none;outline:none;resize:vertical;font-size:0.98rem;color:var(--text-1);line-height:1.6;font-family:var(--font-body);padding:0;min-height:48px;" placeholder="Listening for your voice…"></textarea>
         </div>
 
-        <!-- TEMPORARY on-screen debug log (mirrors vcLog console output for on-device debugging).
-             Pure display, read-only ring buffer, no effect on voice chat logic. Safe to delete later. -->
-        <div id="vcDebugBox" style="display:none;background:#0b0f14;border:1px solid rgba(99,179,237,0.25);border-radius:10px;padding:10px 12px;margin-bottom:16px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:0.68rem;line-height:1.45;color:#8fe3a3;white-space:pre-wrap;word-break:break-word;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="color:var(--text-3);text-transform:uppercase;letter-spacing:0.6px;font-family:var(--font-body);font-size:0.65rem;">Debug log (last 20)</span>
-            <button id="vcDebugClearBtn" style="font-family:var(--font-body);font-size:0.65rem;background:transparent;border:1px solid rgba(255,255,255,0.2);color:var(--text-3);border-radius:6px;padding:2px 8px;cursor:pointer;">Clear</button>
-          </div>
-          <div id="vcDebugLines"></div>
-        </div>
-
         <!-- Send / Stop action row (IDs UNCHANGED, shown/hidden by existing vcSetStatus) -->
         <div id="vcActionRow" style="display:flex;gap:12px;margin-bottom:20px;">
           <button id="vcSendBtn" class="btn-pri" style="display:none;" disabled>📤 Send</button>
@@ -5587,92 +5577,26 @@ function updateVoiceBtn() {
 }
 
 function toggleMic() { S.micOn ? stopMic() : startMic(); }
-
-// ── STT via Groq Whisper (/.netlify/functions/stt) ────────────────
-// S.mic now holds the MediaRecorder instance when recording.
-// S.micStream holds the raw MediaStream so we can stop tracks cleanly.
 function startMic() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    toast('⚠️ Microphone not supported in this browser'); return;
-  }
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(function(stream) {
-      S.micStream = stream;
-      var chunks  = [];
-      var recorder = new MediaRecorder(stream);
-
-      recorder.ondataavailable = function(e) {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = function() {
-        // Stop all tracks so mic indicator light goes off
-        stream.getTracks().forEach(function(t) { t.stop(); });
-        S.micOn = false;
-        var btn = document.getElementById('micBtn');
-        if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
-
-        if (!chunks.length) { toast('⚠️ No audio captured'); return; }
-
-        var mimeType = recorder.mimeType || 'audio/webm';
-        var blob     = new Blob(chunks, { type: mimeType });
-
-        // Show "transcribing" state
-        var inputEl = document.getElementById('chatInput');
-        var prev    = inputEl ? inputEl.value : '';
-        if (inputEl) inputEl.placeholder = '⏳ Transcribing…';
-        toast('⏳ Transcribing…');
-
-        var form = new FormData();
-        form.append('audio', blob, 'audio.webm');
-
-        fetch('/.netlify/functions/stt', { method: 'POST', body: form })
-          .then(function(res) { return res.json(); })
-          .then(function(data) {
-            if (inputEl) inputEl.placeholder = 'Ask ALEEM AI…';
-            if (data.transcript && data.transcript.trim()) {
-              if (inputEl) inputEl.value = data.transcript.trim();
-              handleSend(); // auto-send the transcribed message
-            } else {
-              if (inputEl) inputEl.value = prev;
-              toast('⚠️ Could not transcribe audio. Please try again.');
-            }
-          })
-          .catch(function(err) {
-            if (inputEl) { inputEl.placeholder = 'Ask ALEEM AI…'; inputEl.value = prev; }
-            toast('⚠️ STT error: ' + err.message);
-          });
-      };
-
-      recorder.onerror = function(e) {
-        stream.getTracks().forEach(function(t) { t.stop(); });
-        S.micOn = false;
-        var btn = document.getElementById('micBtn');
-        if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
-        toast('⚠️ Recording error');
-      };
-
-      recorder.start();
-      S.mic   = recorder;
-      S.micOn = true;
-      var btn = document.getElementById('micBtn');
-      if (btn) { btn.classList.add('rec'); btn.title = 'Tap to stop'; }
-      toast('🎤 Listening… tap 🎤 to stop');
-    })
-    .catch(function(err) {
-      toast('⚠️ Microphone access denied: ' + err.message);
-    });
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('⚠️ Voice input not supported in this browser'); return; }
+  S.mic = new SR();
+  S.mic.continuous = false; S.mic.interimResults = false; S.mic.lang = 'en-US';
+  S.mic.onresult = function(e) {
+    document.getElementById('chatInput').value = e.results[0][0].transcript;
+    stopMic(); handleSend();
+  };
+  S.mic.onerror = stopMic; S.mic.onend = stopMic;
+  S.mic.start();
+  S.micOn = true;
+  document.getElementById('micBtn').classList.add('rec');
+  toast('🎤 Listening… speak now');
 }
-
 function stopMic() {
-  try { if (S.mic && S.mic.state !== 'inactive') S.mic.stop(); } catch(e){}
-  // Stream tracks are stopped inside recorder.onstop to avoid a race,
-  // but if stop() throws or state is already inactive, clean up here too.
-  try { if (S.micStream) S.micStream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+  try { if (S.mic) S.mic.stop(); } catch(e){}
   S.micOn = false;
-  S.micStream = null;
   var btn = document.getElementById('micBtn');
-  if (btn) { btn.classList.remove('rec'); btn.title = 'Voice input'; }
+  if (btn) btn.classList.remove('rec');
 }
 
 // ── SETTINGS PAGE ─────────────────────────────────────────────────
@@ -7342,32 +7266,18 @@ if ('serviceWorker' in navigator) {
      and full model fallback pipeline as typed messages.
      No separate architecture — voice messages are normal chat messages.
 
-     [MIGRATED — MediaRecorder + Groq Whisper] This block previously used
-     the browser's native SpeechRecognition API. That API endpoints
-     ("finalizes") a session on its own after a few seconds of silence —
-     no continuous=true setting prevents this — so the old code had to
-     detect every one of those silent terminations and spin up a brand
-     new SpeechRecognition instance to keep the illusion of one continuous
-     session going. That restart was a REAL mic stop/start at the OS/browser
-     level (perceptible as the mic cutting in and out), and a 10–45 second
-     pause reliably triggered it.
-
-     This version opens getUserMedia() ONCE per voice session and keeps a
-     single MediaRecorder running for the ENTIRE session — it is never
-     stopped, paused, or recreated because of silence. Audio is captured in
-     rolling chunks (via MediaRecorder's timeslice) and periodically flushed
-     to /.netlify/functions/stt (Groq Whisper) for transcription; the
-     returned text is appended to the same running transcript used before.
-     A lightweight Web Audio analyser is used ONLY to avoid flushing a chunk
-     mid-word (it waits for a brief lull before sending) — it never stops
-     the recorder and never ends the session. The only way the session ends
-     is vcStop(), called by the toggle, End Call button, or page navigation.
-
-     Nothing here changes memory, multilingual support, language detection,
-     the Gemini/Groq fallback chain, image handling, history persistence,
-     personalities, voice selection, or the Spoken Language selector —
-     they're reused as-is. The manual Send/Stop workflow (no auto-submit)
-     is also unchanged.
+     [SIMPLIFIED] This block previously auto-finalized and auto-submitted
+     utterances using a silence timer, auto-restarted the recognizer through
+     a timer-suspend/resume dance, and ran a separate barge-in probe while
+     the AI was speaking. All of that was a steady source of edge-case bugs
+     (silence-timer mistuning, restart races, false barge-in triggers,
+     premature submission). It has been replaced with a manual workflow:
+     the mic listens continuously and shows a live transcript, the user
+     taps Send when they're done talking, and a Stop button cancels TTS
+     immediately while the AI is speaking. Nothing here changes memory,
+     multilingual support, language detection, the Gemini/Groq fallback
+     chain, image handling, history persistence, personalities, voice
+     selection, or the Spoken Language selector — they're reused as-is.
 ─────────────────────────────────────────────────────────────────── -->
 <script>
 (function() {
@@ -7376,52 +7286,37 @@ if ('serviceWorker' in navigator) {
   // ── State ───────────────────────────────────────────────────────
   var vc = {
     active:    false,  // Voice Chat Mode on/off (USER INTENT)
-    listening: false,  // CONFIRMED: the MediaRecorder is running for the current session
-    starting:  false,  // a session start (getUserMedia + MediaRecorder.start) is in flight
+    listening: false,  // CONFIRMED: recognizer's onstart has fired for the current instance
+    starting:  false,  // a start() call is in flight, awaiting onstart/onerror — blocks duplicate start()
     speaking:  false,  // TTS is playing
-
-    // gen: generation counter — incremented every time the current mic
-    // session is intentionally torn down. Every async callback below
-    // captures the gen it was created for and checks it's still current
-    // before touching shared state, so a stale callback from a torn-down
-    // session can never corrupt the live state. Unlike the old
-    // SpeechRecognition version, gen no longer changes on every restart —
-    // it changes only when the WHOLE session starts or stops, because the
-    // mic itself is never restarted mid-session.
-    gen:       0,
-
+    rec:       null,   // the CURRENT SpeechRecognition instance (or null if none is live)
+    gen:       0,      // generation counter — incremented every time we intentionally
+                        // replace/retire a recognizer instance. Every handler closure
+                        // captures the gen it was created for and checks it's still
+                        // current before touching shared state, so a stale instance's
+                        // late-firing event can never corrupt the live state.
     speakGen:  0,       // same idea as `gen`, but for the TTS utterance currently in
                         // flight — lets the Stop button invalidate a cancelled
                         // utterance's onend/onerror so it can't also try to restart
                         // the mic after vcStopSpeaking() already did.
 
-    // ── Continuous mic session state ─────────────────────────────
-    stream:        null,  // the single MediaStream for the whole voice session
-    recorder:      null,  // the single MediaRecorder for the whole voice session — never
-                           // recreated while active; only torn down by vcStopMic()
-    audioCtx:      null,  // AudioContext used purely for silence-aware chunk flushing
-    analyser:      null,  // AnalyserNode reading mic volume to find a good flush point
-    silenceTimer:  null,  // rAF/poll handle for the silence watcher
-    quietSince:    0,     // timestamp (ms) when the mic first read as "quiet"
-                           // during the current speech-then-pause cycle; 0 means
-                           // we are not currently in a quiet streak (last poll
-                           // was loud, or we already flushed for this streak).
-    flushTimer:    null,  // setTimeout handle for the periodic forced flush
-    transcribeBusy: false,// true while a chunk is in flight to /.netlify/functions/stt
-                           // (prevents overlapping requests from racing each other)
-    hadSpeechInSegment: false, // true if the analyser saw above-threshold RMS at any
-                           // point during the current recorder segment; reset to false
-                           // each time vcCycleRecorder starts a new segment.
-
-    // Live transcript, accumulated across as many Whisper chunk responses as
-    // it takes. The mic itself never stops while vc.active is true, no matter
-    // how long the user pauses — only the act of flushing+transcribing a
-    // chunk is periodic. Nothing here submits automatically — only a tap on
-    // the Send button does, via vcSendTranscript().
+    // Live transcript, accumulated across as many recognizer instances as it
+    // takes (the recognizer — especially on Android Chrome — may end a
+    // session on a short pause even with continuous=true; onend below just
+    // starts a fresh instance and keeps appending to the SAME transcript so
+    // the mic reads as "continuously listening" to the user). Nothing here
+    // submits automatically — only a tap on the Send button does, via
+    // vcSendTranscript().
     transcript: '',
-    interim:    '',   // most recent in-flight chunk's transcript while it is still
-                       // being transcribed — shown live, never sent, cleared once
-                       // the real result lands (then merged into transcript)
+    interim:    '',   // most recent NOT-YET-FINAL chunk — shown live, never sent
+
+    // Restart-boundary dedup guard: the audio a fresh recognizer instance
+    // gets handed after a restart can include audio from just before the
+    // restart boundary, so its first final result(s) can re-transcribe
+    // words already sitting in `transcript`. snapshot is taken the instant
+    // a new instance's onstart fires; onresult strips any overlap it finds
+    // against that snapshot before appending, so the live transcript the
+    // user reviews never shows duplicated words.
 
     // Spoken-language tracking — unchanged from before. langPref is the
     // user's explicit choice from the Spoken Language selector ('' = Auto).
@@ -7429,9 +7324,7 @@ if ('serviceWorker' in navigator) {
     // the existing detectSpeechLang script detector (already used elsewhere
     // for TTS voice selection); lastDetectedLang is the language of the
     // AI's most recent reply. vcResolveRecognitionLang() below prefers
-    // langPref, then userUtteranceLang, then lastDetectedLang, and is now
-    // used to give Whisper a language HINT rather than to configure a
-    // recognizer locale.
+    // langPref, then userUtteranceLang, then lastDetectedLang.
     langPref:          '',
     lastDetectedLang:  '',
     userUtteranceLang: '',
@@ -7451,65 +7344,6 @@ if ('serviceWorker' in navigator) {
     // response can never be re-spoken.
     stopToken: 0,
   };
-
-  // ── Tuning constants for the continuous chunk pipeline ───────────
-  // FLUSH_INTERVAL_MS: backstop cadence — how often we ask the
-  // (still-running) MediaRecorder for buffered audio regardless of silence
-  // detection. This is the ceiling on latency when, for whatever reason, the
-  // silence watcher below doesn't fire (e.g. analyser unavailable). It does
-  // NOT stop or restart recording; it just periodically hands buffered data
-  // off to Whisper while capture continues.
-  var FLUSH_INTERVAL_MS = 2000;
-  // MIN_CHUNK_MS: don't bother sending a flush to Whisper if less than this
-  // much audio has been captured since the last flush (avoids spamming the
-  // STT endpoint with near-empty clips during long pauses).
-  var MIN_CHUNK_MS = 800;
-  // SILENCE_RMS_THRESHOLD: mic volume below this is treated as "quiet".
-  // SILENCE_POLL_MS: how often the analyser is sampled while listening —
-  // this drives the FAST path (flush right after the user stops talking)
-  // rather than waiting for the slower backstop timer above.
-  // SILENCE_HOLD_MS: how long the mic must stay quiet before we treat it as
-  // "they paused" and flush — long enough to not cut off a word mid-syllable,
-  // short enough that the transcript catches up almost immediately after a
-  // sentence ends. None of this ever stops the recorder; a silence of any
-  // length (10s, 20s, 45s+) just means the silence-flush fires once shortly
-  // after speech stops, then nothing else happens until speech resumes.
-  var SILENCE_RMS_THRESHOLD = 0.02;
-  var SILENCE_POLL_MS = 250;
-  var SILENCE_HOLD_MS = 600;
-
-  // STT_TIMEOUT_MS: hard ceiling on how long a single STT fetch is allowed
-  // to stay pending. Pure network-level safety net — if the request hasn't
-  // resolved or rejected on its own by this point, it is aborted so
-  // vc.transcribeBusy/vc.interim can never get stuck forever. Does not
-  // affect the recorder, silence watcher, or flush cadence in any way.
-  var STT_TIMEOUT_MS = 12000;
-
-  // ── Known Whisper silence/noise hallucination guard ───────────────
-  // Whisper-family STT models (incl. Groq's) are well-documented to
-  // hallucinate a small, predictable set of stock phrases when fed audio
-  // that contains no real speech (silence, room tone, breathing) — an
-  // artifact of sign-off lines in their training data. This does NOT touch
-  // the recorder/flush pipeline at all; it only inspects the TEXT Groq
-  // returns, after the fact, at the single point it would be appended to
-  // vc.transcript. If the ENTIRE returned chunk (trimmed, case/punctuation-
-  // insensitive) matches one of these known stock phrases, it's treated the
-  // same as an empty result and discarded instead of appended. A real
-  // utterance that merely contains one of these phrases among other words
-  // is untouched — only an exact, whole-chunk match is filtered.
-  var HALLUCINATION_PHRASES = [
-    'thank you', 'thank you so much', 'thanks for watching',
-    'thank you for watching', 'thank you for watching this video',
-    'please subscribe', "don't forget to subscribe", 'subscribe',
-    'merci', "merci d'avoir regardé", 'merci beaucoup',
-    'bye', 'goodbye', 'see you next time', "i'll see you next time",
-    'okay', 'ok', 'yeah', 'um', 'uh', 'hmm', 'mm-hmm',
-    'you', '.', '...', '♪', '[music]', '[blank_audio]', '(silence)'
-  ];
-  function vcIsHallucinatedFiller(text) {
-    var norm = text.toLowerCase().replace(/[.!?,]+$/g, '').trim();
-    return HALLUCINATION_PHRASES.indexOf(norm) !== -1;
-  }
 
   // ── DOM refs (populated after DOMContentLoaded) ─────────────────
   var vcToggle, vcTrack, vcThumb, vcLabel, vcPanel, vcIcon, vcText, vcLangSelect;
@@ -7570,11 +7404,11 @@ if ('serviceWorker' in navigator) {
   }
 
   // Refreshes the live transcript box + Send button enabled state from
-  // current vc.transcript/vc.interim. Called whenever a chunk is transcribed
-  // and whenever status switches to 'listening'.
+  // current vc.transcript/vc.interim. Called on every onresult and whenever
+  // status switches to 'listening'.
   // NOTE: we only push the recognised text when the user has NOT manually
-  // edited the textarea since the last update, so hand-corrections are never
-  // silently overwritten by a subsequent chunk result.
+  // edited the textarea since the last recognition update, so hand-corrections
+  // are never silently overwritten by a subsequent partial result.
   function vcRefreshTranscriptUI() {
     if (vcTranscriptText) {
       var live = vc.transcript;
@@ -7584,10 +7418,7 @@ if ('serviceWorker' in navigator) {
       if (!vc._userEdited) {
         vcTranscriptText.value = live.trim();
         vcTranscriptText.placeholder = 'Listening for your voice…';
-        vcLog('UI:TRANSCRIPT_BOX_WRITTEN', 'value="' + vcTranscriptText.value + '"');
       }
-    } else {
-      vcLog('UI:TRANSCRIPT_BOX_MISSING', 'vcTranscriptText is null — DOM element not found, box cannot update');
     }
     // Send button enabled whenever the textarea has any text (user-edited or recognised)
     if (vcSendBtn) {
@@ -7597,32 +7428,22 @@ if ('serviceWorker' in navigator) {
   }
 
   // ── VOICE DEBUG LOGGING (internal/dev only) ──────────────────────
-  // Console-only trace for development; mirrored to an on-screen box
-  // (#vcDebugBox) for on-device debugging without devtools.
+  // Console-only trace for development; never touches the DOM.
   var _vcT0 = Date.now();
-  var _vcDebugLines = []; // ring buffer, last 20 messages
 
   function vcLog(event, detail) {
     try {
       var now  = Date.now() - _vcT0;
       var gen  = vc ? vc.gen : '?';
+      var lang = (vc && vc.rec && vc.rec.lang) ? vc.rec.lang : '?';
       var txt  = vc ? '"' + vc.transcript + '"' : '?';
 
       var line = '+' + String(now).padStart(5) + 'ms g' + gen +
-                 ' ' + event +
+                 ' [' + lang + '] ' + event +
                  (detail ? ' :: ' + detail : '') +
                  ' transcript=' + txt;
 
       console.log('[ALEEM-VC] ' + line);
-
-      _vcDebugLines.push(line);
-      if (_vcDebugLines.length > 20) _vcDebugLines.shift();
-      var _dbgEl = document.getElementById('vcDebugLines');
-      if (_dbgEl) {
-        _dbgEl.textContent = _vcDebugLines.join('\n');
-        var _dbgBox = document.getElementById('vcDebugBox');
-        if (_dbgBox) _dbgBox.scrollTop = _dbgBox.scrollHeight;
-      }
     } catch(ex) { /* never break voice chat */ }
   }
 
@@ -7643,41 +7464,27 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // ── Stop mic session cleanly ──────────────────────────────────────
-  // Tears down the CURRENT MediaRecorder + MediaStream + analyser (if any)
-  // and bumps the generation counter so any of their still-pending async
-  // callbacks (a chunk mid-upload, a queued flush) become no-ops (they check
-  // `myGen !== vc.gen` and bail). Unlike the old SpeechRecognition version,
-  // this is called ONLY when the whole voice session is ending or about to
-  // be replaced (vcStart/vcStop/error) — never as a side effect of silence
-  // or a pause, and never on a per-utterance basis.
+  // ── Stop mic cleanly ────────────────────────────────────────────
+  // Tears down the CURRENT recognizer instance (if any) and bumps the
+  // generation counter so any of its still-pending event callbacks become
+  // no-ops (they check `myGen !== vc.gen` and bail). This is what makes
+  // start()/stop()/abort() and the event handlers safe to overlap — there
+  // is never more than one instance whose events can affect state.
   function vcStopMic(reason) {
-    vc.gen++;             // retire the current session — late async work becomes a no-op
+    vc.gen++;             // retire whatever instance is currently live
     vc.listening = false;
     vc.starting  = false;
-
-    if (vc.flushTimer) { clearTimeout(vc.flushTimer); vc.flushTimer = null; }
-    if (vc.silenceTimer) { clearInterval(vc.silenceTimer); vc.silenceTimer = null; }
-    vc.quietSince = 0;
-
-    if (vc.recorder) {
-      try {
-        if (vc.recorder.state !== 'inactive') vc.recorder.stop();
-      } catch (e) {}
-      vc.recorder = null;
+    if (vc.rec) {
+      var r = vc.rec;
+      vc.rec = null;
+      // abort() (not stop()) — we are intentionally discarding this
+      // instance, including any in-flight partial recognition. stop()
+      // would still fire a final onresult/onend for trailing audio, which
+      // is exactly the kind of late event that caused state desync before.
+      try { r.onresult = null; r.onerror = null; r.onend = null; r.onstart = null; } catch (e) {}
+      try { r.abort(); } catch (e) {}
     }
-    if (vc.analyser) { vc.analyser = null; }
-    if (vc.audioCtx) {
-      try { vc.audioCtx.close(); } catch (e) {}
-      vc.audioCtx = null;
-    }
-    if (vc.stream) {
-      try { vc.stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
-      vc.stream = null;
-    }
-    vc.transcribeBusy = false;
-
-    vcLog('MIC:SESSION_DESTROYED', 'bumped gen to ' + vc.gen + ' (was ' + (vc.gen - 1) + ') reason=' + (reason || ''));
+    vcLog('REC:DESTROYED', 'bumped gen to ' + vc.gen + ' (was ' + (vc.gen - 1) + ') reason=' + (reason || '') + ' vc.rec was ' + (vc.rec === null ? 'null (already cleared)' : 'present'));
   }
 
   // ── Stop TTS cleanly ────────────────────────────────────────────
@@ -7691,12 +7498,9 @@ if ('serviceWorker' in navigator) {
   // ── Manual Send: submit whatever transcript has been captured so far ──
   // This is the ONLY way an utterance is ever submitted now — no silence
   // timer, no auto-finalize. Triggered by a tap on the Send button.
-  // Sending does NOT stop the microphone — the same continuous MediaRecorder
-  // session keeps running underneath while the AI responds (transcription
-  // is simply paused while vc.speaking is true; see vcMaybeFlush()).
   function vcSendTranscript() {
     // Read from the editable textarea — this honours any corrections the user
-    // has typed since transcription populated it.
+    // has typed since the recognition populated it.
     var transcript = vcTranscriptText
       ? vcTranscriptText.value.trim()
       : (vc.transcript || '').trim();
@@ -7705,8 +7509,8 @@ if ('serviceWorker' in navigator) {
 
     // [UNCHANGED multilingual logic] Detect the language of what the user
     // JUST said (the same script-based detectSpeechLang already used
-    // elsewhere for TTS voice selection) so the NEXT chunk transcription can
-    // be hinted toward it via vcResolveRecognitionLang, instead of only
+    // elsewhere for TTS voice selection) so the NEXT recognition session
+    // can be biased toward it via vcResolveRecognitionLang, instead of only
     // reacting to the AI's reply from the turn before. Only meaningful when
     // Auto is active (vc.langPref === '') — a pinned language always wins
     // regardless, per vcResolveRecognitionLang's priority order.
@@ -7731,27 +7535,26 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
+
+    vcStopMic('sending-transcript');
+
+    // [Preserved] Do NOT navigate to the chat page. chatInput/chatMessages/
+    // etc. still exist in the DOM even while the chat page isn't the
+    // active/visible one, so handleSend() works exactly the same without
+    // navigating.
     vcSetStatus('processing');
 
     var inp = document.getElementById('chatInput');
     if (inp) {
       inp.value = transcript;
-      if (typeof handleSend === 'function') {
-        vcLog('HANDOFF:TO_CHAT', 'chatInput found, handleSend exists — calling it now');
-        handleSend();
-      } else {
-        vcLog('HANDOFF:FAILED', 'chatInput found but handleSend is not a function — text stuck in input, never sent');
-      }
-    } else {
-      vcLog('HANDOFF:FAILED', 'chatInput element not found — transcript never left voice chat');
+      if (typeof handleSend === 'function') handleSend();
     }
   }
 
-  // ── Resolve which language hint to give Whisper ──────────────────
-  // Whisper (via /.netlify/functions/stt) can be hinted with a language
-  // code to improve accuracy, similarly to how the old SpeechRecognition
-  // locale worked — except Whisper handles many languages well even without
-  // a hint, so this is advisory, not load-bearing.
+  // ── Resolve which BCP-47 locale to recognize with ────────────────
+  // The Web Speech API has no real automatic spoken-language detection:
+  // lang='' silently falls back to the device/browser locale (almost always
+  // en-US/en-GB), so Indian languages are mis-recognised as English.
   //
   // Auto-mode strategy (langPref = ''):
   //   1. If the user's last-SENT transcript was positively identified as a
@@ -7759,8 +7562,18 @@ if ('serviceWorker' in navigator) {
   //      locale — it's the most reliable signal we have.
   //   2. If the AI's last reply was in a confirmed non-English language, use
   //      that locale as a weaker hint.
-  //   3. Otherwise default to 'en-IN' so Indian-accented English isn't
-  //      mis-hinted toward a different script.
+  //   3. Otherwise default to 'hi-IN'. Google's hi-IN backend on Android/
+  //      Chrome handles Hindi (Devanagari), Marathi, and Urdu correctly and
+  //      returns native script.  Gujarati speech on hi-IN is imperfect but
+  //      far better than en-IN or a rotating forced locale.  Users who speak
+  //      primarily Gujarati should pin 'gu-IN' in the Spoken Language selector.
+  //
+  // WHY NOT ROTATE: forcing gu-IN / mr-IN / ur-IN causes mis-recognition
+  // because those locale speech packs are frequently absent on devices, so
+  // the recognizer either errors (language-not-supported) or silently
+  // falls back to a wrong engine.  A single stable locale that the device
+  // definitely supports produces far better results than cycling into
+  // unsupported ones.
   function vcResolveRecognitionLang() {
     var resolved, reason;
     if (vc.langPref) {
@@ -7778,9 +7591,16 @@ if ('serviceWorker' in navigator) {
       resolved = vc.lastDetectedLang;
       reason   = 'lastAIReply(non-en)';
     } else {
+      // FIX: was 'hi-IN'. That caused English, Gujarati, Urdu (and any
+      // language whose script detectSpeechLang returns as 'en') to be
+      // transcribed in Hindi script. en-IN is universally supported, handles
+      // Indian-accented English correctly, and does not force Hindi script on
+      // non-Hindi speakers. Users who primarily speak Hindi/Marathi/Urdu
+      // should pin 'hi-IN' in the Spoken Language selector.
       resolved = 'en-IN';
       reason   = 'default(en-IN)';
     }
+    // DIAGNOSTIC: log every input so resolutions are fully traceable in console
     vcLog('vcResolveRecognitionLang',
       'RESOLVED="' + resolved + '" reason=' + reason +
       ' | langPref="' + vc.langPref + '"' +
@@ -7789,359 +7609,340 @@ if ('serviceWorker' in navigator) {
     return resolved;
   }
 
-  // ── Start the ONE continuous mic session for this voice chat ─────
-  // Opens getUserMedia exactly once for the whole voice session. The stream
-  // stays open until vcStopMic() tears it down — no repeated permission
-  // prompts. Each audio segment is captured by a short-lived MediaRecorder
-  // that is stopped to finalise a complete, valid WebM file, sent to Groq,
-  // then a fresh recorder is immediately started on the same stream.
-  // This is required because requestData() only writes the WebM container
-  // header into the very first ondataavailable chunk; every subsequent chunk
-  // is a raw headerless Opus stream that Groq rejects as an invalid file.
-  // Calling recorder.stop() always produces a complete, self-contained file.
+  // ── Start listening ─────────────────────────────────────────────
+  // Guarded against duplicate concurrent start() calls and against
+  // restart loops via the generation counter: every callback below is
+  // tagged with the generation it was created for (myGen) and checks
+  // `myGen !== vc.gen` before doing anything, so a stale instance firing
+  // late (after a newer vcStartListening() already replaced it) can never
+  // touch vc.listening / the status badge / schedule another restart.
   function vcStartListening() {
     if (!vc.active) { vcLog('vcStartListening:skip', 'not active'); return; }
 
+    // Duplicate-start guard. Without this, overlapping callers (onend,
+    // onerror, TTS onend) could each try to create+start a new recognizer
+    // while one is already starting or already listening.
     if (vc.starting || vc.listening) {
       vcLog('vcStartListening:skip', 'already starting=' + vc.starting + ' listening=' + vc.listening);
       return;
     }
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      vcLog('vcStartListening:fatal', 'getUserMedia unsupported');
-      if (typeof toast === 'function') toast('⚠️ Microphone not supported in this browser');
-      vcSetStatus('error');
-      vcStop();
-      return;
-    }
-    if (typeof MediaRecorder === 'undefined') {
-      vcLog('vcStartListening:fatal', 'MediaRecorder unsupported');
-      if (typeof toast === 'function') toast('⚠️ Audio recording not supported in this browser');
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      vcLog('vcStartListening:fatal', 'SpeechRecognition unsupported');
+      if (typeof toast === 'function') toast('⚠️ Speech recognition not supported in this browser');
       vcSetStatus('error');
       vcStop();
       return;
     }
 
-    var myGen = vc.gen;
+    // Retire any previous instance/generation before creating a new one.
+    vcStopMic('superseded-by-new-start');
+
+    var myGen = vc.gen;     // this instance's generation — captured for every handler below
     vc.starting = true;
 
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(function(stream) {
-        if (myGen !== vc.gen) {
-          vcLog('vcStartListening:stale-stream', 'gen ' + myGen + ' — closing unused stream');
-          try { stream.getTracks().forEach(function(t) { t.stop(); }); } catch (e) {}
-          return;
-        }
-
-        vc.stream    = stream;
-        vc.starting  = false;
-        vc.listening = true;
-
-        var _track = stream.getAudioTracks()[0];
-        vcLog('MIC:STREAM_OPEN', 'gen=' + myGen + ' — starting recorder cycle' +
-          (_track ? ' track.enabled=' + _track.enabled + ' track.muted=' + _track.muted +
-            ' track.readyState=' + _track.readyState : ' NO AUDIO TRACK ON STREAM'));
-        vcSetStatus('listening');
-
-        vcSetupAnalyser(stream, myGen);
-        vcStartSilenceWatcher(myGen);
-        vcCycleRecorder(myGen);
-      })
-      .catch(function(err) {
-        if (myGen !== vc.gen) return;
+    // ── Stuck-starting watchdog ───────────────────────────────────
+    // If vc.starting is still true after 4 seconds for THIS generation,
+    // the recognizer silently failed (e.g. onstart never fired on Android).
+    // Reset and retry once so the UI never locks in a permanent "off" state.
+    ;(function(wdGen) {
+      setTimeout(function() {
+        if (wdGen !== vc.gen) return;          // a newer generation took over — fine
+        if (!vc.active) return;               // user stopped voice chat
+        if (!vc.starting) return;             // onstart fired normally — fine
+        // Still stuck in starting. Force a clean reset.
+        vcLog('vcStartListening:watchdog', 'gen=' + wdGen + ' stuck in starting after 4s — forcing reset');
         vc.starting = false;
-        vcLog('vcStartListening:getUserMedia:error', err && err.message);
-        if (typeof toast === 'function') toast('⚠️ Microphone access denied: ' + (err && err.message || ''));
-        vcSetStatus('error');
-        vcStop();
-      });
-  }
+        vc.listening = false;
+        if (vc.rec) { try { vc.rec.abort(); } catch(e){} vc.rec = null; }
+        // Small delay then retry once.
+        setTimeout(function() {
+          if (wdGen !== vc.gen) return;
+          if (!vc.active || vc.speaking) return;
+          vcLog('vcStartListening:watchdog:retry', 'gen=' + wdGen + ' retrying after reset');
+          vcStartListening();
+        }, 500);
+      }, 4000);
+    })(myGen);
 
-  // Starts one fresh MediaRecorder on the already-open vc.stream.
-  // When vcMaybeFlush() calls recorder.stop(), ondataavailable delivers a
-  // complete valid WebM file, onstop sends it to Groq, then calls
-  // vcCycleRecorder() again to begin the next segment immediately.
-  // The microphone stream is never stopped or re-requested here.
-  function vcCycleRecorder(myGen) {
-    if (myGen !== vc.gen || !vc.active || !vc.stream) return;
-
-    var recorder;
+    var rec;
     try {
-      recorder = new MediaRecorder(vc.stream);
+      rec = new SR();
     } catch (e) {
-      vcLog('vcCycleRecorder:fatal', 'MediaRecorder constructor threw: ' + e.message);
+      vcLog('vcStartListening:fatal', 'constructor threw: ' + e.message);
+      vc.starting = false;
       vcSetStatus('error');
       vcStop();
       return;
     }
 
-    var segChunks = [];
-    vc.hadSpeechInSegment = false;
-    vc.speechTicks = 0;
+    // continuous+interimResults lets the recognizer keep listening through
+    // brief pauses and report live partial text for the transcript box.
+    // Nothing here ever auto-submits — only vcSendTranscript() (the Send
+    // button) does that.
+    // DIAGNOSTIC: log recognizer creation with generation ID
+    vcLog('REC:CREATED', 'gen=' + myGen + ' lang will be set next');
 
-    recorder.ondataavailable = function(e) {
-      if (e.data && e.data.size > 0) segChunks.push(e.data);
+    rec.continuous     = true;
+    rec.interimResults = true;
+    // [UNCHANGED] '' is NOT real auto language-detection — it silently
+    // falls back to the device/browser locale. We always pass an explicit,
+    // officially-supported locale: the user's pinned choice (if any), else
+    // the language the conversation has been adapting to, else a safe
+    // default. Language detection for the AI reply and TTS is still
+    // handled downstream by LANGUAGE_INSTRUCTION (AI side) and
+    // detectSpeechLang/pickVoiceForLang (TTS side) — unchanged.
+    rec.lang = vcResolveRecognitionLang();
+    vcLog('REC:LANG_SET', 'gen=' + myGen + ' rec.lang="' + rec.lang + '"');
+
+    rec.onstart = function() {
+      if (myGen !== vc.gen) { vcLog('onstart:stale', 'gen ' + myGen); return; }
+      vc.starting  = false;
+      vc.listening = true;
+      vc.speaking  = false;
+      vcLog('REC:STARTED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" transcript="' + vc.transcript + '"' + (myGen !== vc.gen ? ' *** STALE — vc.gen already moved on' : ''));
+      vcSetStatus('listening');
     };
 
-    recorder.onstop = function() {
-      if (myGen !== vc.gen) return; // session ended while this segment was stopping
-      // [LOG] Confirms recorder.onstop fired at all, before any other work.
-      vcLog('RECORDER:ONSTOP_FIRED', 'gen=' + myGen + ' chunks=' + segChunks.length);
-      vcLog('MIC:SEGMENT_DONE', 'gen=' + myGen + ' chunks=' + segChunks.length);
+    // Per-instance counter: how many final results from THIS recognizer
+    // instance have already been committed to vc.transcript.
+    // Root cause of Bug 01: the Web Speech API's e.results is a cumulative
+    // list for the lifetime of one recognizer instance. e.resultIndex points
+    // to the result that CHANGED in this event — not a cursor past already-
+    // processed finals. On restart a brand-new instance starts its own
+    // e.results from index 0, so any append-on-final logic that doesn't
+    // track which of THIS instance's results have already been committed will
+    // re-append every previously-seen final on each new event.
+    // Fix: instanceFinalCount tracks exactly how many finals from this
+    // instance are already in vc.transcript. Each onresult only commits
+    // results at index >= instanceFinalCount, then advances the counter.
+    // No overlap matching, no snapshot diffing — each final result is
+    // committed exactly once, regardless of how many onresult events fire
+    // or how many recognizer restarts occur.
+    var instanceFinalCount = 0;
 
-      var mimeType = recorder.mimeType || 'audio/webm';
-      var blob = new Blob(segChunks, { type: mimeType });
-      segChunks = [];
+    rec.onresult = function(e) {
+      if (myGen !== vc.gen) { vcLog('onresult:stale', 'gen ' + myGen); return; }
 
-      // Start next recorder immediately so we capture audio while this
-      // segment is being transcribed — no gap in mic coverage.
-      vcCycleRecorder(myGen);
+      var interimText = '';
 
-      if (blob.size < 2000) {
-        vcLog('MIC:SKIP_TINY', 'blob=' + blob.size + 'B — silence segment, skipping STT');
-        return;
-      }
+      for (var i = 0; i < e.results.length; i++) {
+        var res = e.results[i];
+        var text = res[0] ? res[0].transcript : '';
 
-      if (vc.speaking) {
-        vcLog('MIC:SKIP_SPEAKING', 'AI speaking — discarding segment');
-        return;
-      }
+        if (res.isFinal) {
+          // Only commit finals we haven't seen yet from this instance.
+          if (i >= instanceFinalCount) {
+            var chunk = text.trim();
+            if (chunk) {
+              // RESTART-BOUNDARY OVERLAP CHECK
+              // On Android Chrome, a new recognizer instance re-feeds a small
+              // audio buffer from just before the restart boundary. Its first
+              // final result(s) can re-transcribe words already at the END of
+              // vc.transcript from the previous instance. We check whether
+              // vc.transcript already ends with this chunk (case-insensitive,
+              // whitespace-normalised) and skip the commit if it does.
+              // This only runs when instanceFinalCount === 0 (the very first
+              // final from this instance) — after the first commit, the browser
+              // has moved past the overlap window and the check is not needed.
+              // RESTART-BOUNDARY DEDUP
+              // Android Chrome ends continuous sessions on short pauses and
+              // restarts them. The new instance's first final result(s) replay
+              // audio from just before the restart — delivering the full
+              // cumulative phrase so far, not just the new word. Without this
+              // check, that phrase is appended wholesale and produces:
+              //   "तेरा" → "तेरा तेरा नाम" → "तेरा तेरा नाम तेरा नाम क्या" …
+              //
+              // Fix: on the first final of a new instance, check whether
+              // vc.transcript is a prefix of (or equal to) the incoming chunk.
+              // If it is, the chunk is the old content PLUS new words — so we
+              // append only the new suffix. If chunk equals or is shorter than
+              // the existing transcript, the whole thing is already present and
+              // we skip entirely. Only runs when instanceFinalCount === 0.
+              var before   = vc.transcript;
+              var toAppend = chunk; // what actually gets written — may be trimmed
 
-      vcTranscribeChunk(blob, myGen);
-    };
+              // CUMULATIVE-PHRASE DEDUP
+              // This browser delivers isFinal=true at every result index, each
+              // carrying the full utterance so far ("तेरा", then "तेरा नाम",
+              // then "तेरा नाम क्या", …). Without this check every phrase is
+              // appended wholesale, producing:
+              //   "तेरा तेरा नाम तेरा नाम क्या तेरा नाम क्या है"
+              //
+              // The previous version only ran when instanceFinalCount === 0
+              // (first final of a new instance). That was wrong — cumulative
+              // phrases arrive at every index, so the guard prevented the check
+              // from ever running after the first commit.
+              //
+              // Fix: run on every final commit. If vc.transcript is already a
+              // prefix of chunk, append only the new suffix. If chunk is already
+              // fully contained, skip entirely.
+              if (vc.transcript) {
+                var existLow = vc.transcript.toLowerCase().replace(/\s+/g, ' ').trim();
+                var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ');
 
-    recorder.onerror = function(e) {
-      if (myGen !== vc.gen) return;
-      vcLog('MIC:RECORDER_ERROR', (e && e.error && e.error.message) || 'unknown recorder error');
-      vcCycleRecorder(myGen); // try a fresh recorder on the same stream
-    };
+                if (chunkLow === existLow || chunkLow.length <= existLow.length) {
+                  // Chunk is identical to or shorter than what we already have — skip.
+                  toAppend = '';
+                  vcLog('REC:OVERLAP_SKIP',
+                    '[gen=' + myGen + '] i=' + i +
+                    ' chunk fully covered — skipped' +
+                    ' chunk="' + chunk + '"' +
+                    ' transcript="' + vc.transcript + '"');
+                } else if (chunkLow.indexOf(existLow + ' ') === 0 || chunkLow.indexOf(existLow) === 0) {
+                  // Chunk starts with existing transcript — append suffix only.
+                  toAppend = chunk.slice(vc.transcript.length).replace(/^\s+/, '');
+                  vcLog('REC:OVERLAP_TRIM',
+                    '[gen=' + myGen + '] i=' + i +
+                    ' cumulative phrase trimmed' +
+                    ' full_chunk="' + chunk + '"' +
+                    ' suffix="' + toAppend + '"' +
+                    ' transcript="' + vc.transcript + '"');
+                }
+                // else: chunk is genuinely new content — toAppend stays = chunk
+              }
 
-    recorder.start();
-    vc.recorder = recorder;
-    vcLog('MIC:RECORDER_STARTED', 'gen=' + myGen);
-
-    // Schedule the stop for this segment after FLUSH_INTERVAL_MS.
-    // The silence watcher may call vcMaybeFlush() earlier to stop sooner.
-    vcScheduleFlush(myGen);
-  }
-
-  // ── Silence-aware analyser (advisory only) ───────────────────────
-  // Reads mic volume continuously so vcMaybeFlush() can prefer flushing on
-  // a natural lull rather than mid-word. This NEVER stops the MediaRecorder
-  // and NEVER ends the session — it only influences exactly when a pending
-  // chunk gets sent to Whisper. If anything about the analyser fails, the
-  // periodic timer in vcScheduleFlush() still flushes on schedule regardless.
-  function vcSetupAnalyser(stream, myGen) {
-    try {
-      var AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      var ctx = new AC();
-      var source = ctx.createMediaStreamSource(stream);
-      var analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      vc.audioCtx  = ctx;
-      vc.analyser  = analyser;
-    } catch (e) {
-      vcLog('vcSetupAnalyser:failed', e.message + ' — flush will rely on timer only');
-    }
-  }
-
-  // Returns true if the mic currently reads as "quiet" (a reasonable moment
-  // to flush a chunk without cutting off a word). Falls back to true (i.e.
-  // "go ahead and flush") if the analyser isn't available, so a long pause
-  // never gets stuck NOT flushing.
-  function vcIsQuietNow() {
-    if (!vc.analyser) return true;
-    try {
-      var data = new Uint8Array(vc.analyser.fftSize);
-      vc.analyser.getByteTimeDomainData(data);
-      var sumSquares = 0;
-      for (var i = 0; i < data.length; i++) {
-        var norm = (data[i] - 128) / 128;
-        sumSquares += norm * norm;
-      }
-      var rms = Math.sqrt(sumSquares / data.length);
-      return rms < SILENCE_RMS_THRESHOLD;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  // ── Fast path: flush as soon as the user pauses ──────────────────
-  // Polls mic volume every SILENCE_POLL_MS. The moment a quiet streak holds
-  // for SILENCE_HOLD_MS, triggers vcMaybeFlush() immediately instead of
-  // waiting for the slower vcScheduleFlush() backstop. This is what makes
-  // the transcript catch up right after a sentence ends rather than lagging
-  // up to a full backstop interval behind. It NEVER stops the recorder —
-  // during a long pause (10s, 20s, 45s+) it simply fires the flush once
-  // when the pause begins, then sits idle (quietSince stays set, so the
-  // "already quiet" streak doesn't re-trigger) until speech resumes and
-  // goes quiet again.
-  function vcStartSilenceWatcher(myGen) {
-    if (myGen !== vc.gen) return;
-    if (vc.silenceTimer) { clearInterval(vc.silenceTimer); vc.silenceTimer = null; }
-    vc.quietSince = 0;
-    vc.silenceTimer = setInterval(function() {
-      if (myGen !== vc.gen || !vc.active) return;
-      if (vc.speaking || vc.transcribeBusy) { vc.quietSince = 0; return; }
-
-      var quiet = vcIsQuietNow();
-      var now = Date.now();
-      if (!quiet) {
-        vc.quietSince = 0; // still talking — reset the streak
-        // Require 2 above-threshold ticks total in this segment (not
-        // necessarily consecutive — a brief quiet dip mid-word no longer
-        // resets the count) before treating it as having real speech. A
-        // single isolated 250ms blip (one tick, ever) still can't satisfy
-        // this on its own, but short words with a natural micro-pause are
-        // no longer penalized.
-        vc.speechTicks = (vc.speechTicks || 0) + 1;
-        if (vc.speechTicks >= 2) vc.hadSpeechInSegment = true;
-        return;
-      }
-      if (!vc.quietSince) {
-        vc.quietSince = now; // just went quiet — start timing the streak
-        return;
-      }
-      if (now - vc.quietSince >= SILENCE_HOLD_MS) {
-        // Held quiet long enough — flush now, then wait for the NEXT speech
-        // → quiet transition before flushing again (avoids re-flushing an
-        // already-empty buffer every poll tick during a long pause).
-        vc.quietSince = 0;
-        vcMaybeFlush(myGen);
-      }
-    }, SILENCE_POLL_MS);
-  }
-
-  // ── Backstop flush scheduler ──────────────────────────────────────
-  // Called by vcCycleRecorder() each time a new recorder segment starts.
-  // After FLUSH_INTERVAL_MS it stops the recorder via vcMaybeFlush(), which
-  // triggers onstop → send → vcCycleRecorder() → vcScheduleFlush() for the
-  // next segment. The silence watcher may call vcMaybeFlush() sooner, which
-  // also triggers the same cycle; the flushTimer is cancelled in vcStopMic()
-  // so it never fires after the session ends.
-  function vcScheduleFlush(myGen) {
-    if (myGen !== vc.gen) return;
-    if (vc.flushTimer) clearTimeout(vc.flushTimer);
-    vc.flushTimer = setTimeout(function() {
-      if (myGen !== vc.gen || !vc.active) return;
-      vcMaybeFlush(myGen);
-      // No reschedule here — vcCycleRecorder() calls vcScheduleFlush() for
-      // the next segment once the current recorder has stopped.
-    }, FLUSH_INTERVAL_MS);
-  }
-
-  // Stops the current recorder segment so the browser finalises a complete,
-  // valid WebM file in ondataavailable. The recorder's onstop handler in
-  // vcCycleRecorder() sends that file to Groq and immediately starts the
-  // next recorder on the same stream — no gap in mic coverage, no permission
-  // re-prompt. Skipped when the AI is speaking or a chunk is already in flight.
-  function vcMaybeFlush(myGen) {
-    if (myGen !== vc.gen || !vc.recorder) return;
-    if (vc.recorder.state !== 'recording') return;
-    if (vc.speaking) {
-      vcLog('vcMaybeFlush:skip', 'AI speaking — segment will be discarded in onstop');
-      return;
-    }
-    if (vc.transcribeBusy) {
-      vcLog('vcMaybeFlush:skip', 'previous chunk still transcribing');
-      return;
-    }
-    vcLog('vcMaybeFlush:stop', 'stopping recorder to finalise segment');
-    try {
-      vc.recorder.stop();
-    } catch (e) {
-      vcLog('vcMaybeFlush:stop:failed', e.message);
-    }
-  }
-
-  // ── Send one rolling chunk to Whisper and append the result ───────
-  function vcTranscribeChunk(blob, myGen) {
-    if (myGen !== vc.gen) return;
-    // [LOG] Confirms this function was actually entered (i.e. the segment
-    // passed every skip gate above) and shows the exact blob being sent.
-    vcLog('STT:CALLED', 'blob=' + blob.size + 'B type=' + blob.type);
-
-    vc.transcribeBusy = true;
-    vc.interim = '⏳…';
-    vcRefreshTranscriptUI();
-
-    var form = new FormData();
-    form.append('audio', blob, 'chunk.webm');
-    // Advisory language hint — same resolution logic as before, now used
-    // by Whisper instead of a SpeechRecognition locale. Backend may ignore
-    // this field if it doesn't support it.
-    var langHint = vcResolveRecognitionLang();
-    form.append('language', langHint);
-    // [LOG] Exact request payload size/lang right before the network call.
-    vcLog('STT:REQUEST', 'POST /.netlify/functions/stt blob=' + blob.size + 'B lang=' + langHint);
-
-    // [FIX] Hard ceiling on this request so a fetch that never resolves or
-    // rejects can't lock vc.transcribeBusy/vc.interim forever. If nothing
-    // has settled within STT_TIMEOUT_MS, abort — the resulting AbortError
-    // falls into the existing .catch() below, which already clears
-    // transcribeBusy/interim and refreshes the UI, letting the next flush
-    // proceed normally. No effect at all on requests that settle normally
-    // (the timer is cleared the instant they do).
-    var sttController   = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var sttTimedOut      = false;
-    var sttTimeoutHandle = sttController ? setTimeout(function() {
-      sttTimedOut = true;
-      vcLog('STT:TIMEOUT', 'no response after ' + STT_TIMEOUT_MS + 'ms — aborting request');
-      try { sttController.abort(); } catch (e) {}
-    }, STT_TIMEOUT_MS) : null;
-
-    fetch('/.netlify/functions/stt', {
-        method: 'POST',
-        body: form,
-        signal: sttController ? sttController.signal : undefined
-      })
-      .then(function(res) {
-        if (sttTimeoutHandle) clearTimeout(sttTimeoutHandle);
-        // [LOG] HTTP status of the response, before attempting to parse it.
-        vcLog('STT:HTTP_STATUS', 'status=' + res.status + ' ok=' + res.ok);
-        return res.json();
-      })
-      .then(function(data) {
-        // [LOG] Exact JSON body returned by the function.
-        vcLog('STT:RESPONSE_JSON', (function() { try { return JSON.stringify(data); } catch (e) { return '(unstringifiable: ' + e.message + ')'; } })());
-
-        vc.transcribeBusy = false;
-        if (myGen !== vc.gen) return; // session ended while this was in flight
-        vc.interim = '';
-        var text = data && data.transcript ? data.transcript.trim() : '';
-        if (text && vcIsHallucinatedFiller(text)) {
-          vcLog('STT:FILTERED_HALLUCINATION', 'discarded stock phrase: "' + text + '"');
-          text = '';
-        }
-        if (text) {
-          // [LOG] Exact point vc.transcript is mutated, with before/after values.
-          var before = vc.transcript;
-          vc.transcript = (vc.transcript + ' ' + text).trim();
-          vcLog('TRANSCRIPT:UPDATE', 'before="' + before + '" appended="' + text + '" after="' + vc.transcript + '"');
+              if (toAppend) {
+                vc.transcript = (vc.transcript + ' ' + toAppend).trim();
+                vcLog('REC:APPEND',
+                  '[gen=' + myGen + '] i=' + i +
+                  ' appended="' + toAppend + '"' +
+                  ' vc.gen=' + vc.gen +
+                  (myGen !== vc.gen ? ' *** GEN MISMATCH — stale instance appending!' : ' (gen current)') +
+                  ' transcript BEFORE="' + before + '"' +
+                  ' AFTER="' + vc.transcript + '"');
+              }
+            }
+            instanceFinalCount = i + 1;
+          }
+          // Final result clears any trailing interim for that slot.
+          interimText = '';
         } else {
-          vcLog('STT:EMPTY', 'chunk returned no transcript (likely silence)');
+          // The last non-final result is the live interim preview.
+          interimText = text;
         }
-        vcRefreshTranscriptUI();
-      })
-      .catch(function(err) {
-        if (sttTimeoutHandle) clearTimeout(sttTimeoutHandle);
-        // [LOG] Fires on network failure, a timeout-triggered abort, or if
-        // res.json() couldn't parse the response body (e.g. a non-JSON
-        // error page from a 404/500).
-        vcLog(sttTimedOut ? 'STT:TIMEOUT_ABORTED' : 'STT:CATCH', (err && err.message) || String(err));
+      }
 
-        vc.transcribeBusy = false;
-        if (myGen !== vc.gen) return;
-        vc.interim = '';
-        vcLog('STT:ERROR', err && err.message);
-        // A single failed chunk does not end the session or restart the
-        // mic — it's simply dropped, and the next scheduled flush tries again.
-        vcRefreshTranscriptUI();
-      });
+      vc.interim = interimText;
+      vcLog('onresult', 'lang="' + rec.lang + '" resultIndex=' + e.resultIndex +
+            ' results.length=' + e.results.length +
+            ' instanceFinalCount=' + instanceFinalCount +
+            ' transcript="' + vc.transcript + '" interim="' + vc.interim + '"');
+      vcRefreshTranscriptUI();
+    };
+
+    var errorHandled = false; // set by onerror; tells the always-following
+                               // onend not to ALSO schedule its own restart,
+                               // since per spec onend always fires after
+                               // onerror for the same instance.
+
+    rec.onerror = function(e) {
+      if (myGen !== vc.gen) { vcLog('onerror:stale', 'gen ' + myGen + ' error=' + e.error); return; }
+      errorHandled = true;
+      vc.starting  = false;
+      vc.listening = false;
+
+      vcLog('onerror:FIRED', 'lang="' + rec.lang + '" error="' + e.error + '" transcript="' + vc.transcript + '"');
+
+      switch (e.error) {
+        case 'not-allowed':
+        case 'permission-denied':
+          vcLog('onerror:not-allowed', 'mic permission denied — stopping');
+          if (typeof toast === 'function') toast('🎤 Microphone permission denied. Please allow mic access and try again.');
+          vcSetStatus('error');
+          vcStop();
+          return;
+        case 'audio-capture':
+          vcLog('onerror:audio-capture', 'no microphone — stopping');
+          if (typeof toast === 'function') toast('🎤 No microphone detected. Check your device and try again.');
+          vcSetStatus('error');
+          vcStop();
+          return;
+        case 'network':
+          vcLog('onerror:network', 'lang="' + rec.lang + '" network/server error — retry 1500ms');
+          vcSetStatus('error');
+          if (vc.active) setTimeout(vcStartListening, 1500);
+          return;
+        case 'aborted':
+          vcLog('onerror:aborted', 'intentional abort — no restart scheduled here');
+          return;
+        case 'no-speech':
+          // Android Chrome fires no-speech every ~5-7 seconds of silence even
+          // with continuous=true. errorHandled stays true so the onend that
+          // follows immediately after remains a no-op — we own the restart here.
+          // vc.rec is cleared in onend (now unconditionally, before the
+          // errorHandled guard) so vcStopMic won't call abort() on the dead
+          // instance and produce the audible mic-release click.
+          vcLog('onerror:no-speech', 'lang="' + rec.lang + '" gen=' + myGen + ' — scheduling clean restart after onend');
+          vc.starting = false;
+          if (vc.active) {
+            var _nspGen = myGen;
+            setTimeout(function() {
+              if (_nspGen !== vc.gen) return;
+              if (!vc.active || vc.speaking || vc.starting || vc.listening) return;
+              vcStartListening();
+            }, 300);
+          }
+          return;
+        case 'language-not-supported':
+          // Expected root cause for mr-IN/gu-IN/ur-IN on devices that do
+          // not have those language packs installed.
+          vcLog('onerror:language-not-supported',
+            '*** LOCALE NOT SUPPORTED *** lang="' + rec.lang + '" — device missing this language pack. ' +
+            'Retry in 800ms (will keep failing until lang changes or pack is installed).');
+          if (vc.active) setTimeout(vcStartListening, 800);
+          return;
+        default:
+          vcLog('onerror:other', 'lang="' + rec.lang + '" error="' + e.error + '" — retry 800ms');
+          if (vc.active) setTimeout(vcStartListening, 800);
+          return;
+      }
+    };
+
+    rec.onend = function() {
+      if (myGen !== vc.gen) { vcLog('onend:stale', 'gen ' + myGen); return; }
+      vc.starting  = false;
+      var wasListening = vc.listening;
+      vc.listening = false;
+      // Mark this instance as dead so no-speech handler won't try to re-arm it.
+      rec._ended = true;
+      vcLog('REC:ENDED', '[gen=' + myGen + '] vc.gen=' + vc.gen + ' lang="' + rec.lang + '" wasListening=' + wasListening + ' speaking=' + vc.speaking + ' errorHandled=' + errorHandled + ' transcript="' + vc.transcript + '"');
+      // Clear the dead instance reference unconditionally so vcStopMic inside
+      // vcStartListening finds vc.rec === null and skips the abort() call —
+      // preventing an audible mic-release click on an already-ended recognizer.
+      // Must run before any early-return so every exit path leaves vc.rec clean.
+      vc.rec = null;
+      if (!vc.active) return;
+      if (vc.speaking) return;     // TTS owns the next transition (vcSpeakAndRestart)
+      if (errorHandled) return;    // onerror already decided what happens next
+      var _schedGen = myGen;
+      setTimeout(function() {
+        if (_schedGen !== vc.gen) { vcLog('onend:restart:stale', 'gen ' + _schedGen); return; }
+        if (!vc.active || vc.speaking) return;
+        if (vc.starting || vc.listening) {
+          vcLog('onend:restart:already-active', 'gen ' + _schedGen + ' — skip, already starting/listening');
+          return;
+        }
+        vcLog('onend:restart:new-instance', 'gen=' + _schedGen + ' — full restart (clean path)');
+        vcStartListening();
+      }, 300);
+    };
+
+    vc.rec = rec;
+
+    try {
+      rec.start();
+      vcLog('REC:START_CALLED', 'gen=' + myGen + ' vc.gen=' + vc.gen + ' lang="' + rec.lang + '" — awaiting onstart');
+    } catch (e) {
+      vcLog('start():threw', e.name + ' — ' + e.message);
+      vc.starting = false;
+      if (myGen === vc.gen) vc.rec = null;
+      vcSetStatus('error');
+      if (typeof toast === 'function') toast('⚠️ Could not start microphone: ' + e.message);
+      vcStop();
+    }
   }
-
 
   // ── Speak AI reply, then return to listening ─────────────────────
   // Called by the patched speakText replacement below. mySpeakGen lets the
@@ -8150,11 +7951,6 @@ if ('serviceWorker' in navigator) {
   // myStopToken is checked at entry: if vcStopSpeaking() has already bumped
   // vc.stopToken since this response was queued, we silently discard it and
   // return to listening — the response is never spoken.
-  //
-  // NOTE: the mic session is NOT stopped/restarted here — it has been
-  // running continuously since vcStart(). Only chunk transcription pauses
-  // while vc.speaking is true (see vcMaybeFlush), so the AI's own voice is
-  // never sent to Whisper.
   function vcSpeakAndRestart(text, myStopToken) {
     // ── Emergency-stop gate ──────────────────────────────────────
     // If Stop was pressed after this response was queued but before we got
@@ -8162,7 +7958,7 @@ if ('serviceWorker' in navigator) {
     if (myStopToken !== vc.stopToken) {
       vcLog('vcSpeakAndRestart:CANCELLED', 'stopToken mismatch myStopToken=' + myStopToken + ' vc.stopToken=' + vc.stopToken + ' — discarding response');
       vc.speaking = false;
-      vcSetStatus('listening');
+      if (vc.active && !vc.listening && !vc.starting) vcStartListening();
       return;
     }
 
@@ -8170,9 +7966,9 @@ if ('serviceWorker' in navigator) {
     var mySpeakGen = vc.speakGen;
 
     if (!('speechSynthesis' in window)) {
-      // No TTS — just go back to listening immediately (mic never stopped).
+      // No TTS — just go back to listening immediately.
       vc.speaking = false;
-      vcSetStatus('listening');
+      if (vc.active) setTimeout(vcStartListening, 500);
       return;
     }
 
@@ -8196,8 +7992,8 @@ if ('serviceWorker' in navigator) {
       var voice = pickVoiceForLang(lang);
       if (voice) { u.voice = voice; u.lang = voice.lang || lang; }
       else        { u.lang = lang; }
-      // Remember this turn's language so the NEXT chunk transcription is
-      // hinted toward it.
+      // Remember this turn's language so the NEXT recognition session
+      // (vcResolveRecognitionLang) is biased toward it.
       vc.lastDetectedLang = lang;
     }
 
@@ -8208,16 +8004,17 @@ if ('serviceWorker' in navigator) {
       if (mySpeakGen !== vc.speakGen) return; // superseded by Stop or a newer utterance
       vc.speaking = false;
       if (vc.active) {
-        // Mic session is still running — just resume showing "Listening…"
-        // and let the normal flush schedule pick back up automatically.
-        vcSetStatus('listening');
+        // Go straight back to a visible "Listening…" state instead of
+        // hiding the panel for a beat first — keeps the flow feeling
+        // continuous rather than blinking out and back in.
+        setTimeout(vcStartListening, 400);
       }
     };
     u.onerror = function() {
       if (mySpeakGen !== vc.speakGen) return;
       vc.speaking = false;
       if (vc.active) {
-        vcSetStatus('listening');
+        setTimeout(vcStartListening, 400);
       }
     };
 
@@ -8237,9 +8034,11 @@ if ('serviceWorker' in navigator) {
   //  4. speechSynthesis.cancel() — stops audio output right now.
   //     Called unconditionally: cancel() on an idle synthesizer is a safe
   //     no-op per spec, so pressing Stop multiple times is always safe.
-  //  5. Return to "listening" status. The mic session itself was never
-  //     stopped while the AI was speaking — only transcription was paused —
-  //     so there is nothing to restart here; we just flip the status back.
+  //  5. Force return to listening via vcStopMic + vcStartListening — NOT a
+  //     conditional "if not already listening" check.  vcStopMic bumps the mic
+  //     generation (retiring any stale recognizer) and vcStartListening starts
+  //     a clean new instance.  This guarantees listening resumes even if
+  //     vc.listening or vc.starting is true due to poll lag.
   function vcStopSpeaking() {
     vcLog('vcStopSpeaking', 'EMERGENCY STOP — speaking=' + vc.speaking +
           ' speakGen=' + vc.speakGen + ' stopToken=' + vc.stopToken);
@@ -8261,11 +8060,12 @@ if ('serviceWorker' in navigator) {
     vcLog('vcStopSpeaking', 'TTS cancelled — stopToken now ' + vc.stopToken +
           ' speakGen now ' + vc.speakGen);
 
-    // 5. Return to listening unconditionally. The continuous mic session
-    //    was never torn down while speaking, so there's no recorder to
-    //    recreate — just reflect the status.
+    // 5. Return to listening unconditionally.
+    //    vcStopMic bumps mic gen (retires stale recognizer + clears starting/listening flags)
+    //    so vcStartListening always gets a clean slate, regardless of current state.
     if (vc.active) {
-      vcSetStatus('listening');
+      vcStopMic('stop-speech-btn');
+      vcStartListening();
     } else {
       vcSetStatus('idle');
     }
@@ -8279,24 +8079,16 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
-    vcLog('vcStart', 'Voice Chat Mode enabled — opening continuous mic session');
-    var _dbgBoxStart = document.getElementById('vcDebugBox');
-    if (_dbgBoxStart) _dbgBoxStart.style.display = 'block';
+    vcLog('vcStart', 'Voice Chat Mode enabled');
     vcUpdateToggleUI();
-    if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — speak any time, pauses are fine, tap Send when ready');
+    if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — speak, then tap Send when ready');
     vcStartListening();
   }
 
   // ── Turn Voice Chat Mode off ─────────────────────────────────────
-  // This is the ONLY path that tears down the continuous mic session —
-  // explicit user action (toggle off, End Call button, or navigating away
-  // from the Voice Chat page). Silence, pauses, and TTS playback never call
-  // this.
   function vcStop() {
     vc.active = false;
-    vcLog('vcStop', 'Voice Chat Mode disabled — closing mic session');
-    var _dbgBoxStop = document.getElementById('vcDebugBox');
-    if (_dbgBoxStop) _dbgBoxStop.style.display = 'none';
+    vcLog('vcStop', 'Voice Chat Mode disabled');
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
@@ -8348,10 +8140,7 @@ if ('serviceWorker' in navigator) {
         // (even during async processing), the response is silently dropped.
         var myStopToken = vc.stopToken;
 
-        // Mic session keeps running underneath; we only need to update the
-        // UI/status — vcMaybeFlush() already skips transcription while
-        // vc.speaking is true, so setting that flag (inside
-        // vcSpeakAndRestart) is what actually prevents self-transcription.
+        vcStopMic('about-to-speak');          // don't listen while speaking
         vcSpeakAndRestart(full, myStopToken);
       } else {
         if (orig) orig(t);
@@ -8371,19 +8160,11 @@ if ('serviceWorker' in navigator) {
     vcTranscriptText = document.getElementById('vcTranscriptText');
     vcSendBtn = document.getElementById('vcSendBtn');
     vcStopBtn = document.getElementById('vcStopBtn');
-    var _vcDebugClearBtn = document.getElementById('vcDebugClearBtn');
-    if (_vcDebugClearBtn) {
-      _vcDebugClearBtn.addEventListener('click', function() {
-        _vcDebugLines.length = 0;
-        var _dbgEl = document.getElementById('vcDebugLines');
-        if (_dbgEl) _dbgEl.textContent = '';
-      });
-    }
 
     // [UNCHANGED] Restore the user's pinned Spoken Language (if any) using
     // the app's existing generic localStorage helpers (ls/lss) — kept out
     // of S/persist()/loadStorage() since it's purely a Voice Chat
-    // transcription setting, not a shared app-wide preference.
+    // recognition setting, not a shared app-wide preference.
     if (vcLangSelect) {
       try { vc.langPref = ls('aleem_vc_lang') || ''; } catch (e) {}
       vcLangSelect.value = vc.langPref;
@@ -8391,10 +8172,13 @@ if ('serviceWorker' in navigator) {
         vc.langPref = vcLangSelect.value;
         try { lss('aleem_vc_lang', vc.langPref); } catch (e) {}
         vcLog('vcLangSelect:change', 'langPref="' + vc.langPref + '"');
-        // The language hint takes effect on the NEXT chunk sent to Whisper —
-        // no recognizer/mic restart is needed, since the recorder is
-        // language-agnostic; vcResolveRecognitionLang() is re-read on every
-        // vcTranscribeChunk() call.
+        // [FIX] If Voice Chat is active, restart the recognizer immediately
+        // so the new language takes effect without requiring End Call.
+        // Transcript is preserved (vcStopMic only stops the recognizer instance).
+        if (vc.active && (vc.listening || vc.starting)) {
+          vcStopMic('lang-change');
+          vcStartListening();
+        }
       });
     }
 
@@ -8409,7 +8193,7 @@ if ('serviceWorker' in navigator) {
       });
     }
 
-    // [Manual Send workflow] Send submits the current transcript;
+    // [ADDED — manual Send workflow] Send submits the current transcript;
     // Stop cancels TTS immediately and returns to listening.
     if (vcSendBtn) vcSendBtn.addEventListener('click', function() { vcSendTranscript(); });
     if (vcStopBtn) vcStopBtn.addEventListener('click', function() { vcStopSpeaking(); });
@@ -8425,9 +8209,7 @@ if ('serviceWorker' in navigator) {
     }
 
     // Stop Voice Chat Mode automatically when user navigates away from voice page
-    // (they may click another sidebar item) — this remains the only
-    // "implicit" way the mic session ends, and it's still an explicit user
-    // action (navigation), not silence or a pause.
+    // (they may click another sidebar item)
     document.querySelectorAll('.nav-btn[data-page]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var page = btn.getAttribute('data-page');
@@ -8644,8 +8426,7 @@ if ('serviceWorker' in navigator) {
 
       // ── Intercept vcSpeakAndRestart to respect mute ───────────────
       // When muted, we skip TTS (just return to listening) without
-      // touching any recognition or model logic. The mic session keeps
-      // running throughout, exactly as in the unmuted path.
+      // touching any recognition or model logic.
       // We also bump speakGen so the skipped utterance's onend/onerror
       // (which never fire, but just in case) can't restart the mic.
       var _origVcSpeakAndRestart = vcSpeakAndRestart;
@@ -8655,7 +8436,7 @@ if ('serviceWorker' in navigator) {
           vc.speakGen++;
           // Skip TTS — go straight back to listening as if TTS ended.
           vc.speaking = false;
-          if (vc.active) vcSetStatus('listening');
+          if (vc.active) setTimeout(vcStartListening, 400);
           return;
         }
         _origVcSpeakAndRestart(text, myStopToken);
@@ -8676,8 +8457,6 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
-
-
 
 </body>
 </html>
