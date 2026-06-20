@@ -819,7 +819,7 @@
      selection state, storage, or prompts. */
   .pers-trigger-row {
     display: flex; align-items: center;
-    gap: 6px; margin-top: 5px;
+    gap: 10px; margin-top: 5px;
     width: 100%; max-width: 800px;
     box-sizing: border-box;
   }
@@ -849,6 +849,94 @@
     transition: transform var(--t);
   }
   .pers-trigger-btn[aria-expanded="true"] .pers-trigger-chev { transform: rotate(180deg); }
+
+  /* ── [ADDED] PREMIUM SELECTOR ROW POLISH ──────────────────────────
+     Pure visual layer on top of the existing .pers-trigger-row /
+     .pers-trigger-btn markup. No IDs, classes used by JS, selects,
+     or event listeners are touched — only new modifier classes and
+     a new optional subtitle span. Each selector gets a --trig-color
+     accent via a row-level modifier class:
+       .pers-trigger-row--model            blue
+       .pers-trigger-row--personality      purple
+       .pers-trigger-row--voicepersonality cyan
+       .pers-trigger-row--voice            green
+       .pers-trigger-row--lang             amber               */
+  .pers-trigger-row--model            { --trig-color: #38bdf8; --trig-glow: rgba(56,189,248,0.30); }
+  .pers-trigger-row--personality      { --trig-color: #a78bfa; --trig-glow: rgba(167,139,250,0.32); }
+  .pers-trigger-row--voicepersonality { --trig-color: #22d3ee; --trig-glow: rgba(34,211,238,0.32); }
+  .pers-trigger-row--voice            { --trig-color: #34d399; --trig-glow: rgba(52,211,153,0.30); }
+  .pers-trigger-row--lang             { --trig-color: #f59e0b; --trig-glow: rgba(245,158,11,0.30); }
+
+  /* Uniform vertical rhythm between all 5 rows, regardless of page */
+  .pers-trigger-row { margin-top: 10px; margin-bottom: 10px; }
+
+  .pers-trigger-label-wrap {
+    display: flex; flex-direction: column; gap: 1px;
+    flex-shrink: 0; max-width: 38%;
+  }
+  .pers-trigger-row .pers-trigger-label {
+    font-weight: 700; font-size: 0.72rem;
+    letter-spacing: 0.3px; color: var(--text-2);
+    text-shadow: 0 0 12px var(--trig-glow, transparent);
+    white-space: nowrap;
+  }
+  .pers-trigger-subtitle {
+    font-size: 0.58rem; font-weight: 500; color: var(--text-3);
+    letter-spacing: 0.2px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Uniform height across all 5 trigger buttons, fixed icon size */
+  .pers-trigger-row .pers-trigger-btn {
+    gap: 10px; padding: 0 12px 0 7px;
+    height: 42px; box-sizing: border-box;
+    background:
+      linear-gradient(var(--bg-input), var(--bg-input)) padding-box,
+      linear-gradient(135deg, var(--trig-color, var(--border-hi)), transparent 65%) border-box;
+    border: 1px solid transparent;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 2px 10px rgba(0,0,0,0.18);
+    transition: border-color var(--t), box-shadow 0.25s ease, transform 0.15s ease;
+  }
+  .pers-trigger-row .pers-trigger-btn:hover,
+  .pers-trigger-row .pers-trigger-btn:focus-visible {
+    box-shadow: 0 0 0 1px var(--trig-color, var(--border-hi)), 0 4px 16px var(--trig-glow, var(--glow1));
+    transform: translateY(-1px);
+  }
+  .pers-trigger-row .pers-trigger-btn:active { transform: translateY(0) scale(0.98); }
+  .pers-trigger-row .pers-trigger-btn[aria-expanded="true"] {
+    box-shadow: 0 0 0 1.5px var(--trig-color, var(--border-hi)), 0 0 20px var(--trig-glow, var(--glow1));
+  }
+
+  .pers-trigger-row .pers-trigger-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; flex-shrink: 0;
+    font-size: 1rem; line-height: 1; border-radius: 9px;
+    background: linear-gradient(155deg, var(--trig-glow, rgba(255,255,255,0.06)), transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--trig-color, var(--border)) 35%, transparent);
+  }
+  /* Selected value reads brighter than its label */
+  .pers-trigger-row .pers-trigger-name {
+    font-weight: 700; letter-spacing: 0.1px;
+    color: #ffffff;
+  }
+  .pers-trigger-row .pers-trigger-chev { color: var(--trig-color, var(--text-3)); opacity: 0.85; }
+
+  /* Mobile widths 360px–480px: keep all 5 rows readable and non-overflowing */
+  @media (max-width: 480px) {
+    .pers-trigger-row { gap: 8px; }
+    .pers-trigger-label-wrap { max-width: 34%; }
+    .pers-trigger-row .pers-trigger-label { font-size: 0.66rem; }
+    .pers-trigger-subtitle { font-size: 0.54rem; }
+    .pers-trigger-row .pers-trigger-btn { height: 40px; gap: 7px; padding: 0 9px 0 6px; }
+    .pers-trigger-row .pers-trigger-icon { width: 23px; height: 23px; font-size: 0.92rem; }
+    .pers-trigger-row .pers-trigger-name { font-size: 0.74rem; }
+  }
+  @media (max-width: 380px) {
+    .pers-trigger-subtitle { display: none; }
+    .pers-trigger-label-wrap { max-width: 30%; }
+  }
+  /* ── [END ADDED: PREMIUM SELECTOR ROW POLISH] ── */
 
   /* Popup overlay — bottom sheet on mobile, centered modal from 640px up */
   .pers-popup-overlay {
@@ -2631,8 +2719,11 @@
             <option value="gemini-2.5-pro">Gemini 2.5 Pro (May require paid quota)</option>
           </select>
         </div>
-        <div class="pers-trigger-row">
-          <span class="pers-trigger-label">🤖 Model:</span>
+        <div class="pers-trigger-row pers-trigger-row--model">
+          <span class="pers-trigger-label-wrap">
+            <span class="pers-trigger-label">🤖 Model</span>
+            <span class="pers-trigger-subtitle">Choose AI Engine</span>
+          </span>
           <button type="button" class="pers-trigger-btn" id="modelTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="modelPopupOverlay">
             <span class="pers-trigger-icon" id="modelTriggerIcon">⚡</span>
@@ -2681,8 +2772,11 @@
             <option value="travel">🌍 Travel Guide</option>
           </select>
         </div>
-        <div class="pers-trigger-row">
-          <span class="pers-trigger-label">🎭 AI Personality:</span>
+        <div class="pers-trigger-row pers-trigger-row--personality">
+          <span class="pers-trigger-label-wrap">
+            <span class="pers-trigger-label">🎭 AI Personality</span>
+            <span class="pers-trigger-subtitle">How ALEEM Responds</span>
+          </span>
           <button type="button" class="pers-trigger-btn" id="personalityTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="personalityPopupOverlay">
             <span class="pers-trigger-icon" id="personalityTriggerIcon">😊</span>
@@ -2713,8 +2807,11 @@
             <option value="caring">❤️ Caring</option>
           </select>
         </div>
-        <div class="pers-trigger-row">
-          <span class="pers-trigger-label">🎙️ Voice Personality:</span>
+        <div class="pers-trigger-row pers-trigger-row--voicepersonality">
+          <span class="pers-trigger-label-wrap">
+            <span class="pers-trigger-label">🎙️ Voice Personality</span>
+            <span class="pers-trigger-subtitle">Speaking Style</span>
+          </span>
           <button type="button" class="pers-trigger-btn" id="voicePersonalityTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="voicePersonalityPopupOverlay">
             <span class="pers-trigger-icon" id="voicePersonalityTriggerIcon">😊</span>
@@ -2759,8 +2856,11 @@
             <option value="">🔄 Default</option>
           </select>
         </div>
-        <div class="pers-trigger-row">
-          <span class="pers-trigger-label">🗣️ Voice:</span>
+        <div class="pers-trigger-row pers-trigger-row--voice">
+          <span class="pers-trigger-label-wrap">
+            <span class="pers-trigger-label">🗣️ Voice</span>
+            <span class="pers-trigger-subtitle">TTS Voice Selection</span>
+          </span>
           <button type="button" class="pers-trigger-btn" id="voiceTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="voicePopupOverlay">
             <span class="pers-trigger-icon" id="voiceTriggerIcon">🔄</span>
@@ -2782,7 +2882,6 @@
           </div>
         </div>
         <!-- [END UPGRADED] -->
-             if called from the browser console during development. -->
         <div id="voiceDebugPanel" style="display:none; margin-top:10px; padding:12px 14px; background:rgba(0,0,0,0.35); border:1px solid rgba(99,179,237,0.25); border-radius:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-2); max-height:260px; overflow-y:auto; text-align:left; line-height:1.7;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <strong style="color:var(--a1);">🔍 Voice Diagnostic</strong>
@@ -3000,8 +3099,11 @@
             <option value="ur-IN">Urdu (اردو)</option>
           </select>
         </div>
-        <div class="pers-trigger-row" style="margin-bottom:20px;max-width:400px;">
-          <span class="pers-trigger-label">🌐 Language:</span>
+        <div class="pers-trigger-row pers-trigger-row--lang">
+          <span class="pers-trigger-label-wrap">
+            <span class="pers-trigger-label">🌐 Spoken Language</span>
+            <span class="pers-trigger-subtitle">Recognition Language</span>
+          </span>
           <button type="button" class="pers-trigger-btn" id="langTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="langPopupOverlay">
             <span class="pers-trigger-icon" id="langTriggerIcon">🔄</span>
@@ -4413,7 +4515,7 @@ function bindPersonalityPopup(overlay, btn, closeBtn, grid, select) {
       var card = e.target.closest ? e.target.closest('.pers-card') : null;
       if (!card) return;
       var key = card.getAttribute('data-key');
-      if (!key) return;
+      if (key === null) return;
       if (select.value !== key) {
         select.value = key;
         select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -4479,44 +4581,64 @@ function _origSyncModelTrigger() { syncModelTrigger(); }
 // Covers every locale code that appears in SpeechSynthesis voices on
 // Android + iOS + desktop Chrome/Safari. Keyed by the BCP-47 region suffix
 // (case-insensitive). Unknown locales fall back to 🔊.
+// Keyed by BCP-47 region/country code only (case-insensitive).
+// voiceFlagForLocale() always extracts the LAST segment of the locale tag
+// (e.g. "zh-HK" → "HK", "zh-MO" → "MO", "zh-Hant-TW" → "TW") so every
+// voice that shares the same region — regardless of language prefix — gets
+// the correct flag automatically. No per-language special-casing is needed.
 var VOICE_FLAG_MAP = {
-  'AU': '🇦🇺', 'US': '🇺🇸', 'GB': '🇬🇧', 'IN': '🇮🇳', 'CA': '🇨🇦',
-  'NZ': '🇳🇿', 'IE': '🇮🇪', 'ZA': '🇿🇦', 'PH': '🇵🇭', 'SG': '🇸🇬',
-  'HK': '🇭🇰', 'TW': '🇹🇼', 'CN': '🇨🇳', 'JP': '🇯🇵', 'KR': '🇰🇷',
-  'FR': '🇫🇷', 'DE': '🇩🇪', 'ES': '🇪🇸', 'IT': '🇮🇹', 'PT': '🇵🇹',
-  'BR': '🇧🇷', 'MX': '🇲🇽', 'AR': '🇦🇷', 'CO': '🇨🇴', 'CL': '🇨🇱',
-  'RU': '🇷🇺', 'PL': '🇵🇱', 'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴',
-  'DK': '🇩🇰', 'FI': '🇫🇮', 'TR': '🇹🇷', 'SA': '🇸🇦', 'IL': '🇮🇱',
-  'TH': '🇹🇭', 'ID': '🇮🇩', 'MY': '🇲🇾', 'VN': '🇻🇳', 'PK': '🇵🇰',
-  'BD': '🇧🇩', 'LK': '🇱🇰', 'NP': '🇳🇵', 'NG': '🇳🇬', 'KE': '🇰🇪',
-  'GH': '🇬🇭', 'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'CZ': '🇨🇿',
-  'HU': '🇭🇺', 'RO': '🇷🇴', 'BG': '🇧🇬', 'HR': '🇭🇷', 'SK': '🇸🇰',
-  'UA': '🇺🇦', 'GR': '🇬🇷', 'PT': '🇵🇹',
+  // ── Oceania ──────────────────────────────────────────────────────
+  'AU': '🇦🇺', 'NZ': '🇳🇿',
+  // ── Americas ─────────────────────────────────────────────────────
+  'US': '🇺🇸', 'CA': '🇨🇦', 'MX': '🇲🇽', 'BR': '🇧🇷',
+  'AR': '🇦🇷', 'CO': '🇨🇴', 'CL': '🇨🇱', 'PE': '🇵🇪',
+  'VE': '🇻🇪', 'EC': '🇪🇨', 'BO': '🇧🇴', 'PY': '🇵🇾',
+  'UY': '🇺🇾', 'CR': '🇨🇷', 'PA': '🇵🇦', 'GT': '🇬🇹',
+  'CU': '🇨🇺', 'DO': '🇩🇴', 'PR': '🇵🇷',
+  // ── Europe ───────────────────────────────────────────────────────
+  'GB': '🇬🇧', 'IE': '🇮🇪', 'FR': '🇫🇷', 'DE': '🇩🇪',
+  'IT': '🇮🇹', 'ES': '🇪🇸', 'PT': '🇵🇹', 'NL': '🇳🇱',
+  'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'SE': '🇸🇪',
+  'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮', 'IS': '🇮🇸',
+  'PL': '🇵🇱', 'CZ': '🇨🇿', 'SK': '🇸🇰', 'HU': '🇭🇺',
+  'RO': '🇷🇴', 'BG': '🇧🇬', 'HR': '🇭🇷', 'SI': '🇸🇮',
+  'RS': '🇷🇸', 'UA': '🇺🇦', 'RU': '🇷🇺', 'GR': '🇬🇷',
+  'TR': '🇹🇷', 'LT': '🇱🇹', 'LV': '🇱🇻', 'EE': '🇪🇪',
+  'BY': '🇧🇾', 'MD': '🇲🇩', 'MK': '🇲🇰', 'AL': '🇦🇱',
+  'LU': '🇱🇺', 'MT': '🇲🇹', 'CY': '🇨🇾',
+  // ── Middle East & Africa ─────────────────────────────────────────
+  'SA': '🇸🇦', 'AE': '🇦🇪', 'EG': '🇪🇬', 'IL': '🇮🇱',
+  'IR': '🇮🇷', 'IQ': '🇮🇶', 'JO': '🇯🇴', 'KW': '🇰🇼',
+  'LB': '🇱🇧', 'MA': '🇲🇦', 'TN': '🇹🇳', 'DZ': '🇩🇿',
+  'NG': '🇳🇬', 'KE': '🇰🇪', 'GH': '🇬🇭', 'ZA': '🇿🇦',
+  'TZ': '🇹🇿', 'UG': '🇺🇬', 'ET': '🇪🇹', 'SN': '🇸🇳',
+  'CM': '🇨🇲', 'CI': '🇨🇮',
+  // ── South Asia ───────────────────────────────────────────────────
+  'IN': '🇮🇳', 'PK': '🇵🇰', 'BD': '🇧🇩', 'LK': '🇱🇰',
+  'NP': '🇳🇵', 'AF': '🇦🇫',
+  // ── East & Southeast Asia ────────────────────────────────────────
+  // All zh-* variants (CN, HK, MO, MY, SG, TW) resolved by region code
+  'CN': '🇨🇳', 'HK': '🇭🇰', 'MO': '🇲🇴', 'TW': '🇹🇼',
+  'JP': '🇯🇵', 'KR': '🇰🇷', 'VN': '🇻🇳', 'TH': '🇹🇭',
+  'ID': '🇮🇩', 'MY': '🇲🇾', 'SG': '🇸🇬', 'PH': '🇵🇭',
+  'MM': '🇲🇲', 'KH': '🇰🇭', 'LA': '🇱🇦',
+  // ── Central Asia ─────────────────────────────────────────────────
+  'KZ': '🇰🇿', 'UZ': '🇺🇿', 'AZ': '🇦🇿', 'GE': '🇬🇪',
+  'AM': '🇦🇲',
 };
 
-// Returns a flag emoji for a BCP-47 locale string (e.g. "en-AU" → "🇦🇺").
-// Falls back to a language-based flag for common Indic languages without
-// a country code, and ultimately to 🔊 if nothing matches.
+// Returns a flag emoji for any BCP-47 locale string.
+// Always uses the LAST hyphen-separated segment as the region code so that
+// multi-segment tags like "zh-Hant-HK" → "HK" → 🇭🇰 resolve correctly,
+// and every language sharing that region (zh-HK, en-HK, yue-HK) gets the
+// same flag without needing per-language entries.
 function voiceFlagForLocale(locale) {
   if (!locale) return '🔄';
-  // Normalise underscores (some Android voices use "en_IN" not "en-IN")
-  var norm = locale.replace(/_/g, '-');
-  // Try region suffix first: "en-AU" → "AU"
-  var parts = norm.split('-');
-  if (parts.length >= 2) {
-    var region = parts[parts.length - 1].toUpperCase();
-    if (VOICE_FLAG_MAP[region]) return VOICE_FLAG_MAP[region];
-  }
-  // Fall back by primary language tag for Indian languages that may lack a region
-  var primary = parts[0].toLowerCase();
-  var LANG_FLAGS = { hi:'🇮🇳', mr:'🇮🇳', gu:'🇮🇳', pa:'🇮🇳', bn:'🇮🇳',
-                     ur:'🇵🇰', ta:'🇱🇰', te:'🇮🇳', kn:'🇮🇳', ml:'🇮🇳',
-                     zh:'🇨🇳', ja:'🇯🇵', ko:'🇰🇷', ar:'🇸🇦', fr:'🇫🇷',
-                     de:'🇩🇪', es:'🇪🇸', it:'🇮🇹', pt:'🇵🇹', ru:'🇷🇺',
-                     tr:'🇹🇷', nl:'🇳🇱', pl:'🇵🇱', sv:'🇸🇪', da:'🇩🇰',
-                     fi:'🇫🇮', no:'🇳🇴', el:'🇬🇷', he:'🇮🇱', th:'🇹🇭',
-                     id:'🇮🇩', ms:'🇲🇾', vi:'🇻🇳' };
-  return LANG_FLAGS[primary] || '🔊';
+  // Normalise underscores → hyphens (some Android voices use "en_IN")
+  var parts = locale.replace(/_/g, '-').split('-');
+  // The region is always the last segment
+  var region = parts[parts.length - 1].toUpperCase();
+  return VOICE_FLAG_MAP[region] || '🔊';
 }
 
 // Also returns a human-readable accent/dialect label from a locale string,
@@ -9061,6 +9183,7 @@ if ('serviceWorker' in navigator) {
     if (vcLangSelect) {
       try { vc.langPref = ls('aleem_vc_lang') || ''; } catch (e) {}
       vcLangSelect.value = vc.langPref;
+      if (typeof syncLangTrigger === 'function') syncLangTrigger();
       vcLangSelect.addEventListener('change', function() {
         vc.langPref = vcLangSelect.value;
         try { lss('aleem_vc_lang', vc.langPref); } catch (e) {}
