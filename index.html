@@ -2298,6 +2298,70 @@
     .vc-end-call-btn { width: 64px; height: 64px; font-size: 1.5rem; }
     .vc-mute-btn, .vc-stop-speech-btn { width: 52px; height: 52px; font-size: 1.25rem; }
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     PATCH — real-volume waveform, avatar sync, animated status,
+     transcript flash, extra glass/shadow polish. Visual-only:
+     no selector below touches recognition/TTS/transcript markup,
+     only the existing decorative vc-ui-* elements.
+  ════════════════════════════════════════════════════════════════ */
+
+  /* Bars: JS drives transform via .live; CSS keyframes (vcWaveListen /
+     vcWaveSpeak / vcWaveProcess, defined above) remain completely
+     untouched and become the automatic fallback if mic analyser access
+     ever fails (getUserMedia denied/unavailable) — .live is simply
+     never added in that case. */
+  .vc-wave-bar { transform-origin: center; }
+  .vc-waveform.live .vc-wave-bar {
+    animation: none !important;
+    will-change: transform;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+  }
+  /* Two-tone colours per state: listening=blue/green,
+     processing=amber/orange, speaking=purple/cyan */
+  .vc-waveform.listening .vc-wave-bar  { background: linear-gradient(180deg,#34d399,#38bdf8); box-shadow: 0 0 6px rgba(52,211,153,0.5); }
+  .vc-waveform.speaking  .vc-wave-bar  { background: linear-gradient(180deg,#c084fc,#22d3ee); box-shadow: 0 0 6px rgba(192,132,252,0.5); }
+  .vc-waveform.processing .vc-wave-bar { background: linear-gradient(180deg,#fbbf24,#f97316); box-shadow: 0 0 6px rgba(251,146,60,0.45); }
+
+  /* Avatar — breathing glow (listening), thinking glow (processing),
+     JS-driven scale pulse (speaking, synced to TTS playback timing) */
+  .vc-avatar-inner { transition: box-shadow 0.4s ease, transform 0.12s ease-out; }
+  @keyframes vcBreathGlow {
+    0%,100% { box-shadow: 0 0 28px rgba(56,189,248,0.25); transform: scale(1); }
+    50%     { box-shadow: 0 0 46px rgba(52,211,153,0.50); transform: scale(1.035); }
+  }
+  .vc-avatar-wrap.listening .vc-avatar-inner { animation: vcBreathGlow 2.8s ease-in-out infinite; }
+  @keyframes vcThinkGlow {
+    0%,100% { box-shadow: 0 0 22px rgba(251,191,36,0.30); }
+    50%     { box-shadow: 0 0 40px rgba(249,115,22,0.55); }
+  }
+  .vc-avatar-wrap.processing .vc-avatar-inner { animation: vcThinkGlow 1.1s ease-in-out infinite; }
+  .vc-avatar-wrap.speaking .vc-avatar-inner   { will-change: transform; }
+
+  /* Status pill — fade + scale "pop" on every state change, plus glass */
+  @keyframes vcPillPop {
+    0%   { opacity: 0.3; transform: scale(0.92); }
+    100% { opacity: 1;   transform: scale(1);    }
+  }
+  .vc-status-pill.vc-pop { animation: vcPillPop 0.28s cubic-bezier(.34,1.56,.64,1); }
+  .vc-status-pill { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 4px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05); }
+
+  /* Live transcript — soft arrival flash. Visual only: never sets
+     vcTranscriptText.value or vc.transcript, just a border/glow pulse
+     on the existing card when new words are detected. */
+  #vcTranscriptCard { transition: box-shadow 0.35s ease, border-color 0.35s ease; }
+  #vcTranscriptCard.vc-flash { animation: vcTranscriptPulse 0.5s ease; }
+  @keyframes vcTranscriptPulse {
+    0%   { box-shadow: 0 0 0 rgba(56,189,248,0); border-color: rgba(56,189,248,0.55); }
+    35%  { box-shadow: 0 0 18px rgba(56,189,248,0.28); }
+    100% { box-shadow: 0 0 0 rgba(56,189,248,0); border-color: rgba(99,179,237,0.2); }
+  }
+
+  /* Extra glass/shadow polish on existing controls (additive only) */
+  .vc-mute-btn, .vc-stop-speech-btn { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .vc-end-call-btn { box-shadow: 0 6px 24px rgba(239,68,68,0.45), inset 0 0 0 1px rgba(255,255,255,0.06); }
+  /* ── END PATCH ── */
+
   /* ── END VOICE CHAT PREMIUM CSS ── */
   </style>
 </head>
@@ -8305,12 +8369,124 @@ if ('serviceWorker' in navigator) {
       var uiEndBtn      = document.getElementById('vcUiEndBtn');
       var uiStopSpeech  = document.getElementById('vcUiStopSpeechBtn');
       var vcInstr       = document.getElementById('vcInstructions');
+      var uiAvatarWrap  = document.querySelector('.vc-avatar-wrap');
+      var uiAvatarInner = document.querySelector('.vc-avatar-wrap .vc-avatar-inner');
+      var bars          = uiWave ? Array.prototype.slice.call(uiWave.querySelectorAll('.vc-wave-bar')) : [];
 
       // Set avatar to ALEEM_LOGO_SRC (the base64 PNG used throughout the app)
       var uiAvatarImg = document.getElementById('vcUiAvatarImg');
       if (uiAvatarImg && typeof ALEEM_LOGO_SRC === 'string' && ALEEM_LOGO_SRC) {
         uiAvatarImg.src = ALEEM_LOGO_SRC;
       }
+
+      // ════════════════════════════════════════════════════════════
+      //  PATCH — real mic-volume meter + render driver (visual only)
+      //  Opens its OWN getUserMedia stream purely to read live volume
+      //  for the waveform/avatar. Completely independent of vc.rec /
+      //  SpeechRecognition — never reads or writes vc.transcript,
+      //  vc.rec, vc.gen, or anything recognition-related. If mic
+      //  access fails for any reason it fails silently and the
+      //  original CSS keyframe wave (untouched, still in the
+      //  stylesheet) keeps working exactly as before.
+      // ════════════════════════════════════════════════════════════
+      var meter = { ctx:null, analyser:null, srcNode:null, stream:null, data:null, running:false };
+
+      function meterStart() {
+        if (meter.running || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        meter.running = true;
+        try {
+          navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+            .then(function(stream) {
+              if (!meter.running) { // stopped again before permission resolved
+                stream.getTracks().forEach(function(t){ t.stop(); });
+                return;
+              }
+              meter.stream   = stream;
+              meter.ctx      = new (window.AudioContext || window.webkitAudioContext)();
+              meter.analyser = meter.ctx.createAnalyser();
+              meter.analyser.fftSize = 256;
+              meter.analyser.smoothingTimeConstant = 0.55;
+              meter.srcNode  = meter.ctx.createMediaStreamSource(stream);
+              meter.srcNode.connect(meter.analyser);
+              meter.data     = new Uint8Array(meter.analyser.frequencyBinCount);
+            })
+            .catch(function() { meter.running = false; /* permission denied — CSS fallback stays active */ });
+        } catch (e) { meter.running = false; }
+      }
+      function meterStop() {
+        meter.running = false;
+        try { if (meter.srcNode) meter.srcNode.disconnect(); } catch(e) {}
+        try { if (meter.stream) meter.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e) {}
+        try { if (meter.ctx) meter.ctx.close(); } catch(e) {}
+        meter.ctx = meter.analyser = meter.srcNode = meter.stream = meter.data = null;
+      }
+      function meterRead() {
+        if (!meter.analyser || !meter.data) return 0;
+        meter.analyser.getByteTimeDomainData(meter.data);
+        var sum = 0;
+        for (var i = 0; i < meter.data.length; i++) { var v = (meter.data[i] - 128) / 128; sum += v * v; }
+        return Math.min(1, Math.sqrt(sum / meter.data.length) * 4.2); // boost quiet speech RMS into a visible 0..1 range
+      }
+
+      // Pause/resume the audio graph (not the rAF loop — that's handled by
+      // mode itself) when the tab is backgrounded, to save battery/CPU.
+      document.addEventListener('visibilitychange', function() {
+        if (!meter.ctx) return;
+        try {
+          if (document.hidden && meter.ctx.state === 'running')   meter.ctx.suspend();
+          else if (!document.hidden && meter.ctx.state === 'suspended') meter.ctx.resume();
+        } catch (e) {}
+      });
+
+      var smoothLevel = 0, speakPhase = 0, driverRaf = null;
+      var barChar = bars.map(function(_, i) { return 0.55 + 0.45 * Math.sin(i * 1.7); }); // per-bar character so they don't move in lockstep
+
+      function setBars(level) {
+        for (var i = 0; i < bars.length; i++) {
+          var jitter = 0.65 + 0.35 * Math.sin((speakPhase * 0.09) + i * 1.3);
+          var v = Math.max(0.08, Math.min(1, level * (0.5 + barChar[i] * 0.5) * jitter));
+          bars[i].style.transform = 'scaleY(' + (1 + v * 6.2).toFixed(2) + ')';
+        }
+      }
+      function resetBars() {
+        for (var i = 0; i < bars.length; i++) bars[i].style.transform = '';
+        if (uiAvatarInner) uiAvatarInner.style.transform = '';
+      }
+      function driverTick() {
+        speakPhase++;
+        if (lastMode === 'listening') {
+          smoothLevel = smoothLevel * 0.72 + meterRead() * 0.28; // exponential smoothing — no jumpy bars
+          setBars(smoothLevel);
+        } else if (lastMode === 'speaking') {
+          // The Web Speech Synthesis API exposes no audio buffer/amplitude
+          // data, so true waveform-from-TTS isn't possible in-browser —
+          // this is a smooth synthetic envelope tied only to vc.speaking
+          // (read-only) purely for a "talking" look. It never touches
+          // vcSpeakAndRestart or the utterance object in any way.
+          var synth = 0.45 + 0.4 * Math.sin(speakPhase * 0.12) * Math.sin(speakPhase * 0.027);
+          smoothLevel = smoothLevel * 0.6 + Math.max(0, synth) * 0.4;
+          setBars(smoothLevel);
+          if (uiAvatarInner) uiAvatarInner.style.transform = 'scale(' + (1 + smoothLevel * 0.05).toFixed(3) + ')';
+        }
+        if (lastMode === 'listening' || lastMode === 'speaking') driverRaf = requestAnimationFrame(driverTick);
+        else driverRaf = null;
+      }
+      function driverStart() { if (!driverRaf) driverRaf = requestAnimationFrame(driverTick); }
+      function driverStop()  { if (driverRaf) cancelAnimationFrame(driverRaf); driverRaf = null; smoothLevel = 0; resetBars(); }
+
+      // Animated "🧠 Thinking…" dots, processing-state only
+      var thinkInt = null;
+      function startThinkDots() {
+        if (thinkInt) return;
+        var n = 0;
+        thinkInt = setInterval(function() {
+          if (lastMode !== 'processing' || !uiPillText) return;
+          n = (n + 1) % 4;
+          uiPillText.textContent = '🧠 Thinking' + '.'.repeat(n);
+        }, 380);
+      }
+      function stopThinkDots() { clearInterval(thinkInt); thinkInt = null; }
+      // ── END PATCH (meter/driver module) ───────────────────────────
 
       // ── State ────────────────────────────────────────────────────
       var timerSec  = 0;
@@ -8359,9 +8535,12 @@ if ('serviceWorker' in navigator) {
         if (mode === lastMode) return;
         lastMode = mode;
 
-        // waveform class
+        // waveform class — '.live' tells the JS meter/driver to take over
+        // bar rendering; CSS keyframes (untouched) are the fallback when
+        // it's absent (e.g. mic analyser permission denied).
         if (uiWave) {
-          uiWave.className = 'vc-waveform ' + (mode === 'idle' ? 'idle' : mode);
+          uiWave.className = 'vc-waveform ' + (mode === 'idle' ? 'idle' : mode) +
+            ((mode === 'listening' || mode === 'speaking') ? ' live' : '');
         }
         // ring class
         if (uiRing) {
@@ -8370,23 +8549,28 @@ if ('serviceWorker' in navigator) {
              mode === 'speaking'  ? 'speaking'  :
              mode === 'processing'? 'processing': '');
         }
+        // avatar-wrap class — drives breathing glow / thinking glow / speak-pulse CSS
+        if (uiAvatarWrap) uiAvatarWrap.className = 'vc-avatar-wrap ' + mode;
         // pulse rings (only on listening)
         if (uiPulse) {
           uiPulse.className = 'vc-pulse-rings' +
             (mode === 'listening' ? '' : ' hidden');
         }
-        // status pill
+        // status pill — rebuild then force a fresh "pop" animation every change
         if (uiPill) {
           uiPill.className = 'vc-status-pill ' + mode;
+          void uiPill.offsetWidth; // force reflow so the animation restarts every time
+          uiPill.classList.add('vc-pop');
         }
         // pill text + icon
         var txt = '';
-        if (mode === 'listening')  txt = '🎤 Listening';
-        else if (mode === 'speaking')  txt = '🤖 AI Speaking';
-        else if (mode === 'processing') txt = '⏳ Processing';
-        else if (mode === 'muted')  txt = '⏸ Muted';
+        if (mode === 'listening')       txt = '🎙 Listening…';
+        else if (mode === 'speaking')   txt = '🔊 Speaking…';
+        else if (mode === 'processing') txt = '🧠 Thinking…';
+        else if (mode === 'muted')      txt = '⏸ Muted';
         else txt = 'Idle';
         if (uiPillText) uiPillText.textContent = txt;
+        if (mode === 'processing') startThinkDots(); else stopThinkDots();
 
         // stop-speech button — only active when AI is actually speaking
         if (uiStopSpeech) {
@@ -8396,17 +8580,37 @@ if ('serviceWorker' in navigator) {
             uiStopSpeech.classList.add('dim');
           }
         }
+
+        // real volume meter — only ever listens to the mic while actually
+        // listening; render driver runs only for listening/speaking.
+        if (mode === 'listening') meterStart(); else meterStop();
+        if (mode === 'listening' || mode === 'speaking') driverStart(); else driverStop();
       }
 
       // ── Poll vc state every 250 ms (lightweight) ─────────────────
       // We poll instead of hooking into vc internals to avoid touching
       // any existing recognition/TTS logic.
       var pollInt = null;
+      var lastTranscriptSig = '';
       function startPoll() {
         clearInterval(pollInt);
         pollInt = setInterval(function() {
           if (!vc.active) { applyMode('idle'); return; }
           applyMode(getMode());
+          // Live-transcript arrival flash — READ-ONLY peek at vc.transcript/
+          // vc.interim to trigger a cosmetic border pulse on the card.
+          // Never writes either value and never touches vcTranscriptText.value
+          // or vcRefreshTranscriptUI — those remain 100% as before.
+          var sig = (vc.transcript || '') + '|' + (vc.interim || '');
+          if (sig !== lastTranscriptSig) {
+            lastTranscriptSig = sig;
+            var card = document.getElementById('vcTranscriptCard');
+            if (card) {
+              card.classList.remove('vc-flash');
+              void card.offsetWidth;
+              card.classList.add('vc-flash');
+            }
+          }
         }, 250);
       }
       function stopPoll() {
@@ -8428,12 +8632,16 @@ if ('serviceWorker' in navigator) {
         if (vcInstr)    vcInstr.style.display = '';
         stopTimer();
         stopPoll();
+        meterStop();
+        driverStop();
+        stopThinkDots();
         muted    = false;
         lastMode = '';
         if (uiMuteBtn) { uiMuteBtn.textContent = '🔊'; uiMuteBtn.classList.remove('muted'); }
         if (uiMuteLbl) uiMuteLbl.textContent = 'Mute';
         if (uiWave) uiWave.className = 'vc-waveform idle';
         if (uiRing) uiRing.className = 'vc-avatar-ring';
+        if (uiAvatarWrap) uiAvatarWrap.className = 'vc-avatar-wrap';
         if (uiPulse) uiPulse.className = 'vc-pulse-rings hidden';
         if (uiPill) { uiPill.className = 'vc-status-pill'; }
         if (uiPillText) uiPillText.textContent = 'Connecting…';
