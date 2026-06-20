@@ -2299,6 +2299,60 @@
     .vc-mute-btn, .vc-stop-speech-btn { width: 52px; height: 52px; font-size: 1.25rem; }
   }
   /* ── END VOICE CHAT PREMIUM CSS ── */
+
+  /* ── VC DEBUG PANEL ──────────────────────────────────────── */
+  #vcDebugPanel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 99999;
+    background: rgba(0,0,0,0.88);
+    border-top: 1px solid #f59e0b;
+    max-height: 38vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    pointer-events: auto;
+  }
+  #vcDebugPanel.vc-debug-hidden { display: none; }
+  #vcDebugPanelHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: rgba(245,158,11,0.15);
+    border-bottom: 1px solid rgba(245,158,11,0.3);
+    flex-shrink: 0;
+  }
+  #vcDebugPanelHeader span {
+    color: #f59e0b;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  #vcDebugPanelHeader button {
+    background: none;
+    border: 1px solid rgba(245,158,11,0.4);
+    color: #f59e0b;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  #vcDebugPanel ul {
+    list-style: none;
+    margin: 0; padding: 4px 8px 6px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  #vcDebugPanel ul li {
+    padding: 1px 0;
+    line-height: 1.4;
+    word-break: break-all;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  /* ── END VC DEBUG PANEL ───────────────────────────────────── */
   </style>
 </head>
 <body>
@@ -7444,6 +7498,35 @@ if ('serviceWorker' in navigator) {
                  ' transcript=' + txt;
 
       console.log('[ALEEM-VC] ' + line);
+
+      // ── On-screen debug panel ─────────────────────────────────────
+      // Push to the rolling 20-entry buffer and refresh the panel.
+      // Colour-code by event prefix so critical events stand out.
+      if (!window._vcDebugLines) window._vcDebugLines = [];
+      window._vcDebugLines.push({ event: event, line: line });
+      if (window._vcDebugLines.length > 20) window._vcDebugLines.shift();
+      var panel = document.getElementById('vcDebugPanel');
+      if (panel) {
+        var ul = panel.querySelector('ul');
+        if (ul) {
+          ul.innerHTML = '';
+          window._vcDebugLines.slice().reverse().forEach(function(e) {
+            var li = document.createElement('li');
+            li.textContent = e.line;
+            if (e.event.indexOf('WATCHDOG')   !== -1) li.style.color = '#f59e0b';
+            else if (e.event.indexOf('ERROR') !== -1 ||
+                     e.event.indexOf('error') !== -1 ||
+                     e.event.indexOf('dropped') !== -1) li.style.color = '#f87171';
+            else if (e.event.indexOf('STARTED') !== -1 ||
+                     e.event.indexOf('ENTER')   !== -1) li.style.color = '#34d399';
+            else if (e.event.indexOf('ENDED')   !== -1 ||
+                     e.event.indexOf('firing')  !== -1) li.style.color = '#38bdf8';
+            else li.style.color = '#94a3b8';
+            ul.appendChild(li);
+          });
+        }
+      }
+      // ── END on-screen debug panel ─────────────────────────────────
     } catch(ex) { /* never break voice chat */ }
   }
 
@@ -7635,6 +7718,9 @@ if ('serviceWorker' in navigator) {
       vcStop();
       return;
     }
+
+    // LOG: vcStartListening is proceeding past all guards.
+    vcLog('vcStartListening:ENTER', 'active=' + vc.active + ' starting=' + vc.starting + ' listening=' + vc.listening + ' speaking=' + vc.speaking + ' gen=' + vc.gen);
 
     // Retire any previous instance/generation before creating a new one.
     vcStopMic('superseded-by-new-start');
@@ -7880,7 +7966,11 @@ if ('serviceWorker' in navigator) {
             var _nspGen = myGen;
             setTimeout(function() {
               if (_nspGen !== vc.gen) return;
-              if (!vc.active || vc.speaking || vc.starting || vc.listening) return;
+              if (!vc.active || vc.speaking || vc.starting || vc.listening) {
+                vcLog('onerror:no-speech:restart-dropped', 'gen=' + _nspGen + ' active=' + vc.active + ' speaking=' + vc.speaking + ' starting=' + vc.starting + ' listening=' + vc.listening + ' — callback guards blocked restart');
+                return;
+              }
+              vcLog('onerror:no-speech:restart-firing', 'gen=' + _nspGen + ' — calling vcStartListening');
               vcStartListening();
             }, 300);
           }
@@ -8486,5 +8576,32 @@ if ('serviceWorker' in navigator) {
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
 
+<!-- ── VC DEBUG PANEL HTML ─────────────────────────────────────────── -->
+<div id="vcDebugPanel" class="vc-debug-hidden">
+  <div id="vcDebugPanelHeader">
+    <span>&#x1F41E; VC DEBUG (last 20 logs)</span>
+    <button onclick="document.getElementById('vcDebugPanel').classList.add('vc-debug-hidden')">&#x2715; Close</button>
+  </div>
+  <ul></ul>
+</div>
+<script>
+// ── VC DEBUG PANEL TOGGLE ──────────────────────────────────────────────
+// Triple-tap anywhere on screen to show/hide the panel.
+// Completely separate from all voice logic.
+(function() {
+  var taps = [], THRESH = 600; // ms window for triple-tap
+  document.addEventListener('touchend', function(e) {
+    var now = Date.now();
+    taps.push(now);
+    taps = taps.filter(function(t) { return now - t < THRESH; });
+    if (taps.length >= 3) {
+      taps = [];
+      var panel = document.getElementById('vcDebugPanel');
+      if (panel) panel.classList.toggle('vc-debug-hidden');
+    }
+  }, { passive: true });
+})();
+</script>
+<!-- ── END VC DEBUG PANEL HTML ──────────────────────────────────────── -->
 </body>
 </html>
