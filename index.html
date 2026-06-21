@@ -343,8 +343,11 @@
     position: fixed; top: 0; left: 0; bottom: 0;
     width: var(--sidebar-w);
     background: var(--glass);
-    backdrop-filter: blur(22px);
-    -webkit-backdrop-filter: blur(22px);
+    /* [PERF PHASE 1] blur radius reduced 22px → 14px: noticeably
+       cheaper to composite, visually near-identical against the
+       already-80%+-opaque var(--glass) background. */
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border-right: 1px solid var(--glass-border);
     display: flex; flex-direction: column;
     /* FIX z-index: raised from 300 → 400 so sidebar sits above overlay (350)
@@ -356,6 +359,15 @@
   @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); }
     .sidebar.open { transform: translateX(0); }
+    /* [PERF PHASE 1] On mobile the sidebar sits off-screen (translateX
+       -100%) most of the time. backdrop-filter is still composited by
+       some Android browsers even while off-screen, so it's switched
+       off by default here and only turned back on once `.open` is
+       applied — zero visual difference (it isn't visible either way)
+       and no wasted blur compositing while closed. Desktop is
+       untouched: the sidebar there has no open/closed state. */
+    .sidebar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .sidebar.open { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
   }
 
   .sidebar-brand {
@@ -585,8 +597,10 @@
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
     padding: 20px 22px;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    /* [PERF PHASE 1] backdrop-filter removed: var(--bg-card) is already
+       80-92% opaque per theme, so the blur underneath it was barely
+       visible while still costing a full-card GPU blur pass — this is
+       multiplied by however many .card elements are on screen at once. */
   }
   .card-title {
     font-family: var(--font-display);
@@ -1229,7 +1243,10 @@
   .stat-card {
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-lg); padding: 20px;
-    backdrop-filter: blur(14px); position: relative; overflow: hidden;
+    /* [PERF PHASE 1] backdrop-filter removed — see .card comment above.
+       Especially worthwhile here since stat-cards render in a grid
+       (multiple at once). */
+    position: relative; overflow: hidden;
     transition: transform var(--t), box-shadow var(--t);
   }
   .stat-card::before {
@@ -1302,7 +1319,8 @@
     background:var(--bg-card); border:1px solid var(--border);
     border-radius:var(--r-lg); padding:18px 14px;
     cursor:pointer; text-align:center;
-    transition:all var(--t); backdrop-filter:blur(10px);
+    /* [PERF PHASE 1] backdrop-filter removed — see .card comment above. */
+    transition:all var(--t);
     touch-action:manipulation;
     -webkit-tap-highlight-color:rgba(56,189,248,0.15);
   }
@@ -1333,7 +1351,10 @@
     border:1px solid rgba(56,189,248,0.17);
     border-radius:var(--r-xl); padding:44px 36px;
     text-align:center; margin-bottom:24px;
-    backdrop-filter:blur(14px); position:relative; overflow:hidden;
+    /* [PERF PHASE 1] blur radius reduced 14px → 8px (cheaper to
+       composite); kept rather than removed since this background is
+       a low-opacity tint and still benefits from some softening. */
+    backdrop-filter:blur(8px); position:relative; overflow:hidden;
   }
   .about-hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% -10%,rgba(56,189,248,0.11),transparent 68%); }
   .ab-av  { width:94px; height:94px; border-radius:50%; margin:0 auto 18px; background:linear-gradient(135deg,#38bdf8,#818cf8,#34d399); padding:3px; animation:avSpin 9s linear infinite; }
@@ -1355,7 +1376,8 @@
     border: 1px solid rgba(129,140,248,0.25);
     border-radius: var(--r-xl); padding: 52px 36px;
     text-align: center; margin-bottom: 28px;
-    backdrop-filter: blur(14px); position: relative; overflow: hidden;
+    /* [PERF PHASE 1] blur radius reduced 14px → 8px. */
+    backdrop-filter: blur(8px); position: relative; overflow: hidden;
   }
   .premium-hero::before {
     content: ''; position: absolute; inset: 0;
@@ -1402,7 +1424,7 @@
   .premium-card {
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-lg); padding: 22px;
-    backdrop-filter: blur(14px);
+    /* [PERF PHASE 1] backdrop-filter removed — see .card comment above. */
     transition: all var(--t); position: relative; overflow: hidden;
   }
   .premium-card::before {
@@ -1439,7 +1461,8 @@
     border: 1px solid rgba(56,189,248,0.18);
     border-radius: var(--r-xl); padding: 44px 36px;
     text-align: center; margin-bottom: 24px;
-    backdrop-filter: blur(14px); position: relative; overflow: hidden;
+    /* [PERF PHASE 1] blur radius reduced 14px → 8px. */
+    backdrop-filter: blur(8px); position: relative; overflow: hidden;
   }
   .profile-hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% -15%, rgba(56,189,248,0.12), transparent 65%); }
   .profile-logo {
@@ -1459,7 +1482,7 @@
   }
 
   .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .profile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px; backdrop-filter: blur(14px); }
+  .profile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px; /* [PERF PHASE 1] backdrop-filter removed — see .card comment above. */ }
   .profile-card h3 { font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; color: var(--a1); margin-bottom: 10px; }
   .profile-card p { font-size: 0.83rem; color: var(--text-2); line-height: 1.7; }
   .privacy-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -1474,7 +1497,8 @@
     border: 1px solid rgba(56,189,248,0.17);
     border-radius: var(--r-xl); padding: 36px 28px;
     text-align: center; margin-bottom: 24px;
-    backdrop-filter: blur(14px);
+    /* [PERF PHASE 1] blur radius reduced 14px → 8px. */
+    backdrop-filter: blur(8px);
   }
   .search-hero h2 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: var(--text-1); margin-bottom: 8px; }
   .search-hero p { color: var(--text-2); font-size: 0.875rem; margin-bottom: 22px; }
@@ -1507,7 +1531,8 @@
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-lg); padding: 18px 14px;
     cursor: pointer; text-align: center;
-    transition: all var(--t); backdrop-filter: blur(10px);
+    /* [PERF PHASE 1] backdrop-filter removed — see .card comment above. */
+    transition: all var(--t);
     touch-action: manipulation;
     -webkit-tap-highlight-color: rgba(56,189,248,0.15);
   }
@@ -1534,7 +1559,8 @@
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-md);
     margin-bottom: 8px;
-    backdrop-filter: blur(12px);
+    /* [PERF PHASE 1] backdrop-filter removed — see .card comment above.
+       Settings rows render as a stacked list, so this adds up. */
     transition: border-color var(--t);
   }
   .settings-row:hover { border-color: var(--border-hi); }
@@ -2595,14 +2621,33 @@
     display: flex; align-items: center; justify-content: center;
     gap: 3px; height: 44px; margin-bottom: 26px;
   }
+  /*
+   * [PERF PHASE 1] Voice waveform optimization.
+   * Previously each bar animated the `height` property every frame,
+   * which is layout-triggering — the browser must reflow the whole
+   * waveform (and recheck siblings) on every animation tick, for all
+   * 9 bars, continuously while a call is active. That's exactly the
+   * kind of per-frame layout work that causes jank on Android.
+   *
+   * Fix: each state now sets a fixed `height` once (a single, cheap
+   * layout pass when the mode changes), and the animation itself only
+   * transforms scaleY() — a compositor-only property that never
+   * triggers layout or paint. transform-origin stays centered (the
+   * default), matching how the bars used to grow symmetrically inside
+   * this align-items:center flex row, so the visual result is the
+   * same peak heights, same easing, same timing — just animated on
+   * the GPU instead of the main thread.
+   */
   .vc-wave-bar {
     width: 4px; border-radius: 99px;
     background: var(--a1);
     height: 6px;
+    transform: scaleY(1);
     transition: background 0.3s;
   }
   /* listening animation */
   .vc-waveform.listening .vc-wave-bar {
+    height: 36px; /* fixed peak height — was animated, now static */
     animation: vcWaveListen 0.9s ease infinite alternate;
   }
   .vc-waveform.listening .vc-wave-bar:nth-child(1)  { animation-delay: 0s;    }
@@ -2615,11 +2660,13 @@
   .vc-waveform.listening .vc-wave-bar:nth-child(8)  { animation-delay: 0.07s; }
   .vc-waveform.listening .vc-wave-bar:nth-child(9)  { animation-delay: 0s;    }
   @keyframes vcWaveListen {
-    from { height: 5px;  opacity: 0.5; }
-    to   { height: 36px; opacity: 1;   }
+    /* was: height 5px → 36px. 5/36 ≈ 0.14 */
+    from { transform: scaleY(0.14); opacity: 0.5; }
+    to   { transform: scaleY(1);    opacity: 1;   }
   }
   /* speaking animation */
   .vc-waveform.speaking .vc-wave-bar {
+    height: 40px; /* fixed peak height — was animated, now static */
     background: #818cf8;
     animation: vcWaveSpeak 0.55s ease infinite alternate;
   }
@@ -2633,16 +2680,26 @@
   .vc-waveform.speaking .vc-wave-bar:nth-child(8)  { animation-delay: 0.08s;  animation-duration: 0.44s; }
   .vc-waveform.speaking .vc-wave-bar:nth-child(9)  { animation-delay: 0.02s;  animation-duration: 0.58s; }
   @keyframes vcWaveSpeak {
-    from { height: 10px; opacity: 0.7; }
-    to   { height: 40px; opacity: 1;   }
+    /* was: height 10px → 40px. 10/40 = 0.25 */
+    from { transform: scaleY(0.25); opacity: 0.7; }
+    to   { transform: scaleY(1);    opacity: 1;   }
   }
   /* idle / processing */
   .vc-waveform.idle .vc-wave-bar,
-  .vc-waveform.processing .vc-wave-bar { height: 5px; opacity: 0.3; animation: none; }
-  .vc-waveform.processing .vc-wave-bar { background: #fbbf24; animation: vcWaveProcess 1s ease infinite alternate; }
+  .vc-waveform.processing .vc-wave-bar { height: 5px; opacity: 0.3; animation: none; transform: scaleY(1); }
+  .vc-waveform.processing .vc-wave-bar {
+    height: 18px; /* fixed peak height — was animated, now static */
+    background: #fbbf24;
+    animation: vcWaveProcess 1s ease infinite alternate;
+  }
   .vc-waveform.processing .vc-wave-bar:nth-child(odd)  { animation-delay: 0s; }
   .vc-waveform.processing .vc-wave-bar:nth-child(even) { animation-delay: 0.5s; }
-  @keyframes vcWaveProcess { from { height: 4px; opacity: 0.2; } to { height: 18px; opacity: 0.8; } }
+  @keyframes vcWaveProcess {
+    /* was: height 4px → 18px. 4/18 ≈ 0.22 */
+    from { transform: scaleY(0.22); opacity: 0.2; }
+    to   { transform: scaleY(1);    opacity: 0.8; }
+  }
+
 
   /* ── Call control buttons row ── */
   .vc-controls-row {
@@ -7106,13 +7163,24 @@ function initSplashParticles() {
 }
 
 // ── PARTICLES ─────────────────────────────────────────────────────
+// [PERF PHASE 1] Particle system optimization:
+//   1) Lower particle count on mobile (was a flat 28 — now tiered by
+//      width, since the connection-line cost below is O(n^2)).
+//   2) Connection-line loop now starts j at i+1 instead of 0, so each
+//      pair is checked/drawn once instead of twice (was silently doing
+//      2x the math and drawing every line on top of itself).
+//   3) The draw loop now fully pauses (no rAF scheduled at all) when
+//      the tab/app is hidden, and when the soft keyboard is open on
+//      mobile — both are pure CPU/battery wins with zero visual
+//      difference whenever the canvas is actually visible.
 function initParticles() {
   var canvas = document.getElementById('particles');
   var ctx    = canvas.getContext('2d');
   var W, H;
   var COLS   = ['#38bdf8','#818cf8','#34d399'];
   var isMobile = window.innerWidth <= 768;
-  var count  = isMobile ? 28 : 60;
+  var isSmallMobile = window.innerWidth <= 480;
+  var count  = isSmallMobile ? 14 : (isMobile ? 18 : 60);
 
   var pts = Array.from({length: count}, function() {
     return {
@@ -7136,19 +7204,47 @@ function initParticles() {
     isMobile = window.innerWidth <= 768;
   });
 
-  var raf;
+  // PERF: pause/resume control. `looping` guards against ever having
+  // two concurrent rAF chains running at once.
+  var hidden = false;
+  var keyboardOpen = false;
+  var looping = false;
+
+  function maybeResume() {
+    if (!hidden && !keyboardOpen && !looping) {
+      looping = true;
+      requestAnimationFrame(draw);
+    }
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    hidden = document.hidden;
+    maybeResume();
+  });
+
+  // Soft keyboard detector: when the visual viewport shrinks a lot
+  // relative to the layout viewport, the on-screen keyboard is open.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function() {
+      var shrink = window.innerHeight - window.visualViewport.height;
+      keyboardOpen = shrink > 150;
+      maybeResume();
+    });
+  }
+
   function draw() {
+    if (hidden || keyboardOpen) { looping = false; return; }
     ctx.clearRect(0,0,W,H);
     for (var i = 0; i < pts.length; i++) {
       var p = pts[i];
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
       ctx.fillStyle = p.c; ctx.globalAlpha = p.a; ctx.fill();
-      for (var j = 0; j < pts.length; j++) {
+      for (var j = i + 1; j < pts.length; j++) {
         var q = pts[j];
         var d = Math.hypot(p.x-q.x, p.y-q.y);
         if (d < 120) {
           ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y);
-          ctx.strokeStyle=p.c; ctx.globalAlpha=(1-d/120)*0.1;
+          ctx.strokeStyle=p.c; ctx.globalAlpha=(1-d/120)*0.18;
           ctx.lineWidth=0.5; ctx.stroke();
         }
       }
@@ -7157,8 +7253,9 @@ function initParticles() {
       if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
     }
     ctx.globalAlpha = 1;
-    raf = requestAnimationFrame(draw);
+    requestAnimationFrame(draw);
   }
+  looping = true;
   draw();
 }
 
