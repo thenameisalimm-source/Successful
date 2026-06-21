@@ -609,7 +609,7 @@
     display: flex; align-items: center; gap: 12px; min-width: 0;
     /* Own stacking context above topbar children */
     position: relative; z-index: 1;
-    margin-left: -8px; /* balance hamburger left edge with avatar right padding */
+    margin-left: -13px; /* shift hamburger closer to screen edge, giving connection indicator more room */
   }
   .topbar-title {
     font-family: var(--font-display);
@@ -3857,10 +3857,10 @@
         <div class="pg-head"><h1>Dashboard</h1><p>Your usage overview and quick stats</p></div>
 
         <div class="stats-grid">
-          <div class="stat-card">
+          <div class="stat-card stat-card--clickable" id="statTotalCard" style="cursor:pointer;" title="View all questions asked">
             <div class="stat-icon">💬</div>
             <div class="stat-value" id="sTotal">0</div>
-            <div class="stat-lbl">Total Questions</div>
+            <div class="stat-lbl">Total Questions <span style="font-size:0.62rem;opacity:0.6;">▶</span></div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">📅</div>
@@ -11654,5 +11654,159 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <!-- ── END VOICE CHAT MODE ─────────────────────────────────────── -->
+
+<!-- ── RECENT QUESTIONS MODAL ────────────────────────────────────── -->
+<div id="recentQOverlay" style="
+  display:none; position:fixed; inset:0; z-index:9800;
+  background:rgba(2,5,12,0.62);
+  align-items:flex-end; justify-content:center;
+" onclick="if(event.target===this)closeRecentQModal()">
+  <div id="recentQPanel" style="
+    width:100%; max-width:560px; max-height:82vh;
+    background:var(--glass); border:1px solid var(--glass-border);
+    border-radius:22px 22px 0 0;
+    box-shadow:0 -10px 40px rgba(0,0,0,0.45);
+    display:flex; flex-direction:column; overflow:hidden;
+    transform:translateY(24px); opacity:0;
+    transition:transform 0.28s cubic-bezier(0.16,1,0.3,1), opacity 0.25s ease;
+  ">
+    <!-- Header -->
+    <div style="
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 18px 12px; border-bottom:1px solid var(--border); flex-shrink:0;
+    ">
+      <div>
+        <div style="font-family:var(--font-display);font-weight:700;font-size:1rem;color:var(--text-1);">
+          💬 Recent Questions
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px;">
+          Your prompts inside ALEEM AI — newest first
+        </div>
+      </div>
+      <button onclick="closeRecentQModal()" style="
+        background:var(--bg-input); border:1px solid var(--border); border-radius:50%;
+        width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+        color:var(--text-2); cursor:pointer; font-size:0.9rem; flex-shrink:0;
+        transition:border-color var(--t),color var(--t);
+        touch-action:manipulation;
+      " aria-label="Close">✕</button>
+    </div>
+    <!-- List -->
+    <div id="recentQList" style="
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+      padding:14px 18px calc(18px + env(safe-area-inset-bottom,0px));
+      display:flex; flex-direction:column; gap:9px;
+    ">
+      <p style="color:var(--text-3);font-size:0.82rem;text-align:center;padding:20px 0;">
+        No questions yet. Start chatting!
+      </p>
+    </div>
+  </div>
+</div>
+
+<style>
+@media(min-width:640px){
+  #recentQOverlay { align-items:center !important; }
+  #recentQPanel   { border-radius:22px !important; transform:translateY(12px) scale(0.97) !important; }
+  #recentQOverlay.rq-show #recentQPanel { transform:translateY(0) scale(1) !important; }
+}
+#recentQOverlay.rq-show { display:flex !important; }
+#recentQOverlay.rq-show #recentQPanel { transform:translateY(0) !important; opacity:1 !important; }
+.stat-card--clickable:active { transform:translateY(0) scale(0.97) !important; }
+</style>
+
+<script>
+(function(){
+  function getUserQuestions() {
+    var questions = [];
+    if (typeof S === 'undefined') return questions;
+
+    // Step 1: live in-memory session (always most recent, newest-first)
+    if (S.messages && S.messages.length) {
+      for (var li = S.messages.length - 1; li >= 0; li--) {
+        var lm = S.messages[li];
+        if (lm.role === 'user' && lm.text && lm.text.trim()) {
+          questions.push({ text: lm.text.trim(), time: lm.time || '' });
+        }
+      }
+    }
+
+    // Step 2: all past (non-live) history conversations, newest-first.
+    // Skip _live entries — already covered by S.messages above.
+    if (S.history && S.history.length) {
+      for (var ci = 0; ci < S.history.length; ci++) {
+        var conv = S.history[ci];
+        if (conv._live) continue;
+        var msgs = conv.messages || [];
+        for (var mi = msgs.length - 1; mi >= 0; mi--) {
+          var m = msgs[mi];
+          if (m.role === 'user' && m.text && m.text.trim()) {
+            questions.push({ text: m.text.trim(), time: m.time || '' });
+          }
+        }
+      }
+    }
+
+    return questions;
+  }
+
+  function escQ(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  window.openRecentQModal = function() {
+    var overlay = document.getElementById('recentQOverlay');
+    var list    = document.getElementById('recentQList');
+    if (!overlay || !list) return;
+
+    var questions = getUserQuestions();
+
+    if (!questions.length) {
+      list.innerHTML = '<p style="color:var(--text-3);font-size:0.82rem;text-align:center;padding:20px 0;">No questions yet. Start chatting!</p>';
+    } else {
+      // Show up to 200 most recent
+      var shown = questions.slice(0, 200);
+      list.innerHTML = shown.map(function(q) {
+        var timeLabel = q.time ? '<span style="color:var(--text-3);font-size:0.7rem;">🕒 ' + escQ(q.time) + '</span>' : '';
+        var preview = q.text.length > 120 ? escQ(q.text.slice(0, 120)) + '…' : escQ(q.text);
+        return '<div style="' +
+          'background:var(--bg-card);border:1px solid var(--border);border-radius:12px;' +
+          'padding:12px 14px;display:flex;flex-direction:column;gap:4px;' +
+        '">' +
+          (timeLabel ? '<div>' + timeLabel + '</div>' : '') +
+          '<div style="font-size:0.875rem;color:var(--text-1);line-height:1.5;">' + preview + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    overlay.classList.add('rq-show');
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.closeRecentQModal = function() {
+    var overlay = document.getElementById('recentQOverlay');
+    var panel   = document.getElementById('recentQPanel');
+    if (!overlay) return;
+    if (panel) {
+      panel.style.transform = 'translateY(24px)';
+      panel.style.opacity   = '0';
+    }
+    setTimeout(function() {
+      overlay.classList.remove('rq-show');
+      if (panel) { panel.style.transform = ''; panel.style.opacity = ''; }
+      document.body.style.overflow = '';
+    }, 280);
+  };
+
+  // Wire up the Total Questions card click after DOM ready
+  document.addEventListener('DOMContentLoaded', function() {
+    var card = document.getElementById('statTotalCard');
+    if (card) {
+      card.addEventListener('click', function() { window.openRecentQModal(); });
+    }
+  });
+})();
+</script>
+<!-- ── END RECENT QUESTIONS MODAL ────────────────────────────────── -->
 </body>
 </html>
