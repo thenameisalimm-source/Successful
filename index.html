@@ -37,6 +37,9 @@
     --r-sm: 8px; --r-md: 14px; --r-lg: 22px; --r-xl: 32px;
     --t: 0.22s cubic-bezier(0.4,0,0.2,1);
     --sidebar-w: 262px;
+    /* [REFRESH] Dedicated message-bubble radius — between --r-md and --r-lg,
+       reused by AI/user bubbles below so both stay in sync. */
+    --r-bubble: 19px;
   }
   [data-theme="light"] {
     --bg-base:    #eef4ff;
@@ -439,7 +442,7 @@
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0;
     width: var(--sidebar-w);
-    background: linear-gradient(165deg, var(--glass), var(--bg-surface));
+    background: linear-gradient(180deg, rgba(5,10,25,0.96), rgba(8,14,32,0.94));
     border-right: 1px solid var(--glass-border);
     box-shadow: 6px 0 28px rgba(0,0,0,0.18);
     display: flex; flex-direction: column;
@@ -671,9 +674,17 @@
   /* Profile button + dropdown */
   .profile-menu-wrap { position: relative; margin-left: 4px; }
   .tb-profile-btn {
-    padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: hidden;
+    position: relative;
+    padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: visible;
     background: linear-gradient(135deg, var(--a1), var(--a2));
     border: 1px solid transparent;
+  }
+  .tb-profile-btn::after {
+    content: '';
+    position: absolute; right: -1px; bottom: -1px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--a3);
+    border: 2px solid var(--bg-surface);
   }
   .tb-profile-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 2px solid var(--bg-surface); box-sizing: border-box; }
   .tb-profile-btn .tb-profile-icon { font-size: 1rem; line-height: 1; }
@@ -774,8 +785,8 @@
   ================================================================ */
   .chat-messages {
     flex: 1; overflow-y: auto;
-    padding: 22px 22px 10px;
-    display: flex; flex-direction: column; gap: 16px;
+    padding: 24px 22px 14px;
+    display: flex; flex-direction: column; gap: 20px;
   }
 
   .chat-welcome {
@@ -869,77 +880,111 @@
   .suggest-grid {
     display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr));
     align-items: stretch;
-    gap: 10px; max-width: 680px; margin: 0 auto;
+    gap: 12px; max-width: 680px; margin: 0 auto;
   }
 
-  /* ── [UPGRADED] PREMIUM SUGGESTION CARDS ──
-     Same gradient-border glass language as .pers-card / .pers-trigger-btn.
-     .chip class + data-suggest attribute (used by the existing
-     t.closest('.chip') click delegation) are unchanged — only the visual
-     treatment and an inner .chip-text wrapper for consistent card height. */
+  /* ── [REFRESH] WELCOME CARD HIERARCHY ──
+     Same gradient-border glass language as before; refined padding/shadow
+     for more "lifted card" depth, a slightly bigger icon swatch with an
+     inner highlight, and tighter text leading for documentation-style
+     legibility. Class names / data-suggest attribute unchanged. */
   .chip {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-    min-height: 82px; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 9px;
+    min-height: 86px; box-sizing: border-box;
     background:
       linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
       linear-gradient(135deg, var(--border-hi), transparent 65%) border-box;
     border: 1px solid transparent;
     border-radius: var(--r-md);
-    padding: 13px 14px;
+    padding: 14px 15px;
     font-size: 0.8rem; color: var(--text-2);
     cursor: pointer; text-align: left;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 10px rgba(0,0,0,0.16);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 3px 12px rgba(0,0,0,0.18);
     transition: transform 0.15s ease, box-shadow 0.25s ease;
     touch-action: manipulation;
   }
   .chip:hover {
     transform: translateY(-2px);
-    box-shadow: 0 0 0 1px var(--a1), 0 6px 18px var(--glow1), 0 2px 10px rgba(0,0,0,0.16);
+    box-shadow: 0 0 0 1px var(--a1), 0 8px 20px var(--glow1), 0 3px 12px rgba(0,0,0,0.18);
   }
   .chip:active { transform: translateY(0) scale(0.97); }
   .chip-icon {
-    width: 30px; height: 30px; flex-shrink: 0;
+    width: 32px; height: 32px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.02rem; line-height: 1; border-radius: 9px;
+    font-size: 1.05rem; line-height: 1; border-radius: 10px;
     background: linear-gradient(155deg, var(--glow1), transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-hi) 70%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-hi) 70%, transparent), 0 1px 0 rgba(255,255,255,0.06) inset;
   }
   .chip-text {
-    color: var(--text-1); font-weight: 500; line-height: 1.4;
+    color: var(--text-1); font-weight: 500; line-height: 1.42;
+    letter-spacing: -0.1px;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  /* ── [END UPGRADED] ── */
+  /* ── [END REFRESH] ── */
 
   .msg { display: flex; gap: 12px; max-width: 800px; }
   .msg.user { flex-direction: row-reverse; margin-left: auto; }
+  /* [REFRESH] MESSAGE GROUPING — consecutive same-role messages sit closer
+     together so a multi-bubble turn reads as one group. Pure CSS sibling
+     selector on top of the existing flex `gap`; no JS adjacency logic
+     added or touched. */
+  .msg.ai + .msg.ai,
+  .msg.user + .msg.user { margin-top: -8px; }
+
   .msg-av {
-    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.16);
   }
-  .msg.ai   .msg-av { background: none; border: none; }
-  .msg.user .msg-av { background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.28); }
+  /* [REFRESH] AI avatar gets a soft brand-gradient ring (static, no
+     animation) so the logo reads as a deliberate identity mark instead of
+     a bare floating image — echoes the welcome screen's av-ring colors. */
+  .msg.ai   .msg-av {
+    background:
+      linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box,
+      linear-gradient(135deg, var(--a1), var(--a2) 70%, transparent) border-box;
+    border: 1.5px solid transparent;
+  }
+  .msg.user .msg-av { background: rgba(52,211,153,0.16); border: 1.5px solid rgba(52,211,153,0.32); }
   /* User photo avatar in chat messages */
   .msg-av-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-  /* ALEEM AI logo avatar — fills the 34px msg-av cell, clipped to circle */
+  /* ALEEM AI logo avatar — fills the 36px msg-av cell, clipped to circle */
   .msg-av-logo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
   .msg-body { flex: 1; min-width: 0; }
+  /* [REFRESH] Bubble: roomier padding, shared --r-bubble radius, and a
+     soft elevation shadow (box-shadow only — no filter/backdrop-filter)
+     for a more premium, "lifted card" feel. */
   .msg-bubble {
-    padding: 12px 16px; border-radius: var(--r-md);
+    padding: 14px 18px; border-radius: var(--r-bubble);
     font-size: 0.875rem; line-height: 1.72;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 3px 14px rgba(0,0,0,0.16);
   }
-  .msg.ai   .msg-bubble { background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px var(--r-md) var(--r-md) var(--r-md); }
-  .msg.user .msg-bubble { background: linear-gradient(135deg,rgba(56,189,248,0.14),rgba(129,140,248,0.11)); border: 1px solid rgba(56,189,248,0.24); border-radius: var(--r-md) 4px var(--r-md) var(--r-md); }
-  .msg-actions { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+  .msg.ai   .msg-bubble {
+    background:
+      linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+      linear-gradient(160deg, var(--border-hi), transparent 60%) border-box;
+    border: 1px solid transparent;
+    border-radius: 6px var(--r-bubble) var(--r-bubble) var(--r-bubble);
+  }
+  .msg.user .msg-bubble {
+    background: linear-gradient(135deg,rgba(56,189,248,0.16),rgba(129,140,248,0.13));
+    border: 1px solid rgba(56,189,248,0.28);
+    border-radius: var(--r-bubble) 6px var(--r-bubble) var(--r-bubble);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 3px 14px var(--glow1);
+  }
+  .msg-actions { display: flex; align-items: center; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
   .msg.user .msg-actions { justify-content: flex-end; }
-  .msg-time { font-size: 0.68rem; color: var(--text-3); }
+  .msg-time { font-size: 0.68rem; color: var(--text-3); padding: 0 4px; }
+  /* [REFRESH] Larger tap target (min-height 28px) for Android thumb use;
+     :active added since touch devices never trigger :hover. */
   .act-btn {
     background: none; border: none; cursor: pointer;
-    color: var(--text-3); font-size: 0.74rem; padding: 2px 6px;
-    border-radius: 4px; transition: all var(--t);
+    color: var(--text-3); font-size: 0.74rem; padding: 5px 8px; min-height: 28px;
+    border-radius: 6px; transition: all var(--t);
     touch-action: manipulation;
   }
-  .act-btn:hover { color: var(--a1); background: var(--bg-input); }
+  .act-btn:hover, .act-btn:active { color: var(--a1); background: var(--bg-input); }
 
   .typing-dots { display: flex; gap: 4px; align-items: center; padding: 10px 0; }
   .td { width: 6px; height: 6px; border-radius: 50%; background: var(--a1); animation: tdBounce 1.2s ease infinite; }
@@ -965,11 +1010,12 @@
     background: var(--bg-input); border: 1px solid var(--border);
     border-radius: var(--r-lg);
     display: flex; align-items: center; gap: 6px;
-    padding: 6px 6px 6px 14px;
+    padding: 6px 6px 6px 16px;
     box-sizing: border-box;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
     transition: border-color var(--t), box-shadow var(--t);
   }
-  .input-wrap:focus-within { border-color: var(--a1); box-shadow: 0 0 0 3px var(--glow1); }
+  .input-wrap:focus-within { border-color: var(--a1); box-shadow: 0 0 0 3px var(--glow1), 0 1px 0 rgba(255,255,255,0.02) inset; }
   #chatInput {
     flex: 1; min-width: 0; background: none; border: none; outline: none;
     font-family: var(--font-body); font-size: 0.875rem;
@@ -986,7 +1032,7 @@
      language as .pers-trigger-btn / .pers-trigger-icon. No IDs,
      classes used by JS, or event listeners are touched. */
   .iact-btn {
-    width: 32px; height: 32px; flex-shrink: 0; padding: 0;
+    width: 34px; height: 34px; flex-shrink: 0; padding: 0;
     display: flex; align-items: center; justify-content: center;
     background:
       linear-gradient(var(--bg-input), var(--bg-input)) padding-box,
@@ -995,7 +1041,7 @@
     border-radius: 50%;
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 2px 8px rgba(0,0,0,0.16);
-    color: var(--text-2); font-size: 0.92rem; line-height: 1;
+    color: var(--text-2); font-size: 0.95rem; line-height: 1;
     cursor: pointer;
     transition: box-shadow 0.25s ease, transform 0.15s ease, color var(--t);
     touch-action: manipulation;
@@ -1016,12 +1062,12 @@
   /* ── [END ADDED] ── */
 
   .send-btn {
-    width: 36px; height: 36px; border-radius: 50%;
+    width: 38px; height: 38px; border-radius: 50%;
     background: linear-gradient(135deg,#38bdf8,#818cf8);
     border: none; cursor: pointer; color: #000;
-    font-size: 0.92rem; flex-shrink: 0;
+    font-size: 0.95rem; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 0 1px rgba(56,189,248,0.4), 0 4px 14px var(--glow1);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 0 0 1px rgba(56,189,248,0.4), 0 4px 14px var(--glow1);
     transition: transform var(--t), box-shadow var(--t);
     touch-action: manipulation;
   }
@@ -1793,6 +1839,8 @@
 
   /* Connection status */
   .conn-status {
+    margin-left: 8px;
+
     display: flex; align-items: center; gap: 5px;
     font-size: 0.72rem; font-weight: 500;
     padding: 4px 10px;
@@ -1849,12 +1897,36 @@
     .av-inner { width: 79px; height: 79px; font-size: 1.7rem; }
     .hero-badges { gap: 6px; margin-bottom: 12px; }
     .hero-badge { height: 22px; font-size: 0.62rem; padding: 0 9px 0 7px; }
-    .chip { min-height: 72px; padding: 11px 12px; }
+    .chip { min-height: 78px; padding: 12px 13px; }
   }
   @media(max-width:360px){
     .topbar { padding: 10px 12px; }
     .pg-body { padding: 12px 10px; }
   }
+
+  /* ================================================================
+     [REFRESH] CHAT EXPERIENCE — MOBILE POLISH (Android-first)
+     Tighter, thumb-friendly spacing for the chat surface itself.
+     Selectors touched: .chat-messages, .msg, .msg-av, .msg-bubble,
+     .msg-actions, .act-btn, .md-body th/td. Nothing here changes
+     structure, IDs, or JS-bound classes — sizing/spacing only.
+  ================================================================ */
+  @media (max-width: 480px) {
+    .chat-messages { padding: 18px 14px 12px; gap: 16px; }
+    .msg { gap: 10px; }
+    .msg.ai + .msg.ai, .msg.user + .msg.user { margin-top: -6px; }
+    .msg-av { width: 32px; height: 32px; }
+    .msg-bubble { padding: 12px 15px; }
+    .msg-actions { margin-top: 6px; }
+    .act-btn { padding: 6px 9px; min-height: 30px; } /* larger than desktop: touch, not hover */
+    .md-body th, .md-body td { padding: 6px 9px; }
+  }
+  @media (max-width: 360px) {
+    .chat-messages { padding: 16px 12px 10px; gap: 14px; }
+    .msg-av { width: 30px; height: 30px; }
+    .msg-bubble { padding: 11px 13px; }
+  }
+  /* ── [END REFRESH] ── */
 
   /* ================================================================
      MOBILE TEXT OVERFLOW & WRAPPING FIXES
@@ -2247,19 +2319,21 @@
      MARKDOWN RENDERED OUTPUT
      Scoped to .md-body — only AI message bubbles use this class.
   ================================================================ */
-  .md-body { line-height: 1.75; color: var(--text-1); }
+  .md-body { line-height: 1.78; color: var(--text-1); }
 
   .md-body h1, .md-body h2, .md-body h3,
   .md-body h4, .md-body h5, .md-body h6 {
+    letter-spacing: -0.2px;
     font-family: var(--font-display);
     font-weight: 700;
     color: var(--text-1);
-    margin: 1em 0 0.4em;
+    margin: 1.1em 0 0.45em;
     line-height: 1.3;
   }
-  .md-body h1 { font-size: 1.3rem; background: linear-gradient(135deg,#38bdf8,#818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-  .md-body h2 { font-size: 1.1rem; color: var(--a1); -webkit-text-fill-color: var(--a1); }
-  .md-body h3 { font-size: 0.98rem; color: var(--a2); -webkit-text-fill-color: var(--a2); }
+  .md-body h1:first-child, .md-body h2:first-child, .md-body h3:first-child { margin-top: 0; }
+  .md-body h1 { font-size: 1.32rem; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); background: linear-gradient(135deg,#38bdf8,#818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .md-body h2 { font-size: 1.12rem; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); color: var(--a1); -webkit-text-fill-color: var(--a1); }
+  .md-body h3 { font-size: 0.99rem; color: var(--a2); -webkit-text-fill-color: var(--a2); }
   .md-body h4, .md-body h5, .md-body h6 { font-size: 0.88rem; color: var(--text-2); -webkit-text-fill-color: var(--text-2); }
 
   .md-body p { margin: 0.5em 0; }
@@ -2275,7 +2349,7 @@
     font-size: 0.84em;
     background: var(--bg-input);
     border: 1px solid var(--border);
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 5px;
     color: var(--a3);
     word-break: break-word;
@@ -2286,9 +2360,16 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 0;
-    margin: 0.75em 0;
+    margin: 0.85em 0;
     overflow: hidden;
     position: relative;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.16);
+  }
+  .md-body pre::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--a1), var(--a2), var(--a3));
+    opacity: 0.65;
   }
   .md-body pre .code-header {
     display: flex;
@@ -2300,6 +2381,7 @@
     font-size: 0.7rem;
     color: var(--text-3);
     font-family: var(--font-mono);
+    letter-spacing: 0.3px;
   }
   .md-body pre .code-copy-btn {
     background: none;
@@ -2316,9 +2398,9 @@
   .md-body pre .code-copy-btn:hover { border-color: var(--a1); color: var(--a1); }
   .md-body pre code {
     display: block;
-    padding: 12px 14px;
+    padding: 13px 15px;
     font-size: 0.82em;
-    line-height: 1.65;
+    line-height: 1.7;
     overflow-x: auto;
     background: none;
     border: none;
@@ -2330,18 +2412,18 @@
 
   .md-body blockquote {
     border-left: 3px solid var(--a1);
-    margin: 0.65em 0;
-    padding: 7px 13px;
-    background: rgba(56,189,248,0.06);
+    margin: 0.75em 0;
+    padding: 9px 15px;
+    background: rgba(56,189,248,0.07);
     border-radius: 0 var(--r-sm) var(--r-sm) 0;
     color: var(--text-2);
     font-style: italic;
   }
   .md-body blockquote p { margin: 0; }
 
-  .md-body ul, .md-body ol { margin: 0.5em 0; padding-left: 1.5em; }
-  .md-body ul { list-style: none; padding-left: 1.1em; }
-  .md-body ul li { position: relative; padding-left: 0.55em; }
+  .md-body ul, .md-body ol { margin: 0.6em 0; padding-left: 1.5em; }
+  .md-body ul { list-style: none; padding-left: 1.15em; }
+  .md-body ul li { position: relative; padding-left: 0.6em; }
   .md-body ul li::before {
     content: '▸';
     position: absolute;
@@ -2352,10 +2434,11 @@
   }
   .md-body ul ul li::before { content: '◦'; color: var(--a2); }
   .md-body ol { list-style: decimal; }
-  .md-body li { margin: 0.22em 0; }
+  .md-body ol li::marker { color: var(--a1); font-weight: 600; }
+  .md-body li { margin: 0.32em 0; }
   .md-body li p { margin: 0; }
   .md-body ul ul, .md-body ul ol,
-  .md-body ol ul, .md-body ol ol { margin: 0.18em 0; }
+  .md-body ol ul, .md-body ol ol { margin: 0.22em 0; }
 
   .md-body hr { border: none; border-top: 1px solid var(--border); margin: 0.9em 0; }
 
@@ -2371,16 +2454,18 @@
 
   .md-body .table-wrap {
     overflow-x: auto;
-    margin: 0.75em 0;
+    margin: 0.85em 0;
     border-radius: var(--r-md);
     border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
   }
   .md-body table { width: 100%; border-collapse: collapse; font-size: 0.83em; }
-  .md-body thead tr { background: rgba(56,189,248,0.08); border-bottom: 1px solid var(--border-hi); }
-  .md-body th { padding: 7px 11px; text-align: left; font-weight: 600; color: var(--a1); font-family: var(--font-display); white-space: nowrap; }
-  .md-body td { padding: 6px 11px; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
+  .md-body thead tr { background: rgba(56,189,248,0.09); border-bottom: 1px solid var(--border-hi); }
+  .md-body th { padding: 8px 12px; text-align: left; font-weight: 600; color: var(--a1); font-family: var(--font-display); white-space: nowrap; letter-spacing: 0.1px; }
+  .md-body td { padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: top; }
   .md-body tr:last-child td { border-bottom: none; }
   .md-body tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+  .md-body tbody tr:hover { background: rgba(56,189,248,0.05); }
 
   /* Syntax highlighting tokens */
   .md-body .hl-kw   { color: #c792ea; font-weight: 600; }  /* keywords      */
@@ -2439,6 +2524,11 @@
     flex-shrink: 0;
     background: var(--bg-surface);
     box-shadow: 0 2px 10px rgba(0,0,0,0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .img-preview-thumb:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.34);
   }
   .img-preview-thumb img {
     width: 100%; height: 100%;
