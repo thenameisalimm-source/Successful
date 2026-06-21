@@ -439,10 +439,9 @@
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0;
     width: var(--sidebar-w);
-    background: var(--glass);
-    backdrop-filter: blur(22px);
-    -webkit-backdrop-filter: blur(22px);
+    background: linear-gradient(165deg, var(--glass), var(--bg-surface));
     border-right: 1px solid var(--glass-border);
+    box-shadow: 6px 0 28px rgba(0,0,0,0.18);
     display: flex; flex-direction: column;
     /* FIX z-index: raised from 300 → 400 so sidebar sits above overlay (350)
        and its nav buttons are never covered by the backdrop div. */
@@ -456,17 +455,28 @@
   }
 
   .sidebar-brand {
-    padding: 26px 22px 18px;
+    position: relative;
+    padding: 26px 22px 20px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-brand::before {
+    content: '';
+    position: absolute;
+    top: -30px; left: -20px;
+    width: 160px; height: 110px;
+    background: radial-gradient(ellipse, rgba(56,189,248,0.20) 0%, rgba(129,140,248,0.10) 45%, transparent 75%);
+    pointer-events: none;
   }
   .brand-name {
+    position: relative;
     font-family: var(--font-logo);
     font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px;
     background: linear-gradient(135deg, #38bdf8, #818cf8);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
-  .brand-tag { font-size: 0.68rem; color: var(--text-3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+  .brand-tag { position: relative; font-size: 0.68rem; color: var(--text-3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; font-weight: 500; }
 
   .sidebar-nav {
     flex: 1; overflow-y: auto;
@@ -478,21 +488,29 @@
        hit-testing, making nav buttons miss taps. */
   }
   .nav-label {
-    font-size: 0.66rem; letter-spacing: 2px; text-transform: uppercase;
-    color: var(--text-3); font-weight: 600;
-    padding: 10px 10px 4px;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.65rem; letter-spacing: 2.2px; text-transform: uppercase;
+    color: var(--text-3); font-weight: 700;
+    padding: 14px 10px 6px;
+  }
+  .nav-label::before {
+    content: '';
+    width: 10px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--a1), var(--a2));
+    opacity: 0.7;
   }
 
   .nav-btn {
+    position: relative;
     display: flex; align-items: center; gap: 11px;
-    width: 100%; padding: 12px 12px;
+    width: 100%; padding: 12px 12px 12px 16px;
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--r-sm);
     color: var(--text-2);
-    font-size: 0.875rem; font-weight: 400;
+    font-size: 0.875rem; font-weight: 450; letter-spacing: 0.1px;
     cursor: pointer; text-align: left;
-    transition: background var(--t), color var(--t), border-color var(--t);
+    transition: background var(--t), color var(--t), border-color var(--t), box-shadow var(--t);
     /* FIX: removed position:relative + z-index:10 — those created isolated
        stacking contexts inside the sidebar that caused Android to route taps
        to the wrong layer. Nav buttons do not need their own stacking context. */
@@ -506,19 +524,30 @@
     pointer-events: auto;
     min-height: 44px;
   }
+  .nav-btn::before {
+    content: '';
+    position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--a1), var(--a2));
+    opacity: 0; transition: opacity var(--t);
+  }
   .nav-btn:hover  { background: var(--bg-input); color: var(--text-1); }
   .nav-btn:active { background: rgba(56,189,248,0.12); }
   .nav-btn.active {
-    background: linear-gradient(135deg, rgba(56,189,248,0.14), rgba(129,140,248,0.09));
-    border-color: rgba(56,189,248,0.22);
-    color: var(--a1); font-weight: 500;
+    background: linear-gradient(135deg, rgba(56,189,248,0.13), rgba(129,140,248,0.07));
+    border-color: rgba(56,189,248,0.20);
+    color: var(--a1); font-weight: 600;
+    box-shadow: 0 2px 8px rgba(56,189,248,0.06);
   }
+  .nav-btn.active::before { opacity: 1; }
   .nav-icon { font-size: 1.05rem; width: 20px; text-align: center; flex-shrink: 0; }
 
   .sidebar-foot {
-    padding: 14px 20px;
+    position: relative;
+    padding: 16px 20px;
     border-top: 1px solid var(--border);
-    font-size: 0.7rem; color: var(--text-3); line-height: 1.65;
+    border-image: linear-gradient(90deg, transparent, rgba(56,189,248,0.4), rgba(129,140,248,0.25), transparent) 1;
+    font-size: 0.7rem; color: var(--text-3); line-height: 1.6; letter-spacing: 0.2px;
     flex-shrink: 0;
   }
 
@@ -565,11 +594,10 @@
      * animations. will-change stays on hamburger only.
      */
     z-index: 200;
-    background: var(--glass);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: linear-gradient(180deg, var(--glass), var(--bg-surface));
     border-bottom: 1px solid var(--glass-border);
-    padding: 10px 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18), 0 1px 0 rgba(56,189,248,0.10);
+    padding: 10px 14px;
     display: flex; align-items: center; justify-content: space-between;
     gap: 8px; flex-shrink: 0;
     isolation: isolate;
@@ -607,11 +635,20 @@
   }
   @media (max-width: 768px) { .hamburger { display: flex; } }
 
-  .tb-btn {
-    display: flex; align-items: center; gap: 3px;
-    padding: 5px 6px;
+  .tb-btn-group {
+    display: flex; align-items: center;
+    background: var(--bg-input);
     border: 1px solid var(--border);
-    border-radius: var(--r-sm);
+    border-radius: var(--r-lg);
+    padding: 3px;
+    gap: 1px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .tb-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
     background: var(--bg-input);
     color: var(--text-2);
     font-size: 0.75rem; cursor: pointer;
@@ -619,11 +656,26 @@
     touch-action: manipulation;
   }
   .tb-btn:hover { border-color: var(--border-hi); color: var(--text-1); }
+  .tb-btn-group .tb-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: calc(var(--r-lg) - 4px);
+  }
+  .tb-btn-group .tb-btn:hover {
+    background: rgba(56,189,248,0.10);
+    color: var(--text-1);
+    border-color: transparent;
+  }
+  .tb-btn-group .tb-btn + .tb-btn { box-shadow: -1px 0 0 var(--border); }
 
   /* Profile button + dropdown */
-  .profile-menu-wrap { position: relative; }
-  .tb-profile-btn { padding: 4px; width: 30px; height: 30px; justify-content: center; border-radius: 50%; overflow: hidden; }
-  .tb-profile-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+  .profile-menu-wrap { position: relative; margin-left: 4px; }
+  .tb-profile-btn {
+    padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: hidden;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    border: 1px solid transparent;
+  }
+  .tb-profile-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 2px solid var(--bg-surface); box-sizing: border-box; }
   .tb-profile-btn .tb-profile-icon { font-size: 1rem; line-height: 1; }
   .profile-dropdown {
     position: absolute; top: calc(100% + 8px); right: 0;
@@ -1570,6 +1622,7 @@
     border-radius: var(--r-xl); padding: 36px 28px;
     text-align: center; margin-bottom: 24px;
     backdrop-filter: blur(14px);
+    overflow: hidden; box-sizing: border-box;
   }
   .search-hero h2 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 800; color: var(--text-1); margin-bottom: 8px; }
   .search-hero p { color: var(--text-2); font-size: 0.875rem; margin-bottom: 22px; }
@@ -1577,17 +1630,20 @@
     display: flex; align-items: center; gap: 10px;
     background: var(--bg-input); border: 1px solid var(--border);
     border-radius: var(--r-lg); padding: 13px 18px;
-    max-width: 600px; margin: 0 auto;
+    max-width: 600px; width: 100%; margin: 0 auto;
+    box-sizing: border-box; overflow: hidden;
     transition: border-color var(--t), box-shadow var(--t);
   }
   .search-input-big:focus-within { border-color: var(--a1); box-shadow: 0 0 0 3px var(--glow1); }
   .search-input-big input {
-    flex: 1; background: none; border: none; outline: none;
+    flex: 1; min-width: 0; width: 100%; background: none; border: none; outline: none;
     font-family: var(--font-body); font-size: 1rem;
-    color: var(--text-1);
+    color: var(--text-1); box-sizing: border-box;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .search-input-big input::placeholder { color: var(--text-3); }
   .search-go {
+    flex-shrink: 0;
     background: linear-gradient(135deg, #38bdf8, #818cf8);
     border: none; border-radius: var(--r-sm); color: #000;
     font-size: 0.85rem; font-weight: 600; padding: 7px 16px;
@@ -2946,9 +3002,11 @@
     <div class="conn-dot"></div>
     <span id="connLabel"></span>
         </div>
-       <button class="tb-btn" id="voiceBtn">🔊 Voice</button>
-       <button class="tb-btn" id="clearBtn">🗑 Clear</button>
-       <button class="tb-btn" id="themeBtn">🌙</button>
+       <div class="tb-btn-group">
+         <button class="tb-btn" id="voiceBtn">🔊 Voice</button>
+         <button class="tb-btn" id="clearBtn">🗑 Clear</button>
+         <button class="tb-btn" id="themeBtn">🌙</button>
+       </div>
        <div class="profile-menu-wrap" id="profileMenuWrap" style="display:none;">
          <button class="tb-btn tb-profile-btn" id="profileBtn" aria-label="Account">
            <img id="topbarUserPhoto" src="" alt="" style="display:none;">
