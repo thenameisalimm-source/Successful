@@ -2328,6 +2328,18 @@
     .topbar-left {
       margin-right: 8px;          /* push controls group away from hamburger */
     }
+    /* FIX 4 — Hamburger ↔ green online indicator gap, mobile.
+       .topbar-left (and the hamburger inside it) must NOT move. Instead we
+       shift the avatar (profile-menu-wrap) right by ~10px, and nudge the
+       Voice/Clear/Dark control group right with it by a smaller amount so
+       the topbar still reads as visually centered. transform is used so
+       neither shift affects the flex layout/position of .topbar-left. */
+    .tb-btn-group {
+      transform: translateX(5px);
+    }
+    .profile-menu-wrap {
+      transform: translateX(10px);
+    }
   }
 
   /* FIX 3 — Profile avatar right-edge breathing room on mobile.
@@ -5077,7 +5089,7 @@ function persist() {
   var histToStore = S.history.map(function(conv) {
     var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages.map(function(m) {
       if (m.imgs && m.imgs.length) {
-        return { role: m.role, text: m.text, time: m.time, imgs: m.imgs, img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, imgs: m.imgs, img: null };
       }
       return m;
     }) };
@@ -5102,7 +5114,7 @@ function persist() {
       updatedAt: conv.updatedAt || conv.id || 0,
       messages: conv.messages.map(function(m) {
         if (!m.imgs || !m.imgs.length) return m;
-        return { role: m.role, text: m.text, time: m.time, imgs: [], img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, imgs: [], img: null };
       })
     };
   }
@@ -6194,6 +6206,7 @@ function addMsg(role, text, noRender, imgDataArr) {
 
   var now = new Date();
   var t   = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  var ts  = now.getTime(); // raw epoch ms, used for date filtering (e.g. "today" modal) and re-formatting times reliably
 
   // Normalise imgDataArr → clean array of objects that have a dataUrl
   var imgs = [];
@@ -6214,7 +6227,7 @@ function addMsg(role, text, noRender, imgDataArr) {
   // Keep full image data in S.messages (RAM) for display within this session.
   var storedImgs = imgs.slice();
   var storedImg  = storedImgs.length ? storedImgs[0] : null;
-  S.messages.push({ role: role, text: text, time: t, img: storedImg, imgs: storedImgs });
+  S.messages.push({ role: role, text: text, time: t, ts: ts, img: storedImg, imgs: storedImgs });
 
   // S.messages holds the full message objects including image dataUrls.
   // History is persisted via autoSaveConversation() → persist() after each AI reply.
@@ -11726,7 +11739,7 @@ if ('serviceWorker' in navigator) {
       for (var li = S.messages.length - 1; li >= 0; li--) {
         var lm = S.messages[li];
         if (lm.role === 'user' && lm.text && lm.text.trim()) {
-          questions.push({ text: lm.text.trim(), time: lm.time || '' });
+          questions.push({ text: lm.text.trim(), time: lm.time || '', ts: lm.ts });
         }
       }
     }
@@ -11741,7 +11754,7 @@ if ('serviceWorker' in navigator) {
         for (var mi = msgs.length - 1; mi >= 0; mi--) {
           var m = msgs[mi];
           if (m.role === 'user' && m.text && m.text.trim()) {
-            questions.push({ text: m.text.trim(), time: m.time || '' });
+            questions.push({ text: m.text.trim(), time: m.time || '', ts: m.ts });
           }
         }
       }
@@ -11754,8 +11767,23 @@ if ('serviceWorker' in navigator) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function formatQTime(q) {
+    // Prefer re-deriving the time from the raw timestamp so display is always
+    // 12-hour, regardless of what may have been stored previously. Falls back
+    // to the legacy pre-formatted q.time string for older saved data that
+    // predates the ts field.
+    if (q.ts) {
+      var d = new Date(q.ts);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+      }
+    }
+    return q.time || '';
+  }
+
   function buildQItemHTML(q) {
-    var timeLabel = q.time ? '<span style="color:var(--text-3);font-size:0.7rem;">🕒 ' + escQ(q.time) + '</span>' : '';
+    var displayTime = formatQTime(q);
+    var timeLabel = displayTime ? '<span style="color:var(--text-3);font-size:0.7rem;">🕒 ' + escQ(displayTime) + '</span>' : '';
     var preview = q.text.length > 120 ? escQ(q.text.slice(0, 120)) + '…' : escQ(q.text);
     return '<div style="' +
       'background:var(--bg-card);border:1px solid var(--border);border-radius:12px;' +
@@ -11811,53 +11839,25 @@ if ('serviceWorker' in navigator) {
 
     var all = getUserQuestions();
 
-    // Filter to questions whose stored time string falls on today's calendar date.
-    // The stored time comes from addMsg's toLocaleTimeString (HH:MM or H:MM AM/PM),
-    // which has no date component — so we match live session messages by checking
-    // S.messages directly for a timestamp, and for history we use conv.date.
+    // Filter to questions whose ACTUAL timestamp date matches today's local
+    // calendar date. Every question is checked individually — a live session
+    // or a history conversation can legitimately span more than one day, so
+    // neither "it's in the live session" nor "the conversation's date
+    // matches" is sufficient on its own; only the message's own timestamp
+    // decides whether it belongs in "today".
     var todayQuestions = [];
-    var now = new Date();
-    var todayStr = now.toLocaleDateString([], { year:'numeric', month:'long', day:'numeric' });
-    var todayISO = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    var todayStr = new Date().toDateString();
 
-    if (typeof S !== 'undefined') {
-      // Live session messages (always "today" if they exist in current session)
-      if (S.messages && S.messages.length) {
-        for (var li = S.messages.length - 1; li >= 0; li--) {
-          var lm = S.messages[li];
-          if (lm.role === 'user' && lm.text && lm.text.trim()) {
-            todayQuestions.push({ text: lm.text.trim(), time: lm.time || '' });
-          }
-        }
-      }
-      // Past history conversations whose date matches today
-      if (S.history && S.history.length) {
-        for (var ci = 0; ci < S.history.length; ci++) {
-          var conv = S.history[ci];
-          if (conv._live) continue;
-          // conv.date is a locale date string; also check updatedAt/createdAt as ISO
-          var convDateMatch = false;
-          if (conv.date && (conv.date === todayStr || conv.date.indexOf(todayISO) !== -1)) {
-            convDateMatch = true;
-          }
-          if (!convDateMatch && conv.updatedAt) {
-            var updISO = new Date(conv.updatedAt).toISOString().slice(0, 10);
-            if (updISO === todayISO) convDateMatch = true;
-          }
-          if (!convDateMatch && conv.createdAt) {
-            var crISO = new Date(conv.createdAt).toISOString().slice(0, 10);
-            if (crISO === todayISO) convDateMatch = true;
-          }
-          if (convDateMatch) {
-            var msgs = conv.messages || [];
-            for (var mi = msgs.length - 1; mi >= 0; mi--) {
-              var m = msgs[mi];
-              if (m.role === 'user' && m.text && m.text.trim()) {
-                todayQuestions.push({ text: m.text.trim(), time: m.time || '' });
-              }
-            }
-          }
-        }
+    function isValidToday(ts) {
+      if (!ts) return false;               // no timestamp at all → can't verify, exclude
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return false; // invalid timestamp → exclude
+      return d.toDateString() === todayStr;
+    }
+
+    for (var qi = 0; qi < all.length; qi++) {
+      if (isValidToday(all[qi].ts)) {
+        todayQuestions.push(all[qi]);
       }
     }
 
