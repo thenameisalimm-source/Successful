@@ -1837,6 +1837,55 @@
   ================================================================ */
   .app-footer { padding:16px 24px; border-top:1px solid var(--border); text-align:center; font-size:0.72rem; color:var(--text-3); background:var(--glass); backdrop-filter:blur(10px); }
 
+  /* Voice search bar inside Choose Voice popup */
+  .voice-search-wrap {
+    padding: 10px 18px 4px;
+    flex-shrink: 0;
+  }
+  .voice-search-inner {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .voice-search-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    padding: 9px 36px 9px 13px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--t);
+  }
+  .voice-search-input:focus { border-color: var(--border-hi); }
+  .voice-search-input::placeholder { color: var(--text-3); }
+  .voice-search-clear {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 0.78rem;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+    transition: background var(--t), color var(--t);
+    touch-action: manipulation;
+    flex-shrink: 0;
+  }
+  .voice-search-clear:hover { background: var(--bg-input); color: var(--text-1); }
+  .voice-search-empty {
+    text-align: center;
+    padding: 28px 16px;
+    font-size: 0.84rem;
+    color: var(--text-3);
+  }
+
   /* Connection status */
   .conn-status {
     margin-left: 8px;
@@ -3354,7 +3403,14 @@
               </div>
               <button type="button" class="pers-popup-close" id="voicePopupClose" aria-label="Close">✕</button>
             </div>
+            <div class="voice-search-wrap">
+              <div class="voice-search-inner">
+                <input type="text" id="voiceSearchInput" class="voice-search-input" placeholder="🔍 Search voice, language, or country..." autocomplete="off" autocorrect="off" spellcheck="false">
+                <button type="button" id="voiceSearchClear" class="voice-search-clear" aria-label="Clear search" style="display:none;">✕</button>
+              </div>
+            </div>
             <div class="pers-grid" id="voiceGrid"></div>
+            <div class="voice-search-empty" id="voiceSearchEmpty" style="display:none;">No voices found</div>
           </div>
         </div>
         <!-- [END UPGRADED] -->
@@ -4625,6 +4681,7 @@ function bindAllEvents() {
   var vsEl = document.getElementById('voiceSelect');
   if (vsEl) vsEl.addEventListener('change', syncVoiceTrigger);
   syncVoiceTrigger();
+  initVoiceSearch();
 
   // [ADDED] Spoken Language popup wiring
   buildLangCards();
@@ -5191,6 +5248,80 @@ function buildVoiceCards() {
   }
   grid.innerHTML = html || '<p style="color:var(--text-3);font-size:0.82rem;padding:16px;">No voices available yet — try again after the page fully loads.</p>';
 }
+
+// ── Voice search filter ───────────────────────────────────────────
+// Pure JS, no libraries. Filters visible cards in real time by
+// matching the query against voice name, description (locale/accent),
+// locale code, and the full option label text from #voiceSelect.
+// Runs only inside the Choose Voice popup; nothing else is touched.
+function initVoiceSearch() {
+  var input   = document.getElementById('voiceSearchInput');
+  var clearBtn= document.getElementById('voiceSearchClear');
+  var grid    = document.getElementById('voiceGrid');
+  var emptyEl = document.getElementById('voiceSearchEmpty');
+  var overlay = document.getElementById('voicePopupOverlay');
+  if (!input || !grid || !emptyEl || !overlay) return;
+
+  function filterVoices() {
+    var q = input.value.trim().toLowerCase();
+
+    // Show/hide clear button
+    if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
+
+    var cards = grid.querySelectorAll('.pers-card');
+    var visibleCount = 0;
+
+    // Also build a locale→label map from #voiceSelect for richer matching
+    var sel = document.getElementById('voiceSelect');
+    var labelMap = {};
+    if (sel) {
+      for (var oi = 0; oi < sel.options.length; oi++) {
+        var opt = sel.options[oi];
+        labelMap[opt.value] = (opt.textContent || '').toLowerCase();
+      }
+    }
+
+    cards.forEach(function(card) {
+      if (!q) {
+        card.style.display = '';
+        visibleCount++;
+        return;
+      }
+      var name   = (card.querySelector('.pers-card-name') || {}).textContent || '';
+      var desc   = (card.querySelector('.pers-card-desc') || {}).textContent || '';
+      var locale = (card.getAttribute('data-locale') || '').toLowerCase();
+      var key    = (card.getAttribute('data-key') || '').toLowerCase();
+      var label  = labelMap[card.getAttribute('data-key')] || '';
+
+      var haystack = [name, desc, locale, key, label].join(' ').toLowerCase();
+      var match = haystack.indexOf(q) !== -1;
+      card.style.display = match ? '' : 'none';
+      if (match) visibleCount++;
+    });
+
+    emptyEl.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+  }
+
+  input.addEventListener('input', filterVoices);
+
+  // Clear button — one tap clears input and re-shows all voices
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      input.value = '';
+      filterVoices();
+      input.focus();
+    });
+  }
+
+  // Reset search when popup closes so it's clean on next open
+  overlay.addEventListener('transitionend', function() {
+    if (!overlay.classList.contains('show')) {
+      input.value = '';
+      filterVoices();
+    }
+  });
+}
+// ── End voice search filter ───────────────────────────────────────
 
 function syncVoiceTrigger() {
   var sel = document.getElementById('voiceSelect');
