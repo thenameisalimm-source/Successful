@@ -2000,6 +2000,66 @@
   @keyframes connSpin  { 0%{box-shadow:2px 0 0 var(--a1),-2px 0 0 transparent} 50%{box-shadow:0 2px 0 var(--a1),0 -2px 0 transparent} 100%{box-shadow:2px 0 0 var(--a1),-2px 0 0 transparent} }
   @media(max-width:400px){ #connLabel { display:none; } }
 
+  /* ================================================================
+     MOBILE UI POLISH FIXES (CSS-only, 320px–480px)
+  ================================================================ */
+
+  /* FIX 1 — History search bar: prevent placeholder from overlapping Export button.
+     - search-wrap already has flex:1 but the inner input needs min-width:0 so it
+       can shrink, and the placeholder must be clipped with ellipsis.
+     - Export button gets flex-shrink:0 so it is never squeezed out.             */
+  @media (max-width: 480px) {
+    .hist-search-row {
+      flex-wrap: nowrap;          /* keep search + export on one line */
+    }
+    .hist-search-row .search-wrap {
+      min-width: 0;               /* allow flex child to shrink below content size */
+    }
+    .hist-search-row .search-wrap input {
+      min-width: 0;               /* allow input to shrink */
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .hist-search-row .search-wrap input::placeholder {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .hist-search-row .btn-sec[data-action="export"] {
+      flex-shrink: 0;             /* Export button never gets squeezed */
+      white-space: nowrap;
+    }
+  }
+
+  /* FIX 2 — Hamburger ↔ connection-status separation on mobile.
+     The conn-status already has margin-left:22px globally but on mobile that
+     22px applies to the wrong neighbour (it sits in topbar-right, not next to
+     the hamburger). We increase the left margin of conn-status on mobile so it
+     visually groups with the controls group and detaches from the hamburger.   */
+  @media (max-width: 768px) {
+    .conn-status {
+      margin-left: 10px;          /* inner breathing room inside topbar-right */
+    }
+    /* Add a visible gap between hamburger and the controls group */
+    .topbar-left {
+      margin-right: 8px;          /* push controls group away from hamburger */
+    }
+  }
+
+  /* FIX 3 — Profile avatar right-edge breathing room on mobile.
+     The profile-menu-wrap has margin-left:4px but no right margin, so the
+     avatar sits flush against the screen edge on narrow viewports.             */
+  @media (max-width: 480px) {
+    .profile-menu-wrap {
+      margin-right: 6px;          /* lift avatar off the screen edge */
+    }
+    /* Also ensure topbar-right doesn't run to edge when profile is hidden */
+    .topbar-right {
+      padding-right: 6px;
+    }
+  }
+
   #toast {
     position:fixed; bottom:24px; right:22px; z-index:9000;
     background:var(--bg-surface); border:1px solid var(--border-hi);
