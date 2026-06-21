@@ -609,6 +609,7 @@
     display: flex; align-items: center; gap: 12px; min-width: 0;
     /* Own stacking context above topbar children */
     position: relative; z-index: 1;
+    margin-left: -8px; /* balance hamburger left edge with avatar right padding */
   }
   .topbar-title {
     font-family: var(--font-display);
@@ -4543,13 +4544,13 @@
           <div class="ab-card"><h4>📱 Universal Compatibility</h4><p>Runs on any device — desktop to mobile — as a fully responsive Progressive Web App that adapts perfectly to every screen size and platform.</p></div>
           <div class="ab-card"><h4>🧠 Long-Term Memory</h4><p>ALEEM AI automatically remembers your name, interests, goals, and favourites across sessions using Firestore — every conversation makes it smarter about you.</p></div>
           <div class="ab-card"><h4>ℹ️ App Information</h4>
-            <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Version</span><span style="color:var(--text-1);font-weight:500;">2.0 (2026)</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Created by</span><span style="color:var(--a1);font-weight:500;">Aleem Sudamaniya</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">AI Engine</span><span style="color:var(--text-1);font-weight:500;">Gemini · Groq · DeepSeek</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Platform</span><span style="color:var(--text-1);font-weight:500;">Web · Mobile · Desktop (PWA)</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Personalities</span><span style="color:var(--text-1);font-weight:500;">12 AI Modes</span></div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Themes</span><span style="color:var(--text-1);font-weight:500;">5 (Dark · AMOLED · Purple · Matrix · Light)</span></div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-top:4px;font-size:0.82rem;">
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">Version</span><span style="color:var(--text-1);font-weight:500;word-break:break-word;">2.0 (2026)</span>
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">Created by</span><span style="color:var(--a1);font-weight:500;word-break:break-word;">Aleem Sudamaniya</span>
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">AI Engine</span><span style="color:var(--text-1);font-weight:500;word-break:break-word;">Gemini · Groq · DeepSeek</span>
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">Platform</span><span style="color:var(--text-1);font-weight:500;word-break:break-word;">Web · Mobile · Desktop (PWA)</span>
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">Personalities</span><span style="color:var(--text-1);font-weight:500;word-break:break-word;">12 AI Modes</span>
+              <span style="color:var(--text-3);white-space:nowrap;padding-top:1px;">Themes</span><span style="color:var(--text-1);font-weight:500;word-break:break-word;">5 (Dark · AMOLED · Purple · Matrix · Light)</span>
             </div>
           </div>
         </div>
