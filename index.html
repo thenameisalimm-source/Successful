@@ -288,25 +288,51 @@
   }
 
   /* ================================================================
-     AMBIENT BACKGROUND — CSS-only, no canvas, no rAF, no blur
-     3 radial-gradient layers on body::before. opacity-only animation
-     at a 35s cycle — imperceptibly slow, zero paint/scroll cost.
+     AMBIENT BACKGROUND V2 — CSS-only, no canvas, no rAF, no blur,
+     no opacity change. 4 radial-gradient glow orbs split across
+     body::before (2 orbs) and body::after (2 orbs), each element
+     on its own compositor layer via will-change:transform.
+     Animations are transform-only (translate) — the single cheapest
+     compositor property — with 40–60 s cycles and ≤8 px movement.
+     Zero paint, zero layout, zero blur, zero main-thread cost.
   ================================================================ */
+
+  /* Orb 1 — blue, top-left — 55 s drift */
+  /* Orb 2 — purple, bottom-right — 47 s drift */
   body::before {
     content: '';
     position: fixed; inset: 0; z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 72% 55% at 15% 20%,  rgba(56,189,248,0.07)  0%, transparent 65%),
-      radial-gradient(ellipse 60% 50% at 85% 75%,  rgba(129,140,248,0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 55% 45% at 50% 105%, rgba(52,211,153,0.05)  0%, transparent 55%);
-    animation: ambientDrift 35s ease-in-out infinite alternate;
-    will-change: opacity;
+      radial-gradient(ellipse 68% 52% at 14% 18%,  rgba(56,189,248,0.09)  0%, transparent 68%),
+      radial-gradient(ellipse 58% 48% at 88% 80%,  rgba(129,140,248,0.08) 0%, transparent 62%);
+    animation: ambV2_a 55s ease-in-out infinite alternate;
+    will-change: transform;
   }
-  @keyframes ambientDrift {
-    0%   { opacity: 0.75; }
-    50%  { opacity: 1;    }
-    100% { opacity: 0.75; }
+  @keyframes ambV2_a {
+    0%   { transform: translate(0px,   0px);  }
+    33%  { transform: translate(5px,  -4px);  }
+    66%  { transform: translate(-3px,  6px);  }
+    100% { transform: translate(4px,   3px);  }
+  }
+
+  /* Orb 3 — cyan/green, bottom-centre — 43 s drift */
+  /* Orb 4 — blue-purple mid, centre-right — 61 s drift */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 52% 42% at 48% 108%, rgba(52,211,153,0.07)  0%, transparent 58%),
+      radial-gradient(ellipse 44% 38% at 78% 38%,  rgba(99,102,241,0.06)  0%, transparent 55%);
+    animation: ambV2_b 43s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  @keyframes ambV2_b {
+    0%   { transform: translate(0px,  0px);  }
+    40%  { transform: translate(-6px, 4px);  }
+    75%  { transform: translate(4px, -5px);  }
+    100% { transform: translate(-3px, 2px);  }
   }
 
   /* ================================================================
