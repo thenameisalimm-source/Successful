@@ -288,51 +288,99 @@
   }
 
   /* ================================================================
-     AMBIENT BACKGROUND V2 — CSS-only, no canvas, no rAF, no blur,
-     no opacity change. 4 radial-gradient glow orbs split across
-     body::before (2 orbs) and body::after (2 orbs), each element
-     on its own compositor layer via will-change:transform.
-     Animations are transform-only (translate) — the single cheapest
-     compositor property — with 40–60 s cycles and ≤8 px movement.
-     Zero paint, zero layout, zero blur, zero main-thread cost.
+     AMBIENT BACKGROUND V3 — CSS-only, no canvas, no rAF, no
+     backdrop-filter, no filter:blur. 6 individual glow-orb divs,
+     each its own compositor layer (will-change:transform), each
+     with a unique size/duration/path so the drift reads as living
+     rather than a static gradient. Soft edges come from the radial-
+     gradient falloff itself (transparent at ~70%) — zero blur cost.
+     Sits behind all content (z-index:0) and is fully inert
+     (pointer-events:none).
   ================================================================ */
-
-  /* Orb 1 — blue, top-left — 55 s drift */
-  /* Orb 2 — purple, bottom-right — 47 s drift */
-  body::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0;
+  .amb-orb {
+    position: fixed;
+    border-radius: 50%;
+    z-index: 0;
     pointer-events: none;
-    background:
-      radial-gradient(ellipse 68% 52% at 14% 18%,  rgba(56,189,248,0.09)  0%, transparent 68%),
-      radial-gradient(ellipse 58% 48% at 88% 80%,  rgba(129,140,248,0.08) 0%, transparent 62%);
-    animation: ambV2_a 55s ease-in-out infinite alternate;
     will-change: transform;
   }
-  @keyframes ambV2_a {
-    0%   { transform: translate(0px,   0px);  }
-    33%  { transform: translate(5px,  -4px);  }
-    66%  { transform: translate(-3px,  6px);  }
-    100% { transform: translate(4px,   3px);  }
+
+  /* 1 — blue, upper-left */
+  .amb-o1 {
+    top: 8%; left: 6%;
+    width: 80px; height: 80px;
+    background: radial-gradient(circle, rgba(56,189,248,0.13) 0%, transparent 70%);
+    animation: amb3_1 58s ease-in-out infinite alternate;
+  }
+  @keyframes amb3_1 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(28px, -20px); }
+    100% { transform: translate(-14px, 16px); }
   }
 
-  /* Orb 3 — cyan/green, bottom-centre — 43 s drift */
-  /* Orb 4 — blue-purple mid, centre-right — 61 s drift */
-  body::after {
-    content: '';
-    position: fixed; inset: 0; z-index: 0;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 52% 42% at 48% 108%, rgba(52,211,153,0.07)  0%, transparent 58%),
-      radial-gradient(ellipse 44% 38% at 78% 38%,  rgba(99,102,241,0.06)  0%, transparent 55%);
-    animation: ambV2_b 43s ease-in-out infinite alternate;
-    will-change: transform;
+  /* 2 — purple, upper-right */
+  .amb-o2 {
+    top: 14%; right: 8%;
+    width: 60px; height: 60px;
+    background: radial-gradient(circle, rgba(129,140,248,0.12) 0%, transparent 70%);
+    animation: amb3_2 71s ease-in-out infinite alternate;
   }
-  @keyframes ambV2_b {
-    0%   { transform: translate(0px,  0px);  }
-    40%  { transform: translate(-6px, 4px);  }
-    75%  { transform: translate(4px, -5px);  }
-    100% { transform: translate(-3px, 2px);  }
+  @keyframes amb3_2 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(-24px, 22px); }
+    100% { transform: translate(18px, -12px); }
+  }
+
+  /* 3 — cyan, mid-left */
+  .amb-o3 {
+    top: 48%; left: 12%;
+    width: 90px; height: 90px;
+    background: radial-gradient(circle, rgba(34,211,238,0.10) 0%, transparent 70%);
+    animation: amb3_3 64s ease-in-out infinite alternate;
+  }
+  @keyframes amb3_3 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(20px, 30px); }
+    100% { transform: translate(-22px, -18px); }
+  }
+
+  /* 4 — green, lower-right */
+  .amb-o4 {
+    bottom: 12%; right: 10%;
+    width: 70px; height: 70px;
+    background: radial-gradient(circle, rgba(52,211,153,0.11) 0%, transparent 70%);
+    animation: amb3_4 49s ease-in-out infinite alternate;
+  }
+  @keyframes amb3_4 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(-26px, -24px); }
+    100% { transform: translate(16px, 20px); }
+  }
+
+  /* 5 — blue, lower-left */
+  .amb-o5 {
+    bottom: 18%; left: 22%;
+    width: 40px; height: 40px;
+    background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%);
+    animation: amb3_5 80s ease-in-out infinite alternate;
+  }
+  @keyframes amb3_5 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(22px, -28px); }
+    100% { transform: translate(-20px, 14px); }
+  }
+
+  /* 6 — purple, centre-right */
+  .amb-o6 {
+    top: 65%; right: 26%;
+    width: 55px; height: 55px;
+    background: radial-gradient(circle, rgba(99,102,241,0.09) 0%, transparent 70%);
+    animation: amb3_6 40s ease-in-out infinite alternate;
+  }
+  @keyframes amb3_6 {
+    0%   { transform: translate(0px, 0px); }
+    50%  { transform: translate(-18px, 24px); }
+    100% { transform: translate(24px, -16px); }
   }
 
   /* ================================================================
@@ -2770,6 +2818,14 @@
   </style>
 </head>
 <body>
+
+<!-- AMBIENT BACKGROUND V3 — CSS-only floating glow orbs, behind all content -->
+<div class="amb-orb amb-o1"></div>
+<div class="amb-orb amb-o2"></div>
+<div class="amb-orb amb-o3"></div>
+<div class="amb-orb amb-o4"></div>
+<div class="amb-orb amb-o5"></div>
+<div class="amb-orb amb-o6"></div>
 
 <!-- IMAGE LIGHTBOX -->
 <div id="imgLightbox" onclick="closeLightbox()">
