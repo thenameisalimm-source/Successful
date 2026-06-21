@@ -5825,6 +5825,7 @@ function typeMessage(bubId, rawText, onDone) {
   if (!S.typingAnim || rawText.length < 30) {
     bub.innerHTML = fmtMsg(rawText);
     var area = document.getElementById('chatMessages');
+    // [PERF] Single scrollHeight read, guarded so it only runs when needed.
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
     if (onDone) onDone();
     return;
@@ -5857,20 +5858,49 @@ function typeMessage(bubId, rawText, onDone) {
 
   var displayed = '';
   var ci = 0;
+  // [PERF] Cache area reference once — getElementById is a live DOM lookup
+  // and was called inside every tick() iteration.
   var area = document.getElementById('chatMessages');
+
+  // [PERF] rAF handle and dirty flag allow us to batch scroll updates.
+  // scrollTop = scrollHeight is a read + write that forces a synchronous
+  // layout (reflow) every time it runs. By scheduling it via rAF we let the
+  // browser paint the text write first, then scroll in the same frame,
+  // eliminating the forced-layout cycle on every tick.
+  var rafId = 0;
+  var scrollPending = false;
+
+  function scheduleScroll() {
+    if (!area || S.autoScroll === false || scrollPending) return;
+    scrollPending = true;
+    rafId = requestAnimationFrame(function() {
+      scrollPending = false;
+      area.scrollTop = area.scrollHeight;
+    });
+  }
 
   function tick() {
     if (ci >= chunks.length) {
+      // Cancel any pending scroll rAF before the final innerHTML swap.
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; scrollPending = false; }
       bub.classList.remove('typing-active');
       bub.innerHTML = fmtMsg(rawText);
+      // [PERF] One final synchronous scroll after the completed render — this
+      // is the only place where a direct scrollHeight read is acceptable because
+      // it only runs once and the content has just been fully written.
       if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
       if (onDone) onDone();
       return;
     }
     displayed += chunks[ci++];
+    // [PERF] Two separate DOM writes (textContent then appendChild) are
+    // batched by the browser into a single paint when done back-to-back with
+    // no intervening reads. This avoids a forced layout between the writes.
     bub.textContent = displayed;
     bub.appendChild(cursor);
-    if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
+    // [PERF] Schedule scroll via rAF instead of reading scrollHeight inline.
+    // The dirty flag prevents queuing more than one pending rAF at a time.
+    scheduleScroll();
     var lastChar = displayed.trimEnd().slice(-1);
     var delay = /[.!?]/.test(lastChar) ? baseInterval * 2.2 : baseInterval;
     setTimeout(tick, delay);
@@ -7080,15 +7110,23 @@ function exportConvs() {
 }
 
 // ── CLOCK ─────────────────────────────────────────────────────────
+// [PERF] Cache element references once instead of getElementById on every
+// tick. Store the interval handle so it can be cleared if ever needed.
+// Use the Page Visibility API to skip DOM writes while the tab is hidden —
+// the browser already throttles setInterval to ~1 Hz in hidden tabs, but
+// the DOM writes and toLocaleTimeString() call still happen; guard them out.
+var _clockInt = null;
 function startClock() {
+  var ce = document.getElementById('clockEl');
+  var de = document.getElementById('dateEl');
   function tick() {
+    if (document.hidden) return; // skip work when tab is not visible
     var now = new Date();
-    var ce = document.getElementById('clockEl');
-    var de = document.getElementById('dateEl');
     if (ce) ce.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     if (de) de.textContent = now.toLocaleDateString([], {weekday:'long', year:'numeric', month:'long', day:'numeric'});
   }
-  tick(); setInterval(tick, 1000);
+  tick();
+  _clockInt = setInterval(tick, 1000);
 }
 
 // ── FACT ──────────────────────────────────────────────────────────
@@ -7108,10 +7146,22 @@ function toast(msg) {
 }
 
 // ── AUTO-RESIZE TEXTAREA ──────────────────────────────────────────
+// [PERF] Cache the element once — getElementById is a live DOM lookup and
+// was fired on every keystroke.  Also add a pending-rAF guard so rapid IME
+// / autocomplete bursts only trigger one layout measurement per frame.
+var _autoResizeEl = null;
+var _autoResizeRaf = 0;
 function autoResize() {
-  var el = document.getElementById('chatInput');
-  el.style.height = '';
-  el.style.height = Math.min(el.scrollHeight, 130) + 'px';
+  if (!_autoResizeEl) _autoResizeEl = document.getElementById('chatInput');
+  if (!_autoResizeEl) return;
+  if (_autoResizeRaf) return; // already queued for this frame
+  _autoResizeRaf = requestAnimationFrame(function() {
+    _autoResizeRaf = 0;
+    // Reset to auto so scrollHeight reflects natural content height,
+    // then clamp to 130 px max — identical visible behaviour to before.
+    _autoResizeEl.style.height = 'auto';
+    _autoResizeEl.style.height = Math.min(_autoResizeEl.scrollHeight, 130) + 'px';
+  });
 }
 
 // ── SPLASH PARTICLES ──────────────────────────────────────────────
@@ -9104,10 +9154,14 @@ if ('serviceWorker' in navigator) {
               // prefix of chunk, append only the new suffix. If chunk is already
               // fully contained, skip entirely.
               if (vc.transcript) {
+                // [PERF] Normalise both strings once here; the two branches
+                // below reuse the same values instead of calling
+                // .toLowerCase().replace() a second time each.
                 var existLow = vc.transcript.toLowerCase().replace(/\s+/g, ' ').trim();
-                var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ');
+                var chunkLow = chunk.toLowerCase().replace(/\s+/g, ' ').trim();
+                var existLen = existLow.length;
 
-                if (chunkLow === existLow || chunkLow.length <= existLow.length) {
+                if (chunkLow === existLow || chunkLow.length <= existLen) {
                   // Chunk is identical to or shorter than what we already have — skip.
                   toAppend = '';
                   vcLog('REC:OVERLAP_SKIP',
@@ -9289,16 +9343,18 @@ if ('serviceWorker' in navigator) {
   //   vc.starting — a new recognizer is already being set up
   //   vc.listening — recognizer is live and healthy; nothing to do
   // All four must be in the "mic is dead" state before we act.
-  ;(function() {
-    setInterval(function() {
-      if (!vc.active)   return;
-      if (vc.speaking)  return;
-      if (vc.starting)  return;
-      if (vc.listening) return;
-      vcLog('WATCHDOG:restart', 'mic dead while active — restarting gen=' + vc.gen);
-      vcStartListening();
-    }, 2000);
-  })();
+  // [PERF] Store handle; add document.hidden guard so the watchdog body
+  // is a no-op when the page is backgrounded — no recognizer can have
+  // gone dead in a background tab that never had user focus.
+  var _silenceWatchdogInt = setInterval(function() {
+    if (document.hidden)  return; // tab not visible — skip
+    if (!vc.active)   return;
+    if (vc.speaking)  return;
+    if (vc.starting)  return;
+    if (vc.listening) return;
+    vcLog('WATCHDOG:restart', 'mic dead while active — restarting gen=' + vc.gen);
+    vcStartListening();
+  }, 2000);
   // ── END SILENCE-RECOVERY WATCHDOG ─────────────────────────────────
 
   // ── Speak AI reply, then return to listening ─────────────────────
