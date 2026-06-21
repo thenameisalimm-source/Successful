@@ -1713,7 +1713,7 @@
   .profile-hero {
     background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(129,140,248,0.06));
     border: 1px solid rgba(56,189,248,0.18);
-    border-radius: var(--r-xl); padding: 44px 36px;
+    border-radius: var(--r-xl); padding: 48px 28px 36px;
     text-align: center; margin-bottom: 24px;
     backdrop-filter: blur(14px); position: relative; overflow: hidden;
   }
@@ -1734,13 +1734,295 @@
     position: relative;
   }
 
-  .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-  .profile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px; backdrop-filter: blur(14px); }
-  .profile-card h3 { font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; color: var(--a1); margin-bottom: 10px; }
+  /* ── NEW PERSONAL PROFILE PAGE ─────────────────────────────────── */
+
+  /* Avatar ring — larger, social-media style */
+  .profile-avatar-ring {
+    width: 116px; height: 116px; border-radius: 50%;
+    background: linear-gradient(135deg, #38bdf8, #818cf8, #34d399);
+    padding: 3px; margin: 0 auto 18px;
+    animation: avSpin 9s linear infinite;
+    position: relative;
+    box-shadow: 0 0 32px rgba(56,189,248,0.28), 0 8px 32px rgba(0,0,0,0.35);
+  }
+  .profile-avatar-inner {
+    width: 100%; height: 100%; border-radius: 50%;
+    background: var(--bg-surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem;
+    overflow: hidden;
+  }
+  .profile-avatar-inner img {
+    width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
+  }
+
+  /* Hero name + badge */
+  .profile-display-name {
+    font-family: var(--font-display); font-size: 2rem; font-weight: 800;
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 4px; position: relative;
+  }
+  .profile-role-line {
+    font-size: 0.82rem; color: var(--a1); font-weight: 600;
+    letter-spacing: 0.5px; margin-bottom: 6px; position: relative;
+  }
+  .profile-handle {
+    font-size: 0.76rem; color: var(--text-3); letter-spacing: 0.3px; margin-bottom: 14px; position: relative;
+  }
+  .profile-status-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.28);
+    color: var(--a3); font-size: 0.72rem; font-weight: 600;
+    padding: 4px 14px; border-radius: 99px; letter-spacing: 0.5px; position: relative;
+  }
+  .profile-status-chip::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--a3); animation: statusPulse 2s ease infinite;
+  }
+  @keyframes statusPulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.5;transform:scale(1.4);} }
+
+  /* Editable status message */
+  .profile-status-msg-wrap {
+    margin-top: 16px; position: relative; max-width: 380px; margin-left: auto; margin-right: auto;
+  }
+  .profile-status-msg-display {
+    font-size: 0.85rem; color: var(--text-2); font-style: italic;
+    cursor: pointer; padding: 8px 14px;
+    border-radius: var(--r-md);
+    border: 1px dashed rgba(56,189,248,0.18);
+    background: rgba(56,189,248,0.04);
+    transition: border-color var(--t), background var(--t);
+    display: flex; align-items: center; gap: 7px; justify-content: center;
+    min-height: 40px;
+  }
+  .profile-status-msg-display:hover { border-color: rgba(56,189,248,0.38); background: rgba(56,189,248,0.08); }
+  .profile-status-msg-display .psm-edit-hint { font-size: 0.7rem; color: var(--text-3); margin-left: 2px; }
+  .profile-status-msg-input {
+    display: none; width: 100%;
+    background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.35);
+    border-radius: var(--r-md); color: var(--text-1);
+    font-family: var(--font-body); font-size: 0.85rem;
+    padding: 8px 12px; outline: none; text-align: center;
+    transition: border-color var(--t);
+  }
+  .profile-status-msg-input:focus { border-color: var(--a1); }
+  .profile-status-msg-hint { font-size: 0.66rem; color: var(--text-3); margin-top: 4px; text-align: center; display: none; }
+
+  /* Member since + memory count row */
+  .profile-hero-meta {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    margin-top: 14px; flex-wrap: wrap;
+  }
+  .phm-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.74rem; color: var(--text-3);
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    padding: 4px 11px; border-radius: 99px;
+  }
+  .phm-chip strong { color: var(--text-2); font-weight: 600; }
+
+  /* Stats strip - social-media style */
+  .profile-stats-strip {
+    display: flex; gap: 0; margin: 22px 0 0;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: var(--r-md); overflow: hidden;
+    max-width: 360px; margin-left: auto; margin-right: auto;
+  }
+  .pstat {
+    flex: 1; padding: 14px 8px; text-align: center;
+    border-right: 1px solid var(--border); cursor: default;
+    transition: background var(--t);
+  }
+  .pstat:last-child { border-right: none; }
+  .pstat:hover { background: rgba(56,189,248,0.06); }
+  .pstat-val {
+    font-family: var(--font-display); font-size: 1.3rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1;
+  }
+  .pstat-lbl { font-size: 0.64rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  /* Section label */
+  .profile-section-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-3); font-weight: 700; margin: 28px 0 12px;
+  }
+  .profile-section-label::before {
+    content: ''; width: 18px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--a1), var(--a2));
+  }
+
+  /* Profile cards grid */
+  .profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+
+  .profile-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 20px;
+    backdrop-filter: blur(14px); position: relative; overflow: hidden;
+    transition: border-color var(--t), transform var(--t), box-shadow var(--t);
+  }
+  .profile-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--a1), var(--a2));
+    opacity: 0; transition: opacity var(--t);
+  }
+  .profile-card:hover { border-color: var(--border-hi); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(56,189,248,0.08); }
+  .profile-card:hover::before { opacity: 1; }
+
+  .profile-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .profile-card-title {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-display); font-size: 0.88rem; font-weight: 700; color: var(--a1);
+  }
+  .profile-card-icon { font-size: 1.1rem; }
+  .profile-edit-btn {
+    background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.18);
+    border-radius: var(--r-sm); padding: 3px 10px;
+    font-size: 0.68rem; color: var(--a1); cursor: pointer;
+    transition: background var(--t), border-color var(--t);
+    font-family: var(--font-body);
+  }
+  .profile-edit-btn:hover { background: rgba(56,189,248,0.16); border-color: rgba(56,189,248,0.36); }
+
   .profile-card p { font-size: 0.83rem; color: var(--text-2); line-height: 1.7; }
-  .privacy-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  .privacy-list li { font-size: 0.82rem; color: var(--text-2); display: flex; gap: 9px; align-items: flex-start; line-height: 1.55; }
-  .privacy-list li::before { content: '✓'; color: var(--a3); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+  /* Info rows (key-value pairs inside cards) */
+  .profile-info-rows { display: flex; flex-direction: column; gap: 9px; }
+  .profile-info-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; font-size: 0.82rem; padding-bottom: 9px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .profile-info-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .pir-label { color: var(--text-3); flex-shrink: 0; min-width: 80px; }
+  .pir-value { color: var(--text-1); font-weight: 500; text-align: right; }
+  .pir-empty { color: var(--text-3); font-style: italic; font-weight: 400; }
+
+  /* Tag chips (favorites, interests) */
+  .profile-tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
+  .profile-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.18);
+    color: var(--text-2); font-size: 0.74rem; padding: 4px 10px;
+    border-radius: 99px; transition: background var(--t);
+  }
+  .profile-tag:hover { background: rgba(56,189,248,0.15); color: var(--text-1); }
+  .profile-tag.cat-favorite  { border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.07); }
+  .profile-tag.cat-interest  { border-color: rgba(129,140,248,0.25); background: rgba(129,140,248,0.07); }
+  .profile-tag.cat-goal      { border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.07); }
+  .profile-tag.cat-sport     { border-color: rgba(249,115,22,0.25); background: rgba(249,115,22,0.07); }
+  .profile-tag.cat-inspiration { border-color: rgba(192,132,252,0.25); background: rgba(192,132,252,0.07); }
+
+  /* Goal items */
+  .profile-goal-list { display: flex; flex-direction: column; gap: 8px; }
+  .profile-goal-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 0.82rem; color: var(--text-2); line-height: 1.55;
+  }
+  .profile-goal-item::before {
+    content: '🎯'; flex-shrink: 0; font-size: 0.85rem; margin-top: 1px;
+  }
+
+  /* Memory stats mini grid */
+  .mem-stat-mini-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 8px;
+  }
+  .mem-stat-mini {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: 10px 8px; text-align: center;
+  }
+  .mem-stat-mini-val {
+    font-family: var(--font-display); font-size: 1.2rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .mem-stat-mini-lbl { font-size: 0.62rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; }
+
+  /* Category breakdown bar */
+  .mem-cat-breakdown { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .mem-cat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; }
+  .mem-cat-bar-label { color: var(--text-3); width: 80px; flex-shrink: 0; }
+  .mem-cat-bar-track {
+    flex: 1; height: 5px; border-radius: 99px;
+    background: rgba(255,255,255,0.06); overflow: hidden;
+  }
+  .mem-cat-bar-fill {
+    height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--a1), var(--a2));
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .mem-cat-bar-count { color: var(--text-2); font-weight: 600; min-width: 18px; text-align: right; }
+
+  /* Creator journey timeline */
+  .creator-timeline { display: flex; flex-direction: column; gap: 0; }
+  .ct-item {
+    display: flex; gap: 14px; position: relative;
+    padding-bottom: 20px;
+  }
+  .ct-item:last-child { padding-bottom: 0; }
+  .ct-left { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
+  .ct-dot {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0; position: relative; z-index: 1;
+    box-shadow: 0 0 10px rgba(56,189,248,0.3);
+  }
+  .ct-line {
+    flex: 1; width: 2px; background: linear-gradient(180deg, rgba(56,189,248,0.3), rgba(129,140,248,0.1));
+    border-radius: 2px; margin-top: 4px;
+  }
+  .ct-item:last-child .ct-line { display: none; }
+  .ct-right { padding-top: 3px; }
+  .ct-year { font-size: 0.68rem; color: var(--a1); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+  .ct-title { font-size: 0.88rem; font-weight: 600; color: var(--text-1); margin-bottom: 2px; }
+  .ct-desc { font-size: 0.78rem; color: var(--text-3); line-height: 1.55; }
+
+  /* Editable textarea inside a profile card */
+  .profile-edit-area {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border-hi);
+    border-radius: var(--r-sm); color: var(--text-1); font-family: var(--font-body);
+    font-size: 0.82rem; padding: 8px 10px; resize: vertical; min-height: 72px;
+    margin-top: 8px; transition: border-color var(--t);
+  }
+  .profile-edit-area:focus { outline: none; border-color: var(--a1); }
+  .profile-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .pea-save {
+    background: linear-gradient(135deg, rgba(56,189,248,0.18), rgba(129,140,248,0.12));
+    border: 1px solid rgba(56,189,248,0.35); border-radius: var(--r-sm);
+    color: var(--a1); font-size: 0.74rem; padding: 4px 14px; cursor: pointer;
+    font-family: var(--font-body); transition: background var(--t);
+  }
+  .pea-save:hover { background: rgba(56,189,248,0.28); }
+  .pea-cancel {
+    background: transparent; border: 1px solid var(--border);
+    border-radius: var(--r-sm); color: var(--text-3);
+    font-size: 0.74rem; padding: 4px 12px; cursor: pointer;
+    font-family: var(--font-body); transition: border-color var(--t);
+  }
+  .pea-cancel:hover { border-color: var(--border-hi); color: var(--text-2); }
+
+  /* Empty state inside profile cards */
+  .profile-empty-hint {
+    font-size: 0.78rem; color: var(--text-3); font-style: italic; text-align: center;
+    padding: 16px 0; line-height: 1.6;
+  }
+
+  /* Signed-out notice on profile page */
+  .profile-signin-notice {
+    background: linear-gradient(135deg, rgba(56,189,248,0.06), rgba(129,140,248,0.04));
+    border: 1px dashed rgba(56,189,248,0.22); border-radius: var(--r-lg);
+    padding: 32px 24px; text-align: center; margin-top: 20px;
+  }
+  .profile-signin-notice p { font-size: 0.85rem; color: var(--text-2); margin-bottom: 14px; line-height: 1.65; }
+
+  /* ── END NEW PERSONAL PROFILE PAGE ───────────────────────────────── */
 
   /* ================================================================
      SEARCH PAGE
@@ -4006,54 +4288,238 @@
     <section id="page-profile" class="page">
       <div class="pg-body">
 
+        <!-- ── HERO ─────────────────────────────────────────────────── -->
         <div class="profile-hero">
-          <div class="profile-logo">ALEEM AI</div>
-          <h2>Aleem Sudamaniya</h2>
-          <div class="profile-role">Founder &amp; Creator</div>
-          <div class="profile-version">✦ Version 2.0 · 2026</div>
-        </div>
-
-        <div class="profile-grid">
-          <div class="profile-card">
-            <h3>📖 About ALEEM AI</h3>
-            <p>ALEEM AI is a state-of-the-art personal knowledge assistant designed to make world-class artificial intelligence accessible to everyone. Built with passion for education, cricket, and cutting-edge technology, ALEEM AI is more than a chatbot — it is an intelligent companion that grows with you and inspires curiosity every single day.</p>
-          </div>
-          <div class="profile-card">
-            <h3>🌍 Mission Statement</h3>
-            <p>Our mission is to democratize access to AI-powered knowledge, making every person on the planet their own expert in any subject they choose to explore. ALEEM AI exists to answer the questions that matter — from daily curiosities to deep academic knowledge — delivered with warmth and precision.</p>
-          </div>
-          <div class="profile-card">
-            <h3>🔐 Privacy Information</h3>
-            <ul class="privacy-list">
-              <li>Your conversations stay only in your own browser</li>
-              <li>No personal data is collected or stored on servers</li>
-              <li>AI requests are routed through a secure serverless proxy</li>
-              <li>The API key is never exposed to the browser or users</li>
-              <li>Voice data is processed locally on your device only</li>
-            </ul>
-          </div>
-          <div class="profile-card">
-            <h3>⚡ App Information</h3>
-            <p style="margin-bottom:12px;">ALEEM AI is powered by Google Gemini AI with automatic model fallback for maximum reliability.</p>
-            <div style="display:flex;flex-direction:column;gap:7px;">
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
-                <span style="color:var(--text-3);">Version</span>
-                <span style="color:var(--text-1);font-weight:500;">2.0 (2026)</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
-                <span style="color:var(--text-3);">Created by</span>
-                <span style="color:var(--a1);font-weight:500;">Aleem Sudamaniya</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
-                <span style="color:var(--text-3);">AI Engine</span>
-                <span style="color:var(--text-1);font-weight:500;">Google Gemini</span>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
-                <span style="color:var(--text-3);">Platform</span>
-                <span style="color:var(--text-1);font-weight:500;">Web · Mobile · Desktop</span>
-              </div>
+          <div class="profile-avatar-ring">
+            <div class="profile-avatar-inner" id="profileAvatarInner">
+              <img id="profileHeroPhoto" src="" alt="" style="display:none;width:100%;height:100%;border-radius:50%;object-fit:cover;">
+              <span id="profileHeroEmoji">👤</span>
             </div>
           </div>
+          <div class="profile-display-name" id="profileDisplayName">Aleem Sudamaniya</div>
+          <div class="profile-role-line">Founder &amp; Creator of ALEEM AI</div>
+          <div class="profile-handle" id="profileHandleEl">@aleem</div>
+          <div class="profile-status-chip">✦ Active</div>
+
+          <!-- Editable status message -->
+          <div class="profile-status-msg-wrap">
+            <div class="profile-status-msg-display" id="profileStatusDisplay" title="Click to edit your status">
+              <span id="profileStatusText">💬 What's on your mind?</span>
+              <span class="psm-edit-hint">✏️</span>
+            </div>
+            <input type="text" class="profile-status-msg-input" id="profileStatusInput"
+              placeholder="Share a status, quote, or mood…" maxlength="120">
+            <div class="profile-status-msg-hint" id="profileStatusHint">Press Enter to save · Esc to cancel</div>
+          </div>
+
+          <!-- Member since + total memories -->
+          <div class="profile-hero-meta">
+            <div class="phm-chip">📅 Member since <strong id="pHeroMemberSince">—</strong></div>
+            <div class="phm-chip">🧠 <strong id="pHeroMemCount">0</strong> memories</div>
+          </div>
+
+          <!-- Stats strip -->
+          <div class="profile-stats-strip">
+            <div class="pstat">
+              <div class="pstat-val" id="pstatMemories">—</div>
+              <div class="pstat-lbl">Memories</div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-val" id="pstatChats">—</div>
+              <div class="pstat-lbl">Chats</div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-val" id="pstatQuestions">—</div>
+              <div class="pstat-lbl">Questions</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 1. PERSONAL INFORMATION ───────────────────────────────── -->
+        <div class="profile-section-label">👤 Personal Information</div>
+        <div class="profile-card">
+          <div class="profile-card-head">
+            <div class="profile-card-title"><span class="profile-card-icon">🪪</span> About Me</div>
+            <button class="profile-edit-btn" id="profileInfoHintBtn">How to fill</button>
+          </div>
+          <div class="profile-info-rows" id="profileInfoRows">
+            <div class="profile-info-row">
+              <span class="pir-label">👤 Name</span>
+              <span class="pir-value" id="pirName"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">🎂 Age</span>
+              <span class="pir-value" id="pirAge"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">🌍 Country</span>
+              <span class="pir-value" id="pirCountry"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">🗣️ Languages</span>
+              <span class="pir-value" id="pirLanguages"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">💼 Occupation</span>
+              <span class="pir-value" id="pirOccupation"><span class="pir-empty">—</span></span>
+            </div>
+          </div>
+          <!-- Hint panel (hidden by default) -->
+          <div id="profileInfoHint" style="display:none;margin-top:12px;padding:12px;background:rgba(56,189,248,0.06);border:1px dashed rgba(56,189,248,0.22);border-radius:var(--r-sm);">
+            <div style="font-size:0.76rem;color:var(--text-2);line-height:1.65;">
+              These fields are auto-filled from your Memory Manager.<br>
+              Chat with ALEEM AI and say things like:<br>
+              <span style="color:var(--a1);">"My name is…" · "I am 22 years old" · "I live in India" · "I speak Hindi and English" · "I work as a developer"</span>
+            </div>
+            <button class="pea-cancel" id="profileInfoHintClose" style="margin-top:8px;">✕ Close</button>
+          </div>
+        </div>
+
+        <!-- ── 2. FAVOURITES ─────────────────────────────────────────── -->
+        <div class="profile-section-label">⭐ Favourites</div>
+        <div class="profile-card">
+          <div class="profile-card-head">
+            <div class="profile-card-title"><span class="profile-card-icon">❤️</span> Favourite Things</div>
+          </div>
+          <div class="profile-info-rows" id="profileFavRows">
+            <div class="profile-info-row">
+              <span class="pir-label">🎮 Game</span>
+              <span class="pir-value" id="pfavGame"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">⚽ Footballer</span>
+              <span class="pir-value" id="pfavFootballer"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">🎵 Music</span>
+              <span class="pir-value" id="pfavMusic"><span class="pir-empty">—</span></span>
+            </div>
+            <div class="profile-info-row">
+              <span class="pir-label">🏅 Sport</span>
+              <span class="pir-value" id="pfavSport"><span class="pir-empty">—</span></span>
+            </div>
+          </div>
+          <!-- additional favourites tag cloud -->
+          <div id="profileFavExtrasCloud" class="profile-tag-cloud" style="margin-top:12px;"></div>
+        </div>
+
+        <!-- ── 3. GOALS ──────────────────────────────────────────────── -->
+        <div class="profile-section-label">🎯 Goals</div>
+        <div class="profile-card">
+          <div class="profile-card-head">
+            <div class="profile-card-title"><span class="profile-card-icon">🚀</span> Your Goals</div>
+          </div>
+          <div id="profileGoalsList" class="profile-goal-list">
+            <div class="profile-empty-hint">No goals saved yet. Tell ALEEM AI — <span style="color:var(--a1);">"My goal is to…"</span></div>
+          </div>
+        </div>
+
+        <!-- ── 4. MEMORY STATISTICS ──────────────────────────────────── -->
+        <div class="profile-section-label">🧠 Memory Statistics</div>
+        <div class="profile-card">
+          <div class="profile-card-head">
+            <div class="profile-card-title"><span class="profile-card-icon">📊</span> What ALEEM AI Knows</div>
+          </div>
+          <div class="mem-stat-mini-grid">
+            <div class="mem-stat-mini">
+              <div class="mem-stat-mini-val" id="pmsTotalMem">0</div>
+              <div class="mem-stat-mini-lbl">Total Memories</div>
+            </div>
+            <div class="mem-stat-mini">
+              <div class="mem-stat-mini-val" id="pmsCatsUsed">0</div>
+              <div class="mem-stat-mini-lbl">Categories</div>
+            </div>
+            <div class="mem-stat-mini">
+              <div class="mem-stat-mini-val" id="pmsToday">0</div>
+              <div class="mem-stat-mini-lbl">Added Today</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;text-align:center;">
+            <button class="btn-sec" style="font-size:0.78rem;" onclick="showPage('memories')">🧠 Manage All Memories</button>
+          </div>
+        </div>
+
+        <!-- ── 5. RECENT MEMORIES ────────────────────────────────────── -->
+        <div class="profile-section-label">🗂️ Recent Memories</div>
+        <div id="profileRecentMemories">
+          <div class="profile-card">
+            <div class="profile-empty-hint" style="padding:20px 0;">
+              <div style="font-size:2rem;margin-bottom:8px;">🧠</div>
+              Start chatting — ALEEM AI will remember important things about you here.
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 6. CREATOR JOURNEY ────────────────────────────────────── -->
+        <div class="profile-section-label">🛤️ Creator Journey</div>
+        <div class="profile-card">
+          <div class="profile-card-head">
+            <div class="profile-card-title"><span class="profile-card-icon">👨‍💻</span> Aleem Sudamaniya's Path</div>
+          </div>
+          <div class="creator-timeline">
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">🧒</div><div class="ct-line"></div></div>
+              <div class="ct-right">
+                <div class="ct-year">Early Years</div>
+                <div class="ct-title">A Passion for Technology</div>
+                <div class="ct-desc">From a young age, Aleem developed a deep love for technology, problem-solving, and cricket — interests that would shape everything he went on to build.</div>
+              </div>
+            </div>
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">📚</div><div class="ct-line"></div></div>
+              <div class="ct-right">
+                <div class="ct-year">Self-Taught Builder</div>
+                <div class="ct-title">Learning by Doing</div>
+                <div class="ct-desc">Aleem taught himself programming, design, and AI integration through hands-on building — proving that curiosity and dedication are more powerful than any classroom.</div>
+              </div>
+            </div>
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">💡</div><div class="ct-line"></div></div>
+              <div class="ct-right">
+                <div class="ct-year">2024 — The Spark</div>
+                <div class="ct-title">The Idea Takes Shape</div>
+                <div class="ct-desc">Frustrated by the gap between powerful AI tools and everyday people, Aleem decided to build something that anyone could use — in their own language, at their own pace.</div>
+              </div>
+            </div>
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">⚡</div><div class="ct-line"></div></div>
+              <div class="ct-right">
+                <div class="ct-year">2025 — First Launch</div>
+                <div class="ct-title">Solo Creator, Full Stack</div>
+                <div class="ct-desc">Working alone, Aleem shipped the first version of ALEEM AI — handling everything from backend APIs and Firestore integration to UI design and voice input, all in a single HTML file.</div>
+              </div>
+            </div>
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">🏏</div><div class="ct-line"></div></div>
+              <div class="ct-right">
+                <div class="ct-year">Personal Passion</div>
+                <div class="ct-title">Cricket, Culture &amp; Code</div>
+                <div class="ct-desc">Cricket isn't just a sport for Aleem — it's woven into his identity and his approach to building: patience, strategy, and the belief that great things happen one over at a time.</div>
+              </div>
+            </div>
+
+            <div class="ct-item">
+              <div class="ct-left"><div class="ct-dot">🚀</div></div>
+              <div class="ct-right">
+                <div class="ct-year">2026 · Now</div>
+                <div class="ct-title">Still Building, Still Growing</div>
+                <div class="ct-desc">Aleem continues to grow ALEEM AI while staying true to what started it all — the belief that every person deserves access to intelligent, personal, and beautifully designed AI.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Signed-out notice -->
+        <div class="profile-signin-notice" id="profileSigninNotice" style="display:none;margin-top:20px;">
+          <div style="font-size:2.5rem;margin-bottom:14px;">👤</div>
+          <p>Sign in with Google to unlock your personal profile — your name, favourites, goals, and everything ALEEM AI has learned about you will appear here automatically.</p>
+          <button class="btn-pri" id="profileSigninBtn" style="margin:0 auto;">🔐 Sign In with Google</button>
         </div>
 
       </div>
@@ -4063,18 +4529,29 @@
     <section id="page-about" class="page">
       <div class="pg-body">
         <div class="about-hero">
-          <div class="ab-av"><div class="ab-inn">👨‍💻</div></div>
-          <h2>Aleem Sudamaniya</h2>
-          <div class="role-badge">Founder &amp; CEO · Creator of ALEEM AI</div>
-          <p>Aleem Sudamaniya is a visionary technology entrepreneur and AI innovator. As the Founder and CEO of ALEEM AI, he built a state-of-the-art personal knowledge assistant designed to make world-class artificial intelligence accessible to everyone. With a deep passion for education, cricket, and cutting-edge technology, Aleem created ALEEM AI to be more than a chatbot — it is an intelligent companion that grows with you, answers your questions across every domain, and inspires curiosity every single day.</p>
+          <div class="ab-av"><div class="ab-inn">🤖</div></div>
+          <h2>ALEEM AI</h2>
+          <div class="role-badge">Your Personal Knowledge Assistant</div>
+          <p>ALEEM AI is a state-of-the-art personal knowledge assistant built to make world-class artificial intelligence accessible to everyone. Created by Aleem Sudamaniya with a deep passion for education, technology, and cricket — ALEEM AI is more than a chatbot. It is an intelligent companion that grows with you, remembers what matters, answers questions across every domain, and inspires curiosity every single day.</p>
         </div>
         <div class="about-cards">
           <div class="ab-card"><h4>🚀 Vision</h4><p>To democratize access to AI-powered knowledge, making every person on the planet their own expert in any subject they choose to explore.</p></div>
-          <div class="ab-card"><h4>🌍 Mission</h4><p>ALEEM AI exists to answer the questions that matter — from daily curiosities to deep academic knowledge — delivered with warmth and precision.</p></div>
-          <div class="ab-card"><h4>⚡ Technology</h4><p>Powered by Google Gemini AI, ALEEM AI leverages state-of-the-art large language models for fast, accurate, nuanced responses.</p></div>
-          <div class="ab-card"><h4>🏏 Expertise</h4><p>From cricket statistics to quantum physics, history to humor, ALEEM AI is the most versatile knowledge assistant you'll ever use.</p></div>
-          <div class="ab-card"><h4>🔐 Privacy First</h4><p>Your conversation history remains exclusively in your own browser. All AI requests are routed through a secure serverless function — your privacy is paramount.</p></div>
-          <div class="ab-card"><h4>📱 Universal</h4><p>Runs on any device — desktop to mobile — with a fully responsive, beautiful interface that adapts to your screen perfectly.</p></div>
+          <div class="ab-card"><h4>🌍 Mission</h4><p>ALEEM AI exists to answer the questions that matter — from daily curiosities to deep academic knowledge — delivered with warmth, precision, and care.</p></div>
+          <div class="ab-card"><h4>⚡ Technology</h4><p>Powered by Google Gemini, Groq, DeepSeek, and Cerebras AI — ALEEM AI uses state-of-the-art large language models for fast, accurate, nuanced responses across 12 personalities.</p></div>
+          <div class="ab-card"><h4>🏏 Expertise</h4><p>From cricket statistics to quantum physics, history to humor, coding to creative writing — ALEEM AI is the most versatile knowledge assistant you'll ever use.</p></div>
+          <div class="ab-card"><h4>🔐 Privacy First</h4><p>Your conversation history remains exclusively in your own browser. All AI requests are routed through a secure serverless function — your privacy is always paramount.</p></div>
+          <div class="ab-card"><h4>📱 Universal Compatibility</h4><p>Runs on any device — desktop to mobile — as a fully responsive Progressive Web App that adapts perfectly to every screen size and platform.</p></div>
+          <div class="ab-card"><h4>🧠 Long-Term Memory</h4><p>ALEEM AI automatically remembers your name, interests, goals, and favourites across sessions using Firestore — every conversation makes it smarter about you.</p></div>
+          <div class="ab-card"><h4>ℹ️ App Information</h4>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Version</span><span style="color:var(--text-1);font-weight:500;">2.0 (2026)</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Created by</span><span style="color:var(--a1);font-weight:500;">Aleem Sudamaniya</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">AI Engine</span><span style="color:var(--text-1);font-weight:500;">Gemini · Groq · DeepSeek</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Platform</span><span style="color:var(--text-1);font-weight:500;">Web · Mobile · Desktop (PWA)</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Personalities</span><span style="color:var(--text-1);font-weight:500;">12 AI Modes</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span style="color:var(--text-3);">Themes</span><span style="color:var(--text-1);font-weight:500;">5 (Dark · AMOLED · Purple · Matrix · Light)</span></div>
+            </div>
+          </div>
         </div>
         <p style="text-align:center;margin-top:32px;color:var(--text-3);font-size:0.8rem;">
           Created &amp; Developed by <strong style="color:var(--a1)">Aleem Sudamaniya</strong> ·
@@ -5097,6 +5574,7 @@ function goPage(name) {
   if (name === 'history')   renderHistory();
   if (name === 'settings')  syncSettingsUI();
   if (name === 'memories')  renderMemories();
+  if (name === 'profile' && typeof renderProfilePage === 'function') renderProfilePage();
 
   // Fix 1: pause particles on non-Chat pages, resume on Chat
   if (name === 'chat') { particleCtrl.resume(); } else { particleCtrl.pause(); }
@@ -5125,6 +5603,8 @@ function closeSidebar() {
   var main = document.querySelector('.main');
   if (main) main.classList.remove('sidebar-open');
 }
+// Global alias so inline onclick="showPage('x')" works
+window.showPage = goPage;
 
 // ── BUILD UI COMPONENTS ───────────────────────────────────────────
 function buildSuggestions() {
@@ -9134,6 +9614,11 @@ function renderMemories() {
 function updateMemBadge() {
   var badge = document.getElementById('memBadge');
   if (badge) badge.textContent = MEM.items.length;
+  // Keep profile page in sync with latest memory data
+  if (typeof renderProfilePage === 'function') {
+    var profPage = document.getElementById('page-profile');
+    if (profPage && profPage.classList.contains('active')) renderProfilePage();
+  }
 }
 
 // ── SIMPLE STRING SIMILARITY (Dice coefficient) ───────────────────
@@ -9148,6 +9633,272 @@ function strSimilarity(a, b) {
   Object.keys(pa).forEach(function(k){ if (pb[k]) intersection += Math.min(pa[k], pb[k]); });
   return (2 * intersection) / (a.length - 1 + b.length - 1);
 }
+
+// ══════════════════════════════════════════════════════════════════
+// PROFILE PAGE — powered by Memory Manager data
+// ══════════════════════════════════════════════════════════════════
+
+function renderProfilePage() {
+  var user = (typeof window.currentUser !== 'undefined') ? window.currentUser : null;
+
+  // ── Hero: avatar + name update from Google auth ─────────────────
+  var heroPhoto = document.getElementById('profileHeroPhoto');
+  var heroEmoji = document.getElementById('profileHeroEmoji');
+  var displayNameEl = document.getElementById('profileDisplayName');
+  var handleEl = document.getElementById('profileHandleEl');
+  var signinNotice = document.getElementById('profileSigninNotice');
+
+  if (user) {
+    // Show Google profile photo if available
+    if (heroPhoto && user.photoURL) {
+      heroPhoto.src = user.photoURL;
+      heroPhoto.style.display = 'block';
+      if (heroEmoji) heroEmoji.style.display = 'none';
+    } else {
+      if (heroPhoto) heroPhoto.style.display = 'none';
+      if (heroEmoji) heroEmoji.textContent = '👤';
+    }
+    // Show real name from Google auth (override with memory name if found)
+    var memName = _profMemVal('name');
+    if (displayNameEl) displayNameEl.textContent = memName || user.displayName || 'Aleem Sudamaniya';
+    if (handleEl) handleEl.textContent = '@aleem';
+    if (signinNotice) signinNotice.style.display = 'none';
+
+    // Member since — use Google auth metadata creationTime
+    var memberSinceEl = document.getElementById('pHeroMemberSince');
+    if (memberSinceEl && user.metadata && user.metadata.creationTime) {
+      var d = new Date(user.metadata.creationTime);
+      memberSinceEl.textContent = d.toLocaleDateString([], { month: 'short', year: 'numeric' });
+    } else if (memberSinceEl) {
+      memberSinceEl.textContent = '2024';
+    }
+  } else {
+    if (heroPhoto) heroPhoto.style.display = 'none';
+    if (heroEmoji) { heroEmoji.textContent = '👤'; heroEmoji.style.display = ''; }
+    if (displayNameEl) displayNameEl.textContent = 'Aleem Sudamaniya';
+    if (handleEl) handleEl.textContent = '@aleem';
+    if (signinNotice) signinNotice.style.display = 'block';
+    var memberSinceEl2 = document.getElementById('pHeroMemberSince');
+    if (memberSinceEl2) memberSinceEl2.textContent = '2024';
+  }
+
+  // Hero meta — memory count
+  var heroMemCount = document.getElementById('pHeroMemCount');
+  if (heroMemCount) heroMemCount.textContent = MEM.items.length || '0';
+
+  // Status message — load via app's ls() helper (key: aleem_profile_status)
+  var savedStatus = ls('aleem_profile_status') || '';
+  var statusText = document.getElementById('profileStatusText');
+  if (statusText) statusText.textContent = savedStatus || '💬 Tap to add a status…';
+
+  // ── Stats strip ─────────────────────────────────────────────────
+  setText('pstatMemories', MEM.items.length || '0');
+  setText('pstatChats', (typeof S !== 'undefined' && S.history) ? S.history.length : '0');
+  setText('pstatQuestions', (typeof S !== 'undefined' && S.totalAsked) ? S.totalAsked : '0');
+
+  // ── 1. PERSONAL INFORMATION ─────────────────────────────────────
+  _profSetRow('pirName',       _profMemVal('name'));
+  _profSetRow('pirAge',        _profMemVal('age'));
+  _profSetRow('pirCountry',    _profMemVal('country') || _profMemVal('nationality') || _profMemVal('location'));
+  _profSetRow('pirLanguages',  _profMemVal('language') || _profMemVal('languages'));
+  _profSetRow('pirOccupation', _profMemVal('occupation') || _profMemVal('job') || _profMemVal('profession'));
+
+  // ── 2. FAVOURITES ───────────────────────────────────────────────
+  // Named favourite rows (game, footballer, music, sport)
+  _profSetRow('pfavGame',       _profFavVal(['game','video game','favourite game']));
+  _profSetRow('pfavFootballer', _profFavVal(['footballer','football player','favorite footballer','favourite footballer']));
+  _profSetRow('pfavMusic',      _profFavVal(['music','song','singer','artist','band','favourite music','favorite music','favourite song']));
+  _profSetRow('pfavSport',      _profFavVal(['sport','favourite sport','favorite sport']) || _profSportVal());
+
+  // Extra favourites tag cloud (all other favourites not shown above)
+  var shownKeys = ['game','video game','favourite game','footballer','football player','favorite footballer','favourite footballer',
+                   'music','song','singer','artist','band','favourite music','favorite music','favourite song',
+                   'sport','favourite sport','favorite sport'];
+  var extrasEl = document.getElementById('profileFavExtrasCloud');
+  if (extrasEl) {
+    var extras = MEM.items.filter(function(m) {
+      if (m.category !== 'favorite') return false;
+      var subj = (m.subject || '').toLowerCase().replace(/^favourite\s*/,'').replace(/^favorite\s*/,'');
+      return shownKeys.indexOf(subj) === -1 && shownKeys.indexOf((m.subject||'').toLowerCase()) === -1;
+    });
+    extrasEl.innerHTML = extras.length ? extras.map(function(m) {
+      var lbl = m.subject ? m.subject.replace(/^favour?ite\s*/i,'') + ': ' + (m.value||'') : (m.value || m.text);
+      return '<span class="profile-tag cat-favorite">⭐ ' + esc(lbl.trim()) + '</span>';
+    }).join('') : '';
+  }
+
+  // ── 3. GOALS ────────────────────────────────────────────────────
+  var goalsEl = document.getElementById('profileGoalsList');
+  if (goalsEl) {
+    var goals = MEM.items.filter(function(m) { return m.category === 'goal'; });
+    goalsEl.innerHTML = goals.length
+      ? goals.map(function(m) {
+          return '<div class="profile-goal-item">' + esc(m.value || m.text) + '</div>';
+        }).join('')
+      : '<div class="profile-empty-hint">No goals saved yet. Tell ALEEM AI — <span style="color:var(--a1);">"My goal is to…"</span></div>';
+  }
+
+  // ── 4. MEMORY STATISTICS (concise) ──────────────────────────────
+  var today = new Date().toDateString();
+  var todayCount = MEM.items.filter(function(m) {
+    return m.createdAt && new Date(m.createdAt).toDateString() === today;
+  }).length;
+  var catsUsed = (new Set(MEM.items.map(function(m) { return m.category; }))).size;
+  setText('pmsTotalMem',  MEM.items.length);
+  setText('pmsCatsUsed',  catsUsed);
+  setText('pmsToday',     todayCount);
+
+  // ── 5. RECENT MEMORIES — newest first, with timestamps ───────────
+  var recentEl = document.getElementById('profileRecentMemories');
+  if (recentEl) {
+    if (!MEM.items.length) {
+      recentEl.innerHTML = '<div class="profile-card"><div class="profile-empty-hint" style="padding:20px 0;">' +
+        '<div style="font-size:2rem;margin-bottom:8px;">🧠</div>' +
+        'Start chatting — ALEEM AI will remember important things about you here.' +
+        '</div></div>';
+    } else {
+      // Sort by createdAt descending (newest first)
+      var sortedMems = MEM.items.slice().sort(function(a, b) {
+        var ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        var tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+      var recent = sortedMems.slice(0, 10);
+      recentEl.innerHTML = '<div class="memory-list">' + recent.map(function(m) {
+        var cat = (typeof MEM_CATEGORIES !== 'undefined' && MEM_CATEGORIES[m.category]) || { icon: '📌', label: m.category };
+        var dateObj = m.createdAt ? new Date(m.createdAt) : null;
+        var dateStr = dateObj ? dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        var timeStr = dateObj ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        var tsDisplay = dateStr ? (dateStr + (timeStr ? ' · ' + timeStr : '')) : '';
+        return '<div class="memory-card">' +
+          '<div class="memory-cat-badge">' + cat.icon + ' ' + cat.label + '</div>' +
+          '<div class="memory-text">' + esc(m.text) + '</div>' +
+          (tsDisplay ? '<div class="memory-date">🕐 ' + tsDisplay + '</div>' : '') +
+          '<div class="memory-actions">' +
+            '<button class="mem-act-btn" data-profilememedit="' + m.id + '">✏️ Edit</button>' +
+            '<button class="mem-act-btn del" data-profilememdel="' + m.id + '">🗑 Delete</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') + '</div>' +
+      (MEM.items.length > 10
+        ? '<div style="text-align:center;margin-top:12px;">' +
+            '<button class="btn-sec" style="font-size:0.78rem;" onclick="showPage(\'memories\')">View all ' + MEM.items.length + ' memories →</button>' +
+          '</div>'
+        : '');
+    }
+  }
+}
+
+// ── Helpers used by renderProfilePage ────────────────────────────
+// Get value from identity memories by subject keyword
+function _profMemVal(subject) {
+  var item = MEM.items.find(function(m) {
+    return m.category === 'identity' && m.subject && m.subject.toLowerCase().indexOf(subject) !== -1;
+  });
+  if (!item) return '';
+  return (item.value || '').trim() || (item.text || '').replace(/^The user'?s?\s+\w+\s+is\s+/i, '').trim();
+}
+// Get value from favourite memories by subject keyword list
+function _profFavVal(subjects) {
+  var item = MEM.items.find(function(m) {
+    if (m.category !== 'favorite' && m.category !== 'sport' && m.category !== 'preference') return false;
+    var subj = (m.subject || '').toLowerCase();
+    return subjects.some(function(s) { return subj === s || subj.indexOf(s) !== -1; });
+  });
+  return item ? (item.value || '').trim() : '';
+}
+// Get any sport value (from sport category)
+function _profSportVal() {
+  var item = MEM.items.find(function(m) { return m.category === 'sport'; });
+  return item ? (item.value || '').trim() : '';
+}
+// Set a profile info row value, styling empty state
+function _profSetRow(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (val) {
+    el.innerHTML = '<span style="color:var(--text-1);font-weight:500;">' + esc(val) + '</span>';
+  } else {
+    el.innerHTML = '<span class="pir-empty">—</span>';
+  }
+}
+
+// ── Profile page click handlers ───────────────────────────────────
+document.addEventListener('click', function(e) {
+  // "How to fill" hint toggle
+  if (e.target.id === 'profileInfoHintBtn') {
+    var hint = document.getElementById('profileInfoHint');
+    if (hint) hint.style.display = hint.style.display === 'none' ? 'block' : 'none';
+  }
+  if (e.target.id === 'profileInfoHintClose') {
+    var hint2 = document.getElementById('profileInfoHint');
+    if (hint2) hint2.style.display = 'none';
+  }
+  // Status message display click → show input
+  if (e.target.closest('#profileStatusDisplay')) {
+    var disp = document.getElementById('profileStatusDisplay');
+    var inp = document.getElementById('profileStatusInput');
+    var hnt = document.getElementById('profileStatusHint');
+    if (disp && inp) {
+      var saved = ls('aleem_profile_status') || '';
+      inp.value = saved;
+      disp.style.display = 'none';
+      inp.style.display = 'block';
+      if (hnt) hnt.style.display = 'block';
+      inp.focus(); inp.select();
+    }
+  }
+  // Edit memory → jump to Memory Manager with that item in edit mode
+  var profEdit = e.target.closest('[data-profilememedit]');
+  if (profEdit) {
+    var editId = profEdit.getAttribute('data-profilememedit');
+    if (typeof MEM !== 'undefined') MEM.editingId = editId;
+    showPage('memories');
+    setTimeout(function() { if (typeof renderMemories === 'function') renderMemories(); }, 80);
+    return;
+  }
+  // Delete memory directly from profile page
+  var profDel = e.target.closest('[data-profilememdel]');
+  if (profDel) {
+    var delId = profDel.getAttribute('data-profilememdel');
+    if (confirm('Delete this memory? This cannot be undone.')) {
+      if (typeof deleteMemoryFromFirestore === 'function') {
+        deleteMemoryFromFirestore(delId).then(function() { renderProfilePage(); });
+      }
+    }
+    return;
+  }
+  // Sign-in button on profile page
+  if (e.target.id === 'profileSigninBtn') {
+    var loginBtn = document.getElementById('googleLoginBtn');
+    if (loginBtn) loginBtn.click();
+  }
+});
+
+// ── Status message keyboard handler ─────────────────────────────
+document.addEventListener('keydown', function(e) {
+  var inp = document.getElementById('profileStatusInput');
+  if (!inp || inp.style.display === 'none' || inp.style.display === '') return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    var val = inp.value.trim();
+    lss('aleem_profile_status', val);
+    var statusText = document.getElementById('profileStatusText');
+    if (statusText) statusText.textContent = val || '💬 Tap to add a status…';
+    var disp = document.getElementById('profileStatusDisplay');
+    if (disp) disp.style.display = '';
+    inp.style.display = 'none';
+    var hnt = document.getElementById('profileStatusHint');
+    if (hnt) hnt.style.display = 'none';
+  }
+  if (e.key === 'Escape') {
+    var disp2 = document.getElementById('profileStatusDisplay');
+    if (disp2) disp2.style.display = '';
+    inp.style.display = 'none';
+    var hnt2 = document.getElementById('profileStatusHint');
+    if (hnt2) hnt2.style.display = 'none';
+  }
+});
 
 // ── EVENT DELEGATION FOR MEMORY PAGE ─────────────────────────────
 document.addEventListener('click', function(e) {
