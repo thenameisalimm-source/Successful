@@ -674,7 +674,7 @@
   .tb-btn-group .tb-btn + .tb-btn { box-shadow: -1px 0 0 var(--border); }
 
   /* Profile button + dropdown */
-  .profile-menu-wrap { position: relative; margin-left: 4px; }
+  .profile-menu-wrap { position: relative; margin-left: 4px; margin-right: -8px; }
   .tb-profile-btn {
     position: relative;
     padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: visible;
@@ -3862,10 +3862,10 @@
             <div class="stat-value" id="sTotal">0</div>
             <div class="stat-lbl">Total Questions <span style="font-size:0.62rem;opacity:0.6;">▶</span></div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card stat-card--clickable" id="statTodayCard" style="cursor:pointer;" title="View today's questions">
             <div class="stat-icon">📅</div>
             <div class="stat-value" id="sDaily">0</div>
-            <div class="stat-lbl">Questions Today</div>
+            <div class="stat-lbl">Questions Today <span style="font-size:0.62rem;opacity:0.6;">▶</span></div>
           </div>
           <div class="stat-card">
             <div class="stat-icon">🔥</div>
@@ -6193,7 +6193,7 @@ function addMsg(role, text, noRender, imgDataArr) {
   // imgDataArr     → array of { dataUrl, mimeType } OR single legacy object OR null
 
   var now = new Date();
-  var t   = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  var t   = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
 
   // Normalise imgDataArr → clean array of objects that have a dataUrl
   var imgs = [];
@@ -8577,7 +8577,7 @@ function startClock() {
     var now = new Date();
     var ce = document.getElementById('clockEl');
     var de = document.getElementById('dateEl');
-    if (ce) ce.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    if (ce) ce.textContent = now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true});
     if (de) de.textContent = now.toLocaleDateString([], {weekday:'long', year:'numeric', month:'long', day:'numeric'});
   }
   tick(); setInterval(tick, 1000);
@@ -9769,7 +9769,7 @@ function renderProfilePage() {
         var cat = (typeof MEM_CATEGORIES !== 'undefined' && MEM_CATEGORIES[m.category]) || { icon: '📌', label: m.category };
         var dateObj = m.createdAt ? new Date(m.createdAt) : null;
         var dateStr = dateObj ? dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-        var timeStr = dateObj ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        var timeStr = dateObj ? dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : '';
         var tsDisplay = dateStr ? (dateStr + (timeStr ? ' · ' + timeStr : '')) : '';
         return '<div class="memory-card">' +
           '<div class="memory-cat-badge">' + cat.icon + ' ' + cat.label + '</div>' +
@@ -11676,10 +11676,10 @@ if ('serviceWorker' in navigator) {
       padding:16px 18px 12px; border-bottom:1px solid var(--border); flex-shrink:0;
     ">
       <div>
-        <div style="font-family:var(--font-display);font-weight:700;font-size:1rem;color:var(--text-1);">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:1rem;color:var(--text-1);" data-rq-title>
           💬 Recent Questions
         </div>
-        <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px;">
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:2px;" data-rq-sub>
           Your prompts inside ALEEM AI — newest first
         </div>
       </div>
@@ -11754,29 +11754,117 @@ if ('serviceWorker' in navigator) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function buildQItemHTML(q) {
+    var timeLabel = q.time ? '<span style="color:var(--text-3);font-size:0.7rem;">🕒 ' + escQ(q.time) + '</span>' : '';
+    var preview = q.text.length > 120 ? escQ(q.text.slice(0, 120)) + '…' : escQ(q.text);
+    return '<div style="' +
+      'background:var(--bg-card);border:1px solid var(--border);border-radius:12px;' +
+      'padding:12px 14px;display:flex;flex-direction:column;gap:4px;' +
+    '">' +
+      (timeLabel ? '<div>' + timeLabel + '</div>' : '') +
+      '<div style="font-size:0.875rem;color:var(--text-1);line-height:1.5;">' + preview + '</div>' +
+    '</div>';
+  }
+
   window.openRecentQModal = function() {
     var overlay = document.getElementById('recentQOverlay');
     var list    = document.getElementById('recentQList');
     if (!overlay || !list) return;
+
+    // Restore header to "Recent Questions"
+    var headerTitle = overlay.querySelector('[data-rq-title]');
+    if (headerTitle) {
+      headerTitle.innerHTML = '💬 Recent Questions';
+    }
+    var headerSub = overlay.querySelector('[data-rq-sub]');
+    if (headerSub) {
+      headerSub.textContent = 'Your prompts inside ALEEM AI — newest first';
+    }
 
     var questions = getUserQuestions();
 
     if (!questions.length) {
       list.innerHTML = '<p style="color:var(--text-3);font-size:0.82rem;text-align:center;padding:20px 0;">No questions yet. Start chatting!</p>';
     } else {
-      // Show up to 200 most recent
       var shown = questions.slice(0, 200);
-      list.innerHTML = shown.map(function(q) {
-        var timeLabel = q.time ? '<span style="color:var(--text-3);font-size:0.7rem;">🕒 ' + escQ(q.time) + '</span>' : '';
-        var preview = q.text.length > 120 ? escQ(q.text.slice(0, 120)) + '…' : escQ(q.text);
-        return '<div style="' +
-          'background:var(--bg-card);border:1px solid var(--border);border-radius:12px;' +
-          'padding:12px 14px;display:flex;flex-direction:column;gap:4px;' +
-        '">' +
-          (timeLabel ? '<div>' + timeLabel + '</div>' : '') +
-          '<div style="font-size:0.875rem;color:var(--text-1);line-height:1.5;">' + preview + '</div>' +
-        '</div>';
-      }).join('');
+      list.innerHTML = shown.map(buildQItemHTML).join('');
+    }
+
+    overlay.classList.add('rq-show');
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.openTodayQModal = function() {
+    var overlay = document.getElementById('recentQOverlay');
+    var list    = document.getElementById('recentQList');
+    if (!overlay || !list) return;
+
+    // Update header to "Questions Today"
+    var headerTitle = overlay.querySelector('[data-rq-title]');
+    if (headerTitle) {
+      headerTitle.innerHTML = '📅 Questions Today';
+    }
+    var headerSub = overlay.querySelector('[data-rq-sub]');
+    if (headerSub) {
+      headerSub.textContent = 'Questions asked today — newest first';
+    }
+
+    var all = getUserQuestions();
+
+    // Filter to questions whose stored time string falls on today's calendar date.
+    // The stored time comes from addMsg's toLocaleTimeString (HH:MM or H:MM AM/PM),
+    // which has no date component — so we match live session messages by checking
+    // S.messages directly for a timestamp, and for history we use conv.date.
+    var todayQuestions = [];
+    var now = new Date();
+    var todayStr = now.toLocaleDateString([], { year:'numeric', month:'long', day:'numeric' });
+    var todayISO = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    if (typeof S !== 'undefined') {
+      // Live session messages (always "today" if they exist in current session)
+      if (S.messages && S.messages.length) {
+        for (var li = S.messages.length - 1; li >= 0; li--) {
+          var lm = S.messages[li];
+          if (lm.role === 'user' && lm.text && lm.text.trim()) {
+            todayQuestions.push({ text: lm.text.trim(), time: lm.time || '' });
+          }
+        }
+      }
+      // Past history conversations whose date matches today
+      if (S.history && S.history.length) {
+        for (var ci = 0; ci < S.history.length; ci++) {
+          var conv = S.history[ci];
+          if (conv._live) continue;
+          // conv.date is a locale date string; also check updatedAt/createdAt as ISO
+          var convDateMatch = false;
+          if (conv.date && (conv.date === todayStr || conv.date.indexOf(todayISO) !== -1)) {
+            convDateMatch = true;
+          }
+          if (!convDateMatch && conv.updatedAt) {
+            var updISO = new Date(conv.updatedAt).toISOString().slice(0, 10);
+            if (updISO === todayISO) convDateMatch = true;
+          }
+          if (!convDateMatch && conv.createdAt) {
+            var crISO = new Date(conv.createdAt).toISOString().slice(0, 10);
+            if (crISO === todayISO) convDateMatch = true;
+          }
+          if (convDateMatch) {
+            var msgs = conv.messages || [];
+            for (var mi = msgs.length - 1; mi >= 0; mi--) {
+              var m = msgs[mi];
+              if (m.role === 'user' && m.text && m.text.trim()) {
+                todayQuestions.push({ text: m.text.trim(), time: m.time || '' });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!todayQuestions.length) {
+      list.innerHTML = '<p style="color:var(--text-3);font-size:0.82rem;text-align:center;padding:20px 0;">No questions asked today.</p>';
+    } else {
+      list.innerHTML = todayQuestions.map(buildQItemHTML).join('');
     }
 
     overlay.classList.add('rq-show');
@@ -11803,6 +11891,10 @@ if ('serviceWorker' in navigator) {
     var card = document.getElementById('statTotalCard');
     if (card) {
       card.addEventListener('click', function() { window.openRecentQModal(); });
+    }
+    var todayCard = document.getElementById('statTodayCard');
+    if (todayCard) {
+      todayCard.addEventListener('click', function() { window.openTodayQModal(); });
     }
   });
 })();
