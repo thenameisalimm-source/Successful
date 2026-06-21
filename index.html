@@ -635,6 +635,7 @@
     flex-shrink: 0;
     /* FIX long-press: prevents Android text-select popup stealing touchstart */
     user-select: none; -webkit-user-select: none;
+    margin-right: 14px;
   }
   @media (max-width: 768px) { .hamburger { display: flex; } }
 
@@ -1513,10 +1514,92 @@
   .search-wrap input { flex:1; background:none; border:none; outline:none; color:var(--text-1); font-family:var(--font-body); font-size:0.875rem; }
   .search-wrap input::placeholder { color:var(--text-3); }
   .hist-list { display:flex; flex-direction:column; gap:9px; }
-  .hist-item { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; cursor:pointer; transition:all var(--t); touch-action:manipulation; -webkit-tap-highlight-color:rgba(56,189,248,0.15); }
+  .hist-item { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; cursor:pointer; transition:all var(--t); touch-action:manipulation; -webkit-tap-highlight-color:rgba(56,189,248,0.15); position:relative; }
   .hist-item:hover { border-color:var(--border-hi); transform:translateX(3px); }
-  .hist-q    { font-size:0.875rem; color:var(--text-1); font-weight:500; margin-bottom:3px; }
-  .hist-meta { font-size:0.72rem; color:var(--text-3); }
+  .hist-item.is-pinned { border-color:rgba(129,140,248,0.4); background:linear-gradient(135deg,rgba(56,189,248,0.07),rgba(129,140,248,0.05)); }
+  .hist-q    { font-size:0.875rem; color:var(--text-1); font-weight:500; margin-bottom:3px; padding-right:62px; }
+  .hist-meta { font-size:0.72rem; color:var(--text-3); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .hist-snippet { font-size:0.74rem; color:var(--text-2); margin-top:5px; line-height:1.5; opacity:0.85; padding-right:62px; }
+  .hist-mark { color:var(--a1); background:rgba(56,189,248,0.16); border-radius:3px; padding:0 2px; font-weight:600; }
+  .hist-folder-tag { font-size:0.66rem; color:var(--a2); background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.25); border-radius:99px; padding:1px 8px; }
+  .hist-voice-tag { font-size:0.66rem; color:var(--a3); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.25); border-radius:99px; padding:1px 8px; }
+
+  /* Per-item quick actions (pin / archive / move) */
+  .hist-actions { position:absolute; top:12px; right:12px; display:flex; gap:4px; z-index:2; }
+  .hist-act-btn {
+    background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-sm);
+    width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+    font-size:0.78rem; cursor:pointer; color:var(--text-3); transition:all var(--t);
+    touch-action:manipulation; line-height:1;
+  }
+  .hist-act-btn:hover { border-color:var(--a1); color:var(--a1); }
+  .hist-act-btn.pinned { color:var(--a2); border-color:rgba(129,140,248,0.4); }
+  .hist-act-btn.archived-btn:hover { color:#ef4444; border-color:rgba(239,68,68,0.4); }
+
+  /* Search bar — extends .search-wrap with a clear button slot */
+  .hist-search-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .hist-search-row .search-wrap { position:relative; }
+  .hist-clear-btn {
+    background:none; border:none; color:var(--text-3); font-size:1rem; cursor:pointer;
+    padding:2px 4px; line-height:1; border-radius:var(--r-sm); transition:color var(--t);
+    display:none; touch-action:manipulation;
+  }
+  .hist-clear-btn.show { display:inline-flex; }
+  .hist-clear-btn:hover { color:var(--a1); }
+
+  /* Folder chip row (reuses .mem-filter-btn visual language) */
+  .hist-folder-row, .hist-filter-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+  .hist-folder-chip, .hist-filter-chip {
+    background:var(--bg-input); border:1px solid var(--border);
+    border-radius:99px; padding:5px 13px; display:inline-flex; align-items:center; gap:5px;
+    font-size:0.75rem; cursor:pointer; color:var(--text-2);
+    transition:all var(--t); touch-action:manipulation; white-space:nowrap;
+  }
+  .hist-folder-chip:hover, .hist-folder-chip.active,
+  .hist-filter-chip:hover, .hist-filter-chip.active {
+    background:linear-gradient(135deg,rgba(56,189,248,0.15),rgba(129,140,248,0.10));
+    border-color:var(--a1); color:var(--a1);
+  }
+  /* Colored folder chip — border + text use folder's own color on hover/active */
+  .hist-folder-chip[style*="--hf-color"]:hover,
+  .hist-folder-chip[style*="--hf-color"].active {
+    border-color:var(--hf-color) !important;
+    color:var(--hf-color) !important;
+    background:var(--hf-bg, rgba(56,189,248,0.12)) !important;
+    box-shadow:0 0 8px var(--hf-glow, rgba(56,189,248,0.22));
+  }
+  .hist-folder-chip .hf-count { color:var(--text-3); font-size:0.68rem; }
+  .hist-folder-chip.active .hf-count, .hist-filter-chip.active .hf-count { color:var(--a1); }
+  .hist-folder-chip[style*="--hf-color"].active .hf-count { color:var(--hf-color); }
+  .hist-folder-add-btn {
+    background:none; border:1px dashed var(--border); border-radius:99px;
+    padding:5px 13px; font-size:0.75rem; cursor:pointer; color:var(--text-3);
+    transition:all var(--t); touch-action:manipulation;
+  }
+  .hist-folder-add-btn:hover { border-color:var(--a1); color:var(--a1); }
+
+  /* Folder management (rename/delete) — small inline icon buttons on custom folders */
+  .hist-folder-chip .hf-manage { display:none; gap:3px; margin-left:2px; }
+  .hist-folder-chip.has-manage .hf-manage { display:inline-flex; }
+  .hist-folder-chip .hf-manage span { font-size:0.7rem; opacity:0.7; }
+  .hist-folder-chip .hf-manage span:hover { opacity:1; }
+
+  .hist-empty { text-align:center; padding:40px 20px; color:var(--text-3); font-size:0.875rem; }
+  .hist-empty .he-icon { font-size:2.3rem; margin-bottom:10px; }
+
+  /* Recent Chats: Today / Yesterday / This Week / Older section headers.
+     .hist-list already applies a 9px flex gap between all children, so
+     the label's own top margin is kept small to avoid doubled spacing. */
+  .hist-section-label {
+    font-size:0.72rem; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+    color:var(--text-3); margin:6px 0 -2px; padding-left:2px;
+  }
+  .hist-section-label:first-child { margin-top:0; }
+
+  @media (max-width: 480px) {
+    .hist-q, .hist-snippet { padding-right:58px; }
+    .hist-act-btn { width:24px; height:24px; }
+  }
 
   /* ================================================================
      ABOUT / CREATOR PAGE
@@ -1888,16 +1971,17 @@
 
   /* Connection status */
   .conn-status {
-    margin-left: 8px;
+    margin-left: 22px;
 
     display: flex; align-items: center; gap: 5px;
-    font-size: 0.72rem; font-weight: 500;
-    padding: 4px 10px;
+    font-size: 0.68rem; font-weight: 500;
+    padding: 3px 8px;
     border-radius: 99px;
     border: 1px solid transparent;
     transition: all 0.3s ease;
     white-space: nowrap;
     user-select: none;
+    pointer-events: none; /* status indicator, not a button */
   }
   .conn-dot {
     width: 7px; height: 7px; border-radius: 50%;
@@ -3553,14 +3637,27 @@
     <!-- PAGE: HISTORY -->
     <section id="page-history" class="page">
       <div class="pg-body">
-        <div class="pg-head"><h1>Conversation History</h1><p>Browse, search and export past chats</p></div>
-        <div class="hist-toolbar">
+        <div class="pg-head"><h1>Conversation History</h1><p>Browse, search and organize past chats</p></div>
+
+        <div class="hist-search-row">
           <div class="search-wrap">
             <span>🔍</span>
-            <input type="text" id="histSearch" placeholder="Search conversations…" />
+            <input type="text" id="histSearch" placeholder="Search conversations, messages…" />
+            <button class="hist-clear-btn" id="histClearBtn" title="Clear search">✕</button>
           </div>
           <button class="btn-sec" data-action="export">📤 Export</button>
         </div>
+
+        <div class="hist-filter-row" id="histFilterRow">
+          <div class="hist-filter-chip active" data-histfilter="all">💬 All</div>
+          <div class="hist-filter-chip" data-histfilter="pinned">⭐ Pinned</div>
+          <div class="hist-filter-chip" data-histfilter="voice">🎤 Voice Chats</div>
+          <div class="hist-filter-chip" data-histfilter="recent">🕒 Recent</div>
+          <div class="hist-filter-chip" data-histfilter="archived">📦 Archived</div>
+        </div>
+
+        <div class="hist-folder-row" id="histFolderRow"></div>
+
         <div class="hist-list" id="histList">
           <p style="color:var(--text-3);font-size:0.875rem;">No conversations yet. Start chatting!</p>
         </div>
@@ -4189,6 +4286,31 @@ const FACTS = [
   "The average person spends 6 months of their lifetime waiting at red traffic lights.",
 ];
 
+// ── HISTORY CAP ─────────────────────────────────────────────────────
+// Raised 50 -> 1000. History records are lightweight, text-only chats
+// rarely approach localStorage limits, and persist() already strips
+// images from the oldest entries first under quota pressure — 1000 stays
+// future-proof without extra risk.
+var MAX_HISTORY = 1000;
+
+// ── DEFAULT HISTORY FOLDERS ────────────────────────────────────────
+// id 'all' and 'archived' are virtual/reserved — 'all' is the implicit
+// unfiltered view (not stored as a real folder), 'archived' is backed by
+// the .archived flag rather than folder membership. Only the remaining
+// defaults plus any user-created folders are real, manageable folder
+// objects that conversations can be moved into via folderId.
+// [MODIFIED] Each folder now carries its own permanent, distinct icon as
+// part of the folder object (id/icon/name) instead of every folder
+// sharing the same generic 📁 — purely cosmetic, no shape/field changes,
+// so nothing that reads f.icon/f.name/f.id elsewhere needs to change.
+var DEFAULT_FOLDERS = [
+  { id: 'personal',  name: 'Personal',     icon: '🏠', color: '#4f8cff', system: true },
+  { id: 'work',      name: 'Work',         icon: '💼', color: '#34d399', system: true },
+  { id: 'coding',    name: 'Coding',       icon: '💻', color: '#a855f7', system: true },
+  { id: 'voice',     name: 'Voice Chats',  icon: '🎤', color: '#f97316', system: true },
+  { id: 'aiproj',    name: 'AI Projects',  icon: '🤖', color: '#06b6d4', system: true },
+];
+
 // ── STATE ─────────────────────────────────────────────────────────
 const S = {
   messages:    [],
@@ -4202,6 +4324,7 @@ const S = {
   dailyQ:      0,
   topicCounts: {},
   history:     [],
+  folders:     [], // [{id, name, icon, system}], persisted separately from history
   busy:        false,
   mic:         null,
   micOn:       false,
@@ -4209,7 +4332,12 @@ const S = {
   autoScroll:  true,
   // Image upload state — array so multiple images can be queued before sending
   pendingImages: [],   // [{ dataUrl, mimeType }, ...]
+  // ── History UI runtime state (not persisted — resets each load) ──
+  histQuery:   '',      // current search text
+  histFilter:  'all',   // 'all' | 'pinned' | 'voice' | 'recent' | 'archived'
+  histFolder:  null,    // active folder id, or null for "no folder filter"
 };
+
 
 // ── PAGE TITLES ───────────────────────────────────────────────────
 const PAGE_TITLES = {
@@ -4318,7 +4446,26 @@ function loadStorage() {
   S.history     = JSON.parse(ls('aleem_hist') || '[]');
   // Strip any _live flags that may have leaked into storage before this fix.
   // _live is runtime-only; it must never survive a page reload.
-  S.history.forEach(function(c) { delete c._live; });
+  // [ADDED] Also migrate older history entries (saved before folders/pin/
+  // archive existed) by defaulting the new fields — undefined-safe so
+  // nothing here can throw on legacy data, and existing fields are
+  // left exactly as they were.
+  S.history.forEach(function(c) {
+    delete c._live;
+    if (c.pinned === undefined)    c.pinned = false;
+    if (c.archived === undefined)  c.archived = false;
+    if (c.folderId === undefined)  c.folderId = null;
+    if (c.isVoice === undefined)   c.isVoice = false;
+    // Backfill createdAt/updatedAt from id (a Date.now() timestamp) for
+    // conversations saved before these fields existed. New conversations
+    // always have explicit values set by autoSaveConversation().
+    if (!c.createdAt) c.createdAt = c.id || 0;
+    if (!c.updatedAt) c.updatedAt = c.id || 0;
+  });
+  // [ADDED] Custom (user-created) folders are persisted separately from the
+  // default folder list so DEFAULT_FOLDERS can evolve without migrating
+  // stored data. Real folder set for the UI = DEFAULT_FOLDERS + S.folders.
+  try { S.folders = JSON.parse(ls('aleem_folders') || '[]'); } catch(eF) { S.folders = []; }
   S.typingAnim  = ls('aleem_typing_anim') !== 'off';
   S.autoScroll  = ls('aleem_auto_scroll') !== 'off';
 
@@ -4396,6 +4543,13 @@ function persist() {
       }
       return m;
     }) };
+    // Persist all metadata alongside each conversation.
+    c.pinned    = !!conv.pinned;
+    c.archived  = !!conv.archived;
+    c.folderId  = conv.folderId || null;
+    c.isVoice   = !!conv.isVoice;
+    c.createdAt = conv.createdAt || conv.id || 0;
+    c.updatedAt = conv.updatedAt || conv.id || 0;
     // deliberately omit _live
     return c;
   });
@@ -4404,6 +4558,10 @@ function persist() {
   function stripImagesFromConv(conv) {
     return {
       id: conv.id, title: conv.title, date: conv.date,
+      pinned: !!conv.pinned, archived: !!conv.archived,
+      folderId: conv.folderId || null, isVoice: !!conv.isVoice,
+      createdAt: conv.createdAt || conv.id || 0,
+      updatedAt: conv.updatedAt || conv.id || 0,
       messages: conv.messages.map(function(m) {
         if (!m.imgs || !m.imgs.length) return m;
         return { role: m.role, text: m.text, time: m.time, imgs: [], img: null };
@@ -4450,6 +4608,9 @@ function persist() {
   // [END MODIFIED]
   lss('aleem_typing_anim', S.typingAnim ? 'on' : 'off');
   lss('aleem_auto_scroll', S.autoScroll ? 'on' : 'off');
+  // [ADDED] Custom folders — small payload, no image data, so no quota
+  // handling needed beyond the existing try/catch inside lss().
+  try { lss('aleem_folders', JSON.stringify(S.folders)); } catch(eFolderSave) {}
 }
 
 function ls(k)      { try { return localStorage.getItem(k); } catch(e){ return null; } }
@@ -4732,9 +4893,27 @@ function bindAllEvents() {
   });
 
   // ── History search ────────────────────────────────────────────────
+  // [MODIFIED] Debounced (140ms) so typing fast doesn't re-filter/re-render
+  // hundreds of conversations on every keystroke, while still feeling
+  // instant. The clear (✕) button only appears once there's text, and
+  // resets both the input and the rendered list.
   var histSearch = document.getElementById('histSearch');
+  var histClearBtn = document.getElementById('histClearBtn');
+  var debouncedHistRender = debounce(function(val) { renderHistory(val); }, 140);
   if (histSearch) {
-    histSearch.addEventListener('input', function(e) { renderHistory(e.target.value); });
+    histSearch.addEventListener('input', function(e) {
+      var val = e.target.value;
+      if (histClearBtn) histClearBtn.classList.toggle('show', !!val.length);
+      debouncedHistRender(val);
+    });
+  }
+  if (histClearBtn) {
+    histClearBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (histSearch) histSearch.value = '';
+      histClearBtn.classList.remove('show');
+      renderHistory('');
+    });
   }
 
   // ── Search page ───────────────────────────────────────────────────
@@ -4768,6 +4947,19 @@ function bindAllEvents() {
         t.closest('#imgUploadBtn') ||
         t.closest('#searchGoBtn')) {
       dbg('delegate: ignoring directly-bound element tap');
+      return;
+    }
+
+    // [ADDED] History page pin/archive/restore/move buttons live INSIDE
+    // .hist-item and are handled by their own dedicated delegated listener
+    // (see "EVENT DELEGATION FOR HISTORY PAGE" block). Without this guard,
+    // a tap on one of those small buttons would ALSO match .hist-item
+    // below and incorrectly call loadConv() right after the intended
+    // pin/archive/move action — this just prevents that double-trigger,
+    // it doesn't change how .hist-item itself behaves otherwise.
+    if (t.closest('[data-histpin]') || t.closest('[data-histarchive]') ||
+        t.closest('[data-histrestore]') || t.closest('[data-histmove]')) {
+      dbg('delegate: ignoring history action-button tap');
       return;
     }
 
@@ -6859,24 +7051,62 @@ function autoSaveConversation() {
     title = 'Chat';
   }
 
+  // Detect whether this exchange happened in Voice Chat Mode.
+  // S._isVoiceSession is set to true by vcStart() and cleared by vcStop(),
+  // so it is reliable regardless of which page is currently active — it
+  // persists correctly across search, export, and future cloud sync.
+  var isVoiceNow = !!S._isVoiceSession;
+
   // Look for an entry already representing this live session
   var existing = S.history.find(function(c){ return c._live; });
+  var nowMs = Date.now();
   if (existing) {
-    existing.title    = title;
-    existing.messages = S.messages.slice();
-    existing.date     = new Date().toLocaleDateString();
+    existing.title     = title;
+    existing.messages  = S.messages.slice();
+    existing.date      = new Date().toLocaleDateString();
+    existing.updatedAt = nowMs;
+    // Once a session has been flagged as a voice chat, keep that tag even
+    // if a later exchange in the SAME live session happens to read from
+    // the chat page (e.g. user glances at the chat tab mid-conversation)
+    // — it only ever upgrades to true, never silently reverts to false.
+    if (isVoiceNow) existing.isVoice = true;
+    if (existing.isVoice === undefined) existing.isVoice = isVoiceNow;
   } else {
-    S._liveId = Date.now();
+    S._liveId = nowMs;
     S.history.unshift({
-      id:       S._liveId,
-      _live:    true,
-      title:    title,
-      date:     new Date().toLocaleDateString(),
-      messages: S.messages.slice()
+      id:        S._liveId,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+      _live:     true,
+      title:     title,
+      date:      new Date().toLocaleDateString(),
+      messages:  S.messages.slice(),
+      pinned:    false,
+      archived:  false,
+      folderId:  null,
+      isVoice:   isVoiceNow
     });
-    if (S.history.length > 50) S.history.pop();
+    // [MODIFIED] Cap raised 50 -> 500 -> 1000 conversations. History records
+    // are lightweight (text-only chats rarely approach localStorage limits,
+    // and persist() already strips images from the oldest entries first
+    // when quota is tight), so 1000 stays future-proof without extra risk.
+    // Pinned chats are protected from eviction (oldest unpinned entry is
+    // dropped first) so a long-running pin can't be silently lost once the
+    // cap is hit.
+    if (S.history.length > MAX_HISTORY) {
+      var evictIdx = -1;
+      for (var ei = S.history.length - 1; ei >= 0; ei--) {
+        if (!S.history[ei].pinned) { evictIdx = ei; break; }
+      }
+      if (evictIdx === -1) evictIdx = S.history.length - 1; // all pinned (>1000 pins shouldn't happen, cap is 5)
+      S.history.splice(evictIdx, 1);
+    }
   }
   persist();
+  // Keep the History page live if the user has it open in another tab-like
+  // view (e.g. switched pages mid-voice-chat) — cheap no-op if not visible.
+  var histPage = document.getElementById('page-history');
+  if (histPage && histPage.classList.contains('active')) renderHistory();
 }
 
 function clearChat() {
@@ -7288,6 +7518,17 @@ function clearAllHistory() {
   if (!confirm('Clear all conversation history? This cannot be undone.')) return;
   S.history = [];
   S.messages = [];
+  // [ADDED] Reset history UI state too, so the page doesn't keep showing
+  // (e.g.) the Archived filter or a stale search term against now-empty
+  // history. Folders themselves are left intact — clearing chat HISTORY
+  // is not the same as deleting the user's folder organization.
+  S.histQuery = '';
+  S.histFilter = 'all';
+  S.histFolder = null;
+  var hs = document.getElementById('histSearch');
+  if (hs) hs.value = '';
+  var hcb = document.getElementById('histClearBtn');
+  if (hcb) hcb.classList.remove('show');
   clearChat();
   persist();
   renderHistory();
@@ -7343,18 +7584,400 @@ function refreshStats() {
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────
-function renderHistory(q) {
-  var list = document.getElementById('histList');
-  if (!list) return;
-  var items = S.history;
-  if (q) { var lq = q.toLowerCase(); items = items.filter(function(c){ return c.title.toLowerCase().includes(lq); }); }
-  if (!items.length) { list.innerHTML = '<p style="color:var(--text-3);font-size:.875rem">No conversations found.</p>'; return; }
-  list.innerHTML = items.map(function(c) {
-    return '<div class="hist-item" data-id="' + c.id + '">' +
-      '<div class="hist-q">💬 ' + esc(c.title) + '…</div>' +
-      '<div class="hist-meta">📅 ' + c.date + ' · ' + c.messages.length + ' messages</div>' +
+// [MODIFIED] renderHistory() now drives the whole Advanced History System:
+// search (title + message content), folder chips, quick filters, pinning,
+// and archiving — all combined. The original signature renderHistory(q)
+// is preserved (q optional) so every existing call site (init(), goPage,
+// clearAllHistory, the search input) keeps working unchanged; q now just
+// seeds S.histQuery on first use instead of being a one-off parameter.
+
+// Small debounce helper — no existing utility like this in the codebase,
+// added here so search stays "instant-feeling" without re-rendering (and
+// re-filtering hundreds of conversations) on every single keystroke.
+function debounce(fn, ms) {
+  var t;
+  return function() {
+    var args = arguments, ctx = this;
+    clearTimeout(t);
+    t = setTimeout(function(){ fn.apply(ctx, args); }, ms);
+  };
+}
+
+// Wraps the FIRST case-insensitive match of `q` inside `text` in a
+// highlight span. Operates on already-escaped HTML text so it never
+// introduces unescaped user content.
+function highlightMatch(escapedText, q) {
+  if (!q) return escapedText;
+  var escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var re = new RegExp('(' + escapedQ + ')', 'i');
+  return escapedText.replace(re, '<span class="hist-mark">$1</span>');
+}
+
+// Returns a short snippet of message text around the first search match,
+// or the first message's text if there's no active query. Plain text in,
+// plain text out — caller is responsible for escaping/highlighting.
+function getHistSnippet(conv, lq) {
+  if (!conv.messages || !conv.messages.length) return '';
+  if (lq) {
+    for (var i = 0; i < conv.messages.length; i++) {
+      var mt = conv.messages[i].text || '';
+      var idx = mt.toLowerCase().indexOf(lq);
+      if (idx !== -1) {
+        var start = Math.max(0, idx - 40);
+        var end = Math.min(mt.length, idx + lq.length + 60);
+        var snip = mt.slice(start, end).trim();
+        return (start > 0 ? '…' : '') + snip + (end < mt.length ? '…' : '');
+      }
+    }
+  }
+  var firstAi = conv.messages.find(function(m){ return m.role === 'ai'; });
+  var fallback = (firstAi && firstAi.text) ? firstAi.text : (conv.messages[0].text || '');
+  return fallback.slice(0, 90) + (fallback.length > 90 ? '…' : '');
+}
+
+// Returns the best available timestamp for a conversation object.
+// Priority: updatedAt (last activity) → createdAt (birth) → id (legacy
+// Date.now() used before these fields existed) → 0 as final fallback.
+// All sorting, bucketing, and display that needs a conversation's time
+// should call this instead of inlining the fallback chain.
+function convTimestamp(c) {
+  return c.updatedAt || c.createdAt || c.id || 0;
+}
+
+// Combines search query + quick filter + folder selection into the final
+// list to render. Single pass over S.history — cheap even at hundreds of
+// conversations since it's just string/boolean checks, no DOM work.
+function getFilteredHistory() {
+  var lq = (S.histQuery || '').trim().toLowerCase();
+  var items = S.history.slice();
+
+  // Quick filters (mutually exclusive with each other, but combine with
+  // search and folder selection — e.g. filter=coding + folder=coding +
+  // search="groq" all apply together).
+  if (S.histFilter === 'archived') {
+    items = items.filter(function(c){ return !!c.archived; });
+  } else {
+    // every other view hides archived chats, exactly like ChatGPT/Claude
+    items = items.filter(function(c){ return !c.archived; });
+    if (S.histFilter === 'pinned') {
+      items = items.filter(function(c){ return !!c.pinned; });
+    } else if (S.histFilter === 'voice') {
+      items = items.filter(function(c){ return !!c.isVoice; });
+    } else if (S.histFilter === 'recent') {
+      // [MODIFIED] No longer truncated to a flat top-20 slice here — the
+      // Recent view is now rendered as grouped Today/Yesterday/This Week/
+      // Older sections by renderHistory() (see getRecentBuckets()), so the
+      // full filtered set is kept and bucketed at render time instead.
+    }
+  }
+
+  // Folder selection (independent of the quick-filter row, like ChatGPT's
+  // "All / Pinned / Folder" combination — a folder can be selected at the
+  // same time as Pinned/Voice/Recent to narrow further).
+  if (S.histFolder) {
+    items = items.filter(function(c){ return c.folderId === S.histFolder; });
+  }
+
+  // Search: matches title OR any message's text, case-insensitive.
+  if (lq) {
+    items = items.filter(function(c) {
+      if (c.title && c.title.toLowerCase().indexOf(lq) !== -1) return true;
+      if (!c.messages) return false;
+      for (var i = 0; i < c.messages.length; i++) {
+        var mt = c.messages[i].text;
+        if (mt && mt.toLowerCase().indexOf(lq) !== -1) return true;
+      }
+      return false;
+    });
+  }
+
+  // Pinned-first ordering, like ChatGPT/Claude/Perplexity. Within each
+  // group (pinned / unpinned) sort by updatedAt desc so the most recently
+  // active conversation always appears first. Falls back to createdAt then
+  // id for legacy entries that predate the updatedAt field.
+  if (S.histFilter !== 'pinned') {
+    items.sort(function(a, b) {
+      var ap = a.pinned ? 1 : 0, bp = b.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      var at = convTimestamp(a);
+      var bt = convTimestamp(b);
+      return bt - at; // newest-updated first within each pinned/unpinned group
+    });
+  } else {
+    // Within the Pinned view, also sort by updatedAt desc
+    items.sort(function(a, b) {
+      var at = convTimestamp(a);
+      var bt = convTimestamp(b);
+      return bt - at;
+    });
+  }
+
+  return items;
+}
+
+// ── RECENT CHATS: date-bucketed grouping ──────────────────────────
+// Groups already-filtered items into Today / Yesterday / This Week /
+// Older. Uses updatedAt (last message time) so a conversation moved to
+// a different bucket when it receives new messages — matching ChatGPT
+// behaviour. Falls back to createdAt then id for legacy entries.
+// Returns an array of {label, items} in that fixed order, omitting
+// empty buckets so the UI never shows a blank section header.
+function getRecentBuckets(items) {
+  var now = new Date();
+  var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  var startOfYesterday = startOfToday - 24*60*60*1000;
+  var startOfWeek = startOfToday - 7*24*60*60*1000;
+
+  var buckets = { today: [], yesterday: [], week: [], older: [] };
+  items.forEach(function(c) {
+    var t = convTimestamp(c);
+    if (t >= startOfToday) buckets.today.push(c);
+    else if (t >= startOfYesterday) buckets.yesterday.push(c);
+    else if (t >= startOfWeek) buckets.week.push(c);
+    else buckets.older.push(c);
+  });
+
+  var order = [
+    { key: 'today',     label: '🕒 Today' },
+    { key: 'yesterday', label: '📅 Yesterday' },
+    { key: 'week',      label: '🗓️ This Week' },
+    { key: 'older',     label: '📦 Older' }
+  ];
+  return order
+    .map(function(o){ return { label: o.label, items: buckets[o.key] }; })
+    .filter(function(b){ return b.items.length > 0; });
+}
+
+function getAllFolders() {
+  return DEFAULT_FOLDERS.concat(S.folders || []);
+}
+
+function folderCounts() {
+  var counts = {};
+  S.history.forEach(function(c) {
+    if (c.archived) return; // archived chats don't count toward folder totals
+    if (c.folderId) counts[c.folderId] = (counts[c.folderId] || 0) + 1;
+  });
+  return counts;
+}
+
+function renderHistFolderRow() {
+  var row = document.getElementById('histFolderRow');
+  if (!row) return;
+  var counts = folderCounts();
+  var allFolders = getAllFolders();
+  var pinnedTotal = S.history.filter(function(c){ return c.pinned && !c.archived; }).length;
+  var archivedTotal = S.history.filter(function(c){ return c.archived; }).length;
+
+  var chips = '<div class="hist-folder-chip' + (!S.histFolder ? ' active' : '') + '" data-histfolder="">' +
+      '📂 All Folders' +
+    '</div>';
+  chips += allFolders.map(function(f) {
+    var n = counts[f.id] || 0;
+    var manage = f.system ? '' :
+      '<span class="hf-manage">' +
+        '<span data-folderrename="' + f.id + '" title="Rename">✏️</span>' +
+        '<span data-folderdelete="' + f.id + '" title="Delete">🗑️</span>' +
+      '</span>';
+    // Apply folder color to border and icon glow (premium look — only border + glow, not background)
+    var colorStyle = f.color
+      ? ' style="--hf-color:' + f.color + ';--hf-bg:' + hexToRgba(f.color, 0.14) + ';--hf-glow:' + hexToRgba(f.color, 0.28) + ';border-color:' + f.color + '33;"'
+      : '';
+    var iconHtml = f.color
+      ? '<span style="filter:drop-shadow(0 0 4px ' + f.color + '88)">' + f.icon + '</span>'
+      : f.icon;
+    return '<div class="hist-folder-chip' + (S.histFolder === f.id ? ' active' : '') + (manage ? ' has-manage' : '') + '"' + colorStyle + ' data-histfolder="' + f.id + '">' +
+      iconHtml + ' ' + esc(f.name) + ' <span class="hf-count">' + n + '</span>' + manage +
     '</div>';
   }).join('');
+  // [ADDED] ⭐ Pinned and 📦 Archived shown as permanent entries in the
+  // folder row too (not just the quick-filter row above), per request.
+  // These use data-histfilter rather than data-histfolder — they're
+  // status-based views (S.histFilter), not real folder membership, but
+  // the existing delegated click listener already handles data-histfilter
+  // clicks identically wherever they appear, so no new wiring is needed.
+  chips += '<div class="hist-folder-chip' + (S.histFilter === 'pinned' ? ' active' : '') + '" data-histfilter="pinned">' +
+      '⭐ Pinned <span class="hf-count">' + pinnedTotal + '</span>' +
+    '</div>';
+  chips += '<div class="hist-folder-chip' + (S.histFilter === 'archived' ? ' active' : '') + '" data-histfilter="archived">' +
+      '📦 Archived <span class="hf-count">' + archivedTotal + '</span>' +
+    '</div>';
+  chips += '<div class="hist-folder-add-btn" id="histFolderAddBtn">➕ New Folder</div>';
+  row.innerHTML = chips;
+}
+
+function renderHistItemHTML(c, lq, allFolders) {
+  var titleHtml = highlightMatch(esc(c.title), S.histQuery);
+  var snippet = getHistSnippet(c, lq);
+  var snippetHtml = snippet ? '<div class="hist-snippet">' + highlightMatch(esc(snippet), S.histQuery) + '</div>' : '';
+  var folder = c.folderId ? allFolders.find(function(f){ return f.id === c.folderId; }) : null;
+  var folderTag = folder ? '<span class="hist-folder-tag">' + folder.icon + ' ' + esc(folder.name) + '</span>' : '';
+  var voiceTag = c.isVoice ? '<span class="hist-voice-tag">🎤 Voice</span>' : '';
+  var pinBtn = '<button class="hist-act-btn' + (c.pinned ? ' pinned' : '') + '" data-histpin="' + c.id + '" title="' + (c.pinned ? 'Unpin' : 'Pin') + '">' + (c.pinned ? '📌' : '📍') + '</button>';
+  var archBtn = c.archived
+    ? '<button class="hist-act-btn archived-btn" data-histrestore="' + c.id + '" title="Restore">↩️</button>'
+    : '<button class="hist-act-btn archived-btn" data-histarchive="' + c.id + '" title="Archive">📦</button>';
+  var moveBtn = '<button class="hist-act-btn" data-histmove="' + c.id + '" title="Move to folder">📁</button>';
+  return '<div class="hist-item' + (c.pinned ? ' is-pinned' : '') + '" data-id="' + c.id + '">' +
+    '<div class="hist-actions">' + pinBtn + moveBtn + archBtn + '</div>' +
+    '<div class="hist-q">' + (c.pinned ? '📌 ' : '💬 ') + titleHtml + '…</div>' +
+    snippetHtml +
+    '<div class="hist-meta">📅 ' + esc(c.date) + ' · ' + c.messages.length + ' messages' + (folderTag ? ' ' + folderTag : '') + (voiceTag ? ' ' + voiceTag : '') + '</div>' +
+  '</div>';
+}
+
+function renderHistory(q) {
+  if (typeof q === 'string') S.histQuery = q;
+
+  var list = document.getElementById('histList');
+  if (!list) return;
+
+  renderHistFolderRow();
+
+  // Keep the clear-button visibility and quick-filter active state in sync
+  // even when renderHistory() is called from somewhere other than the
+  // search input itself (e.g. after pin/archive/move).
+  var clearBtn = document.getElementById('histClearBtn');
+  if (clearBtn) clearBtn.classList.toggle('show', !!(S.histQuery && S.histQuery.length));
+  document.querySelectorAll('.hist-filter-chip').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-histfilter') === S.histFilter);
+  });
+
+  var items = getFilteredHistory();
+  var lq = (S.histQuery || '').trim().toLowerCase();
+
+  if (!items.length) {
+    var emptyMsg = lq ? 'No conversations found' :
+      (S.histFilter === 'archived' ? 'No archived chats' :
+       S.histFilter === 'pinned'   ? 'No pinned chats yet — pin up to 5 important conversations' :
+       S.histFilter === 'voice'    ? 'No voice chats yet' :
+       S.histFilter === 'recent'   ? 'No recent conversations' :
+       S.history.length ? 'No conversations in this view' : 'No conversations yet. Start chatting!');
+    list.innerHTML = '<div class="hist-empty"><div class="he-icon">' + (lq ? '🔍' : '💬') + '</div><p>' + esc(emptyMsg) + '</p></div>';
+    return;
+  }
+
+  var allFolders = getAllFolders();
+
+  // [ADDED] "Recent" gets its own Today / Yesterday / This Week / Older
+  // grouped layout instead of one flat list — search and folder selection
+  // still apply first (via getFilteredHistory above), the bucketing only
+  // changes how the already-filtered results are presented.
+  if (S.histFilter === 'recent') {
+    var buckets = getRecentBuckets(items);
+    list.innerHTML = buckets.map(function(b) {
+      return '<div class="hist-section-label">' + b.label + '</div>' +
+        b.items.map(function(c){ return renderHistItemHTML(c, lq, allFolders); }).join('');
+    }).join('');
+    return;
+  }
+
+  list.innerHTML = items.map(function(c) { return renderHistItemHTML(c, lq, allFolders); }).join('');
+}
+
+// ── PIN / ARCHIVE / MOVE ─────────────────────────────────────────
+var MAX_PINNED = 5;
+
+function pinConv(id) {
+  var c = S.history.find(function(x){ return x.id === id; });
+  if (!c) return;
+  if (!c.pinned) {
+    var pinnedCount = S.history.filter(function(x){ return x.pinned; }).length;
+    if (pinnedCount >= MAX_PINNED) {
+      toast('⭐ You can pin up to ' + MAX_PINNED + ' chats. Unpin one first.');
+      return;
+    }
+    c.pinned = true;
+    toast('📌 Chat pinned');
+  } else {
+    c.pinned = false;
+    toast('Chat unpinned');
+  }
+  persist();
+  renderHistory();
+}
+
+function archiveConv(id) {
+  var c = S.history.find(function(x){ return x.id === id; });
+  if (!c) return;
+  c.archived = true;
+  c.pinned = false; // archived chats don't stay pinned-to-top
+  persist();
+  renderHistory();
+  toast('📦 Chat archived');
+}
+
+function restoreConv(id) {
+  var c = S.history.find(function(x){ return x.id === id; });
+  if (!c) return;
+  c.archived = false;
+  persist();
+  renderHistory();
+  toast('↩️ Chat restored');
+}
+
+function moveConvToFolder(id, folderId) {
+  var c = S.history.find(function(x){ return x.id === id; });
+  if (!c) return;
+  c.folderId = folderId || null;
+  persist();
+  renderHistory();
+  var f = folderId ? getAllFolders().find(function(x){ return x.id === folderId; }) : null;
+  toast(f ? ('📁 Moved to ' + f.name) : '📂 Removed from folder');
+}
+
+// Simple prompt-based folder picker — consistent with the existing
+// confirm()/prompt()-based interaction style used elsewhere in the app
+// (clearAllHistory, memory delete) rather than introducing a new modal
+// component just for this one flow.
+function promptMoveToFolder(id) {
+  var folders = getAllFolders();
+  if (!folders.length) { toast('No folders yet — create one first'); return; }
+  var listTxt = folders.map(function(f, i){ return (i+1) + '. ' + f.name; }).join('\n');
+  var ans = prompt('Move to which folder? Type a number, or 0 to remove from folder:\n' + listTxt);
+  if (ans === null) return;
+  var n = parseInt(ans, 10);
+  if (isNaN(n)) { toast('⚠️ Enter a number'); return; }
+  if (n === 0) { moveConvToFolder(id, null); return; }
+  var chosen = folders[n - 1];
+  if (!chosen) { toast('⚠️ No such folder'); return; }
+  moveConvToFolder(id, chosen.id);
+}
+
+// ── FOLDER CRUD ───────────────────────────────────────────────────
+function createFolder() {
+  var name = prompt('New folder name:');
+  if (!name || !name.trim()) return;
+  name = name.trim().slice(0, 40);
+  var id = 'f_' + Date.now();
+  S.folders.push({ id: id, name: name, icon: '📁', system: false });
+  S.histFolder = id;
+  persist();
+  renderHistory();
+  toast('📁 Folder "' + name + '" created');
+}
+
+function renameFolder(id) {
+  var f = S.folders.find(function(x){ return x.id === id; });
+  if (!f) { toast('⚠️ Default folders can\'t be renamed'); return; }
+  var name = prompt('Rename folder:', f.name);
+  if (!name || !name.trim()) return;
+  f.name = name.trim().slice(0, 40);
+  persist();
+  renderHistory();
+  toast('✏️ Folder renamed');
+}
+
+function deleteFolder(id) {
+  var f = S.folders.find(function(x){ return x.id === id; });
+  if (!f) { toast('⚠️ Default folders can\'t be deleted'); return; }
+  if (!confirm('Delete folder "' + f.name + '"? Conversations inside will move back to no folder (they will NOT be deleted).')) return;
+  S.folders = S.folders.filter(function(x){ return x.id !== id; });
+  S.history.forEach(function(c) { if (c.folderId === id) c.folderId = null; });
+  if (S.histFolder === id) S.histFolder = null;
+  persist();
+  renderHistory();
+  toast('🗑️ Folder deleted');
 }
 
 function loadConv(id) {
@@ -8517,6 +9140,85 @@ document.addEventListener('click', function(e) {
     if (confirm('Delete this memory? This cannot be undone.')) {
       deleteMemoryFromFirestore(delId);
     }
+    return;
+  }
+});
+</script>
+
+<script>
+// ── EVENT DELEGATION FOR HISTORY PAGE (search / folders / pin / archive) ──
+// Separate delegated listener, same pattern as the Memory page block above:
+// these elements are rebuilt via innerHTML on every renderHistory() call,
+// so they can't hold direct listeners. Kept isolated from the original
+// global click listener (chip/knowCard/histItem/[data-action]) so none of
+// that pre-existing wiring is touched.
+document.addEventListener('click', function(e) {
+  var t = e.target;
+
+  // Quick filter chips (⭐ Pinned / 🎤 Voice / 🕒 Recent / 📦 Archived / 💬 All)
+  var filterChip = t.closest('[data-histfilter]');
+  if (filterChip) {
+    S.histFilter = filterChip.getAttribute('data-histfilter');
+    renderHistory();
+    return;
+  }
+
+  // "New Folder" button
+  if (t.closest('#histFolderAddBtn')) {
+    createFolder();
+    return;
+  }
+
+  // Folder rename / delete icons (only present on custom, non-system folders)
+  var renameEl = t.closest('[data-folderrename]');
+  if (renameEl) {
+    e.stopPropagation();
+    renameFolder(renameEl.getAttribute('data-folderrename'));
+    return;
+  }
+  var deleteEl = t.closest('[data-folderdelete]');
+  if (deleteEl) {
+    e.stopPropagation();
+    deleteFolder(deleteEl.getAttribute('data-folderdelete'));
+    return;
+  }
+
+  // Folder chip selection (must come after rename/delete checks above,
+  // since those icons live INSIDE the chip and need to take priority)
+  var folderChip = t.closest('[data-histfolder]');
+  if (folderChip) {
+    var fid = folderChip.getAttribute('data-histfolder');
+    S.histFolder = fid || null;
+    renderHistory();
+    return;
+  }
+
+  // Per-conversation actions: pin / archive / restore / move. stopPropagation
+  // so clicking these small buttons never also triggers the parent
+  // .hist-item's "open conversation" click (handled by the original
+  // global listener's histItem branch).
+  var pinBtn = t.closest('[data-histpin]');
+  if (pinBtn) {
+    e.stopPropagation();
+    pinConv(parseInt(pinBtn.getAttribute('data-histpin'), 10));
+    return;
+  }
+  var archBtn = t.closest('[data-histarchive]');
+  if (archBtn) {
+    e.stopPropagation();
+    archiveConv(parseInt(archBtn.getAttribute('data-histarchive'), 10));
+    return;
+  }
+  var restoreBtn = t.closest('[data-histrestore]');
+  if (restoreBtn) {
+    e.stopPropagation();
+    restoreConv(parseInt(restoreBtn.getAttribute('data-histrestore'), 10));
+    return;
+  }
+  var moveBtn = t.closest('[data-histmove]');
+  if (moveBtn) {
+    e.stopPropagation();
+    promptMoveToFolder(parseInt(moveBtn.getAttribute('data-histmove'), 10));
     return;
   }
 });
@@ -9759,6 +10461,7 @@ if ('serviceWorker' in navigator) {
     vc.transcript = '';
     vc.interim    = '';
     vc._userEdited = false;
+    S._isVoiceSession = true; // mark live session as voice — used by autoSaveConversation
     vcLog('vcStart', 'Voice Chat Mode enabled');
     vcUpdateToggleUI();
     if (typeof toast === 'function') toast('🎙️ Voice Chat Mode on — speak, then tap Send when ready');
@@ -9768,6 +10471,7 @@ if ('serviceWorker' in navigator) {
   // ── Turn Voice Chat Mode off ─────────────────────────────────────
   function vcStop() {
     vc.active = false;
+    S._isVoiceSession = false; // clear voice session flag
     vcLog('vcStop', 'Voice Chat Mode disabled');
     vc.transcript = '';
     vc.interim    = '';
