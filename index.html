@@ -1898,7 +1898,6 @@
     cursor: pointer; color: var(--text-2); font-family: var(--font-body);
     transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
     touch-action: manipulation;
-    min-height: 148px;
   }
   .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
   .pers-card:active { transform: translateY(0) scale(0.97); }
@@ -4884,25 +4883,7 @@
                 <button type="button" id="voiceSearchClear" class="voice-search-clear" aria-label="Clear search" style="display:none;">✕</button>
               </div>
             </div>
-            <!-- Voice Type filter: Auto / Male / Female -->
-            <div class="voice-type-filter" id="voiceTypeFilter">
-              <span class="voice-type-filter-label">🎙 Voice Type</span>
-              <label class="vtf-option active" id="vtfAuto">
-                <input type="radio" name="voiceType" value="auto" checked>
-                <span class="vtf-icon">🔄</span> Auto
-              </label>
-              <label class="vtf-option" id="vtfMale">
-                <input type="radio" name="voiceType" value="male">
-                <span class="vtf-icon">♂</span> Male
-              </label>
-              <label class="vtf-option" id="vtfFemale">
-                <input type="radio" name="voiceType" value="female">
-                <span class="vtf-icon">♀</span> Female
-              </label>
-              <div class="vtf-best-bar" id="vtfBestBar">
-                <span id="vtfBestText">—</span>
-              </div>
-            </div>
+
             <div class="pers-grid" id="voiceGrid"></div>
             <div class="voice-search-empty" id="voiceSearchEmpty" style="display:none;">No voices found</div>
           </div>
@@ -7538,15 +7519,10 @@ function buildVoiceCards() {
     var color = VOICE_COLORS[colorIdx % VOICE_COLORS.length];
     var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
     var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
-    var previewHtml = val
-      ? '<span class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '" role="button" tabindex="0">▶ Preview</span>'
-      : '<span class="vc-preview-btn" style="visibility:hidden;pointer-events:none" tabindex="-1" aria-hidden="true">▶ Preview</span>';
     return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
               '<span class="pers-card-icon">' + flag + '</span>' +
               '<span class="pers-card-name">' + shortName + '</span>' +
               '<span class="pers-card-desc">' + desc + '</span>' +
-              '<span style="flex:1"></span>' +
-              previewHtml +
               '<span class="pers-card-check">✓</span>' +
            '</button>';
   }
