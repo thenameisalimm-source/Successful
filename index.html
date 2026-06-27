@@ -1833,7 +1833,7 @@
   /* Popup overlay — bottom sheet on mobile, centered modal from 640px up */
   .pers-popup-overlay {
     position: fixed; inset: 0; z-index: 9500;
-    background: rgba(2,5,12,0.72);
+    background: rgba(2,5,12,0.55);
     display: flex; align-items: flex-end; justify-content: center;
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity 0.25s ease, visibility 0.25s ease;
@@ -1841,14 +1841,11 @@
   .pers-popup-overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
 
   .pers-popup {
-    width: 100%; max-width: 560px;
-    /* Common cap on mobile — prevents full-screen takeover,
-       lets content shorter than this shrink naturally. */
-    max-height: 78vh;
+    width: 100%; max-width: 560px; max-height: 82vh;
     background: var(--glass); border: 1px solid var(--glass-border);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
-    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.55);
+    /* DIAGNOSTIC: backdrop-filter removed from popup panel */
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.45);
     display: flex; flex-direction: column; overflow: hidden;
     transform: translateY(24px); opacity: 0;
     transition: transform 0.28s cubic-bezier(0.16,1,0.3,1), opacity 0.25s ease;
@@ -1857,13 +1854,7 @@
 
   @media (min-width: 640px) {
     .pers-popup-overlay { align-items: center; }
-    .pers-popup {
-      border-radius: var(--r-lg);
-      transform: translateY(12px) scale(0.97);
-      /* Shared max-height — all popups feel consistent without forcing a
-         min-height that adds dead space to short pickers like Model or Language. */
-      max-height: 72vh;
-    }
+    .pers-popup { border-radius: var(--r-lg); transform: translateY(12px) scale(0.97); }
     .pers-popup-overlay.show .pers-popup { transform: translateY(0) scale(1); }
   }
 
@@ -1893,30 +1884,21 @@
   /* Card grid — scrolls independently so long lists work on small screens */
   .pers-grid {
     overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding: 16px 18px 20px;
+    padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px));
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
     align-items: start;
-    /* flex: 1 so the grid fills remaining space in the popup,
-       preventing dead whitespace below short lists */
-    flex: 1;
-    /* align-content: start prevents cards from stretching to fill the
-       flex space when there are fewer items */
-    align-content: start;
   }
   @media (min-width: 460px) { .pers-grid { grid-template-columns: repeat(3, 1fr); } }
 
   .pers-card {
     position: relative; display: flex; flex-direction: column; align-items: flex-start;
-    gap: 6px; text-align: left;
+    gap: 4px; text-align: left;
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-md); padding: 14px 12px 12px;
     cursor: pointer; color: var(--text-2); font-family: var(--font-body);
     transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
     touch-action: manipulation;
-    /* Consistent baseline height across all pickers — cards in the same
-       row align evenly; longer titles/descriptions simply push the card
-       taller rather than being clipped. */
-    min-height: 96px;
+    min-height: 148px;
   }
   .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
   .pers-card:active { transform: translateY(0) scale(0.97); }
@@ -1939,8 +1921,8 @@
   .pers-card.selected .pers-card-check { opacity: 1; transform: scale(1); }
 
   @media (max-width: 480px) {
-    .pers-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 14px 14px 18px; }
-    .pers-card { padding: 12px 10px 10px; min-height: 92px; }
+    .pers-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .pers-card { padding: 12px 10px 10px; }
   }
   /* ── [END ADDED] ── */
 
@@ -3005,12 +2987,6 @@
   .app-footer { padding:16px 24px; border-top:1px solid var(--border); text-align:center; font-size:0.72rem; color:var(--text-3); background:var(--glass); backdrop-filter:blur(10px); }
 
   /* Voice search bar inside Choose Voice popup */
-  /* Voice picker grid gets bottom safe-area inset since it's the only
-     popup likely to scroll on small phones (many voices = long list) */
-  #voiceGrid {
-    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-  }
-
   .voice-search-wrap {
     padding: 10px 18px 4px;
     flex-shrink: 0;
@@ -4853,10 +4829,7 @@
         <div class="pers-popup-overlay" id="personalityPopupOverlay">
           <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="personalityPopupTitle">
             <div class="pers-popup-header">
-              <div>
-                <span class="pers-popup-title" id="personalityPopupTitle">🎭 Choose AI Personality</span>
-                <div class="pers-popup-subtitle">How ALEEM AI responds to you</div>
-              </div>
+              <span class="pers-popup-title" id="personalityPopupTitle">🎭 Choose AI Personality</span>
               <button type="button" class="pers-popup-close" id="personalityPopupClose" aria-label="Close">✕</button>
             </div>
             <div class="pers-grid" id="personalityGrid"></div>
@@ -4867,10 +4840,7 @@
         <div class="pers-popup-overlay" id="voicePersonalityPopupOverlay">
           <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="voicePersonalityPopupTitle">
             <div class="pers-popup-header">
-              <div>
-                <span class="pers-popup-title" id="voicePersonalityPopupTitle">🎙️ Choose Voice Personality</span>
-                <div class="pers-popup-subtitle">Speaking style and tone of AI voice</div>
-              </div>
+              <span class="pers-popup-title" id="voicePersonalityPopupTitle">🎙️ Choose Voice Personality</span>
               <button type="button" class="pers-popup-close" id="voicePersonalityPopupClose" aria-label="Close">✕</button>
             </div>
             <div class="pers-grid" id="voicePersonalityGrid"></div>
