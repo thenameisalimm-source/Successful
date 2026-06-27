@@ -2028,7 +2028,7 @@
   /* ── ChatGPT-style history card ── */
   .hist-item {
     background:var(--bg-card); border:1px solid var(--border);
-    border-radius:12px; padding:12px 54px 11px 14px;
+    border-radius:12px; padding:0;
     cursor:pointer; transition:background var(--t), border-color var(--t);
     touch-action:pan-y; -webkit-tap-highlight-color:rgba(56,189,248,0.10);
     position:relative; overflow:hidden; user-select:none;
@@ -2057,16 +2057,48 @@
     transition:transform 0.18s cubic-bezier(0.4,0,0.2,1);
     will-change:transform;
     background:transparent;
+    display:flex;
+    align-items:stretch;
+    padding:11px 0 10px 14px;
   }
 
-  .hist-q    { font-size:0.875rem; color:var(--text-1); font-weight:500; margin-bottom:2px; padding-right:38px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hist-snippet { font-size:0.75rem; color:var(--text-3); margin-top:3px; line-height:1.45; padding-right:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Text column: grows to fill all space left of the button. Stacks its
+     children (hist-q, hist-snippet, hist-meta) in a column naturally.
+     min-width:0 lets the column shrink so ellipsis works on text children. */
+  .hist-content {
+    flex:1;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+
+  /* Button column: fixed 44px, never shrinks, centres the button vertically
+     across the full card height regardless of how many text rows are present. */
+  .hist-actions {
+    flex:0 0 44px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:44px;
+    z-index:3;
+  }
+
+  .hist-q {
+    min-width:0;
+    font-size:0.875rem; color:var(--text-1); font-weight:500;
+    margin-bottom:2px; padding-right:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .hist-snippet {
+    min-width:0;
+    font-size:0.75rem; color:var(--text-3); margin-top:3px;
+    line-height:1.45; padding-right:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .hist-mark { color:var(--a1); background:rgba(56,189,248,0.16); border-radius:3px; padding:0 2px; font-weight:600; }
   .hist-folder-tag { font-size:0.63rem; color:var(--a2); background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.22); border-radius:99px; padding:1px 7px; }
-  .hist-voice-tag { font-size:0.63rem; color:var(--a3); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.22); border-radius:99px; padding:1px 7px; }
-
-  /* 3-dot menu button — always visible, 44x44 touch target */
-  .hist-actions { position:absolute; top:50%; right:6px; transform:translateY(-50%); display:flex; gap:3px; z-index:3; }
+  .hist-voice-tag  { font-size:0.63rem; color:var(--a3); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.22); border-radius:99px; padding:1px 7px; }
   .hist-3dot-btn {
     background:none; border:none;
     width:44px; height:44px; border-radius:50%;
@@ -2075,6 +2107,8 @@
     transition:color var(--t), background var(--t);
     touch-action:manipulation; line-height:1; padding:0; letter-spacing:0;
     flex-shrink:0;
+    pointer-events:auto;
+    position:relative; z-index:3;
   }
   .hist-3dot-btn:hover { color:var(--text-1); background:var(--bg-input); }
 
@@ -2168,7 +2202,10 @@
   .hist-section-label:first-child { margin-top:0; }
 
   /* Meta row */
-  .hist-meta { font-size:0.70rem; color:var(--text-3); display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:5px; }
+  .hist-meta {
+    min-width:0; overflow:hidden;
+    font-size:0.70rem; color:var(--text-3); display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:5px;
+  }
   .hist-meta-ts { color:var(--text-3); font-variant-numeric:tabular-nums; }
   .hist-meta-dot { opacity:0.35; }
   .hist-model-tag {
@@ -2178,8 +2215,8 @@
   }
 
   @media (max-width:400px) {
-    .hist-item { padding:10px 12px 9px; }
-    .hist-q { font-size:0.84rem; padding-right:42px; }
+    .hist-item-inner { padding:10px 0 9px 12px; }
+    .hist-q { font-size:0.84rem; }
     .hist-snippet { font-size:0.71rem; }
     .hist-3dot-btn { width:44px; height:44px; font-size:1rem; }
   }
@@ -6525,6 +6562,28 @@ function persist() {
   try { lss('aleem_folders', JSON.stringify(S.folders)); } catch(eFolderSave) {}
 }
 
+// ── FAST PREFERENCE SAVE ─────────────────────────────────────────
+// Writes ONLY the four scalar keys that the dropdown handlers change.
+// Does NOT touch aleem_hist (the history blob with base64 images),
+// the cloud-sync queue, topicCounts, folders, or any other key that
+// the dropdown handlers never mutate — so every byte written here is
+// actually changed data. persist() continues to be called by every
+// other mutation path (AI replies, clear, pin, archive, etc.) and will
+// overwrite these same four keys with identical values, so there is no
+// data loss or divergence.
+//
+// Verified against loadStorage() reads:
+//   aleem_model      → ls('aleem_model')       → S.model
+//   aleem_pers       → ls('aleem_pers')         → S.personality
+//   aleem_voice_pers → ls('aleem_voice_pers')   → S.voicePersonality
+//   aleem_voice_name → ls('aleem_voice_name')   → S.selectedVoiceName
+function persistPrefsOnly() {
+  lss('aleem_model',      S.model);
+  lss('aleem_pers',       S.personality);
+  lss('aleem_voice_pers', S.voicePersonality);
+  lss('aleem_voice_name', S.selectedVoiceName);
+}
+
 // ── UID-SCOPED STORAGE ───────────────────────────────────────────
 // History is stored under aleem_hist_<uid> so switching Google accounts
 // never leaks one user's conversations to another. Preference keys are
@@ -6698,12 +6757,11 @@ function bindAllEvents() {
   var modelSelect = document.getElementById('modelSelect');
   if (modelSelect) {
     modelSelect.addEventListener('change', function(e) {
-      console.time('pref-change-model');
       S.model = e.target.value;
+      syncModelTrigger();
       toast('🤖 Model: ' + (MODEL_LABELS[S.model] || S.model));
       dbg('modelSelect change → ' + S.model);
-      // Defer heavy I/O off the UI thread
-      setTimeout(function() { persist(); console.timeEnd('pref-change-model'); }, 0);
+      persistPrefsOnly();
     });
   }
   // [END ADDED]
@@ -6712,13 +6770,13 @@ function bindAllEvents() {
   var personalitySelect = document.getElementById('personalitySelect');
   if (personalitySelect) {
     personalitySelect.addEventListener('change', function(e) {
-      console.time('pref-change-personality');
       S.personality = e.target.value;
       updatePLabel();
+      syncPersonalityTrigger();
       var p = PERSONALITIES[S.personality];
       toast('🎭 Personality: ' + (p ? p.label : S.personality));
       dbg('personalitySelect change → ' + S.personality);
-      setTimeout(function() { persist(); console.timeEnd('pref-change-personality'); }, 0);
+      persistPrefsOnly();
     });
   }
   // [END ADDED]
@@ -6728,17 +6786,12 @@ function bindAllEvents() {
   var voicePersonalitySelect = document.getElementById('voicePersonalitySelect');
   if (voicePersonalitySelect) {
     voicePersonalitySelect.addEventListener('change', function(e) {
-      console.time('pref-change-voice-personality');
       S.voicePersonality = e.target.value;
-      // [MODIFIED] Label now read from VOICE_PERSONALITIES[key].label (which
-      // now carries a 'label' field, same pattern as PERSONALITIES) instead
-      // of a separate hardcoded lookup, so newly added voice personalities
-      // don't need their label duplicated in two places. rateMul values for
-      // every existing key are completely unchanged.
+      syncVoicePersonalityTrigger();
       var vp = VOICE_PERSONALITIES[S.voicePersonality];
       toast('🎙️ Voice: ' + (vp ? vp.label : S.voicePersonality));
       dbg('voicePersonalitySelect change → ' + S.voicePersonality);
-      setTimeout(function() { persist(); console.timeEnd('pref-change-voice-personality'); }, 0);
+      persistPrefsOnly();
     });
   }
   // [END ADDED]
@@ -6746,11 +6799,10 @@ function bindAllEvents() {
   // [ADDED] Premium personality popup wiring — pure UI layer on top of the
   // existing #personalitySelect / #voicePersonalitySelect. Card clicks only
   // set select.value + dispatch 'change' (see bindPersonalityPopup()); the
-  // two listeners directly above remain the only code that ever writes to
-  // S.personality / S.voicePersonality or localStorage. This block also
-  // attaches a second, independent 'change' listener on each select purely
-  // to refresh the trigger-button text + selected-card glow — it does not
-  // replace or alter the listeners above in any way.
+  // primary handlers above are the only code that writes to S.personality /
+  // S.voicePersonality or localStorage. The sync-trigger functions are now
+  // called directly inside those primary handlers, so no second change
+  // listener is needed here.
   buildPersonalityCards();
   buildVoicePersonalityCards();
   bindPersonalityPopup(
@@ -6767,8 +6819,6 @@ function bindAllEvents() {
     document.getElementById('voicePersonalityGrid'),
     voicePersonalitySelect
   );
-  if (personalitySelect) personalitySelect.addEventListener('change', syncPersonalityTrigger);
-  if (voicePersonalitySelect) voicePersonalitySelect.addEventListener('change', syncVoicePersonalityTrigger);
   syncPersonalityTrigger();
   syncVoicePersonalityTrigger();
 
@@ -6781,11 +6831,12 @@ function bindAllEvents() {
     document.getElementById('modelGrid'),
     modelSelect
   );
-  if (modelSelect) modelSelect.addEventListener('change', syncModelTrigger);
   syncModelTrigger();
 
-  // [ADDED] Voice picker popup wiring — cards are built by syncVoiceCards()
+  // [ADDED] Voice picker popup wiring — cards are built by buildVoiceCards()
   // which is called after populateVoiceSelect() so the TTS voices list is ready.
+  // syncVoiceTrigger is called directly in the voiceSelect change handler above,
+  // so no second change listener is registered here.
   buildVoiceCards();
   bindPersonalityPopup(
     document.getElementById('voicePopupOverlay'),
@@ -6795,7 +6846,6 @@ function bindAllEvents() {
     document.getElementById('voiceSelect')
   );
   var vsEl = document.getElementById('voiceSelect');
-  if (vsEl) vsEl.addEventListener('change', syncVoiceTrigger);
   syncVoiceTrigger();
   initVoiceSearch();
   initVoiceTypeFilter();
@@ -6837,9 +6887,10 @@ function bindAllEvents() {
   if (voiceSelect) {
     voiceSelect.addEventListener('change', function(e) {
       S.selectedVoiceName = e.target.value;
-      persist();
+      syncVoiceTrigger();
       var label = e.target.options[e.target.selectedIndex] ? e.target.options[e.target.selectedIndex].text : '';
       toast('🗣️ Voice: ' + (label || 'Default'));
+      persistPrefsOnly();
     });
   }
 
@@ -10636,16 +10687,18 @@ function renderHistItemHTML(c, lq, allFolders) {
     // Swipe pin background (left swipe → pin)
     '<div class="hist-swipe-bg pin-bg" id="hsbPin' + c.id + '"><span class="hist-swipe-icon">' + (c.pinned ? '📌' : '📍') + '</span></div>' +
     '<div class="hist-item-inner" id="hii' + c.id + '">' +
-      '<div class="hist-actions">' + dotBtn + '</div>' +
-      '<div class="hist-q">' + pinIcon + titleHtml + '</div>' +
-      snippetHtml +
-      '<div class="hist-meta">' +
-        '<span class="hist-meta-ts">' + esc(ts) + '</span>' +
-        '<span class="hist-meta-dot">·</span>' +
-        '<span>' + msgCount + ' msg' + (msgCount !== 1 ? 's' : '') + '</span>' +
-        (voiceTag  ? '<span class="hist-meta-dot">·</span>' + voiceTag  : '') +
-        (folderTag ? '<span class="hist-meta-dot">·</span>' + folderTag : '') +
+      '<div class="hist-content">' +
+        '<div class="hist-q">' + pinIcon + titleHtml + '</div>' +
+        snippetHtml +
+        '<div class="hist-meta">' +
+          '<span class="hist-meta-ts">' + esc(ts) + '</span>' +
+          '<span class="hist-meta-dot">·</span>' +
+          '<span>' + msgCount + ' msg' + (msgCount !== 1 ? 's' : '') + '</span>' +
+          (voiceTag  ? '<span class="hist-meta-dot">·</span>' + voiceTag  : '') +
+          (folderTag ? '<span class="hist-meta-dot">·</span>' + folderTag : '') +
+        '</div>' +
       '</div>' +
+      '<div class="hist-actions">' + dotBtn + '</div>' +
     '</div>' +
   '</div>';
 }
