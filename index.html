@@ -10216,6 +10216,10 @@ function populateVoiceSelect() {
   syncVoiceTrigger();
 }
 
+// [FIX] Handle for the deferred speak() timeout in speakText().
+// Cleared before each new call so overlapping speech is impossible.
+var _speakTextTimer = null;
+
 function speakText(t) {
   if (!S.voiceOn || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
@@ -10239,7 +10243,13 @@ function speakText(t) {
     u.lang = lang;
   }
 
-  window.speechSynthesis.speak(u);
+  // [FIX] On Android Chrome/WebView, cancel() is asynchronous internally.
+  // Calling speak() in the same JS task causes the browser to discard
+  // utterance.voice and fall back to the system default. Waiting one
+  // event-loop tick lets cancel() flush so the assigned voice is honoured.
+  // utterance.voice is already assigned above before this setTimeout runs.
+  clearTimeout(_speakTextTimer);
+  _speakTextTimer = setTimeout(function() { window.speechSynthesis.speak(u); }, 0);
 }
 
 // ── Voice Preview (for voice picker) ─────────────────────────────
@@ -10258,7 +10268,9 @@ function previewVoice(voiceName, lang) {
   u.rate   = 1.0;
   u.pitch  = 1.0;
   u.volume = 0.9;
-  window.speechSynthesis.speak(u);
+  // [FIX] Same cancel()/speak() race — defer by one tick.
+  // u.voice is already assigned to the named voice object above.
+  setTimeout(function() { window.speechSynthesis.speak(u); }, 0);
   toast('🔊 Previewing: ' + voiceName.replace(/\s*\([^)]+\)/, '').trim());
 }
 
@@ -15878,7 +15890,12 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       }
     };
 
-    window.speechSynthesis.speak(u);
+    // [FIX] Same cancel()/speak() race as speakText and previewVoice.
+    // u.voice is assigned above; defer speak() one tick so cancel() flushes first.
+    // vc.speakGen is already captured (mySpeakGen) before this timeout runs,
+    // so the onend/onerror guards remain valid.
+    if (vc._speakTimer != null) clearTimeout(vc._speakTimer);
+    vc._speakTimer = setTimeout(function() { window.speechSynthesis.speak(u); }, 0);
   }
 
   // ── Stop button: true emergency stop — cancel TTS, prevent re-speak ──
