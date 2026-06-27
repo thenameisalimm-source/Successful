@@ -1771,8 +1771,8 @@
 
   /* Uniform height across all 5 trigger buttons, fixed icon size */
   .pers-trigger-row .pers-trigger-btn {
-    gap: 10px; padding: 0 12px 0 7px;
-    height: 42px; box-sizing: border-box;
+    gap: 10px; padding: 8px 12px 8px 7px;
+    box-sizing: border-box;
     background:
       linear-gradient(var(--bg-input), var(--bg-input)) padding-box,
       linear-gradient(135deg, var(--trig-color, var(--border-hi)), transparent 65%) border-box;
@@ -1817,7 +1817,7 @@
     .pers-trigger-label-wrap { width: 128px; }
     .pers-trigger-row .pers-trigger-label { font-size: 0.64rem; }
     .pers-trigger-subtitle { font-size: 0.54rem; }
-    .pers-trigger-row .pers-trigger-btn { height: 40px; gap: 7px; padding: 0 9px 0 6px; }
+    .pers-trigger-row .pers-trigger-btn { gap: 7px; padding: 7px 9px 7px 6px; }
     .pers-trigger-row .pers-trigger-icon { width: 23px; height: 23px; font-size: 0.92rem; }
     .pers-trigger-row .pers-trigger-name { font-size: 0.74rem; }
   }
@@ -1895,7 +1895,6 @@
     cursor: pointer; color: var(--text-2); font-family: var(--font-body);
     transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
     touch-action: manipulation;
-    height: 160px; overflow: hidden;
   }
   .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
   .pers-card:active { transform: translateY(0) scale(0.97); }
@@ -7535,22 +7534,13 @@ function buildVoiceCards() {
     var color = VOICE_COLORS[colorIdx % VOICE_COLORS.length];
     var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
     var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
-    var qb = val ? getQualityBadge(shortName, isLocal) : null;
-    // Always render quality badge and preview button so every card has the same
-    // DOM structure and therefore the same height. The Default card gets invisible
-    // placeholder elements so its layout matches all other cards exactly.
-    var qualityHtml = qb
-      ? '<span class="voice-quality-badge ' + qb.cls + '">' + qb.label + '</span>'
-      : '<span class="voice-quality-badge" style="visibility:hidden;pointer-events:none">&#8203;</span>';
-    var genderIcon = (gender === 'male') ? '♂' : (gender === 'female') ? '♀' : '';
     var previewHtml = val
       ? '<button type="button" class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '">▶ Preview</button>'
-      : '<button type="button" class="vc-preview-btn" style="visibility:hidden;pointer-events:none" tabindex="-1" aria-hidden="true">▶ Preview</button>';
+      : '';
     return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
               '<span class="pers-card-icon">' + flag + '</span>' +
-              '<span class="pers-card-name">' + shortName + (genderIcon ? ' <span style="opacity:0.55;font-size:0.8em">' + genderIcon + '</span>' : '') + '</span>' +
+              '<span class="pers-card-name">' + shortName + '</span>' +
               '<span class="pers-card-desc">' + desc + '</span>' +
-              qualityHtml +
               previewHtml +
               '<span class="pers-card-check">✓</span>' +
            '</button>';
