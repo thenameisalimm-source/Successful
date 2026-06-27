@@ -6589,12 +6589,20 @@ function persistPrefsOnly() {
 // never leaks one user's conversations to another. Preference keys are
 // NOT scoped (theme, model, personality) — they're device-level settings.
 // The active UID is tracked in _storageUid; set by _setStorageUid().
-var _storageUid = null;
-function _setStorageUid(uid) { _storageUid = uid || null; }
+//
+// Guest (signed-out) history lives under aleem_hist__guest so it is
+// completely isolated from every signed-in account's bucket.
+// _storageUid is set to '__guest' while no user is signed in.
+var _storageUid = '__guest'; // default = guest bucket until auth resolves
+function _setStorageUid(uid) { _storageUid = uid || '__guest'; }
 // Keys that must be UID-scoped (conversation data)
-var _UID_SCOPED_KEYS = { 'aleem_hist': 1, 'aleem_folders': 1 };
+var _UID_SCOPED_KEYS = { 'aleem_hist': 1, 'aleem_folders': 1, 'aleem_hist_recent_searches': 1 };
 function _scopedKey(k) {
-  if (_UID_SCOPED_KEYS[k] && _storageUid) return k + '_' + _storageUid;
+  if (_UID_SCOPED_KEYS[k]) {
+    // Always scope history/folder keys — either to the signed-in UID or
+    // to the '__guest' sentinel so no two buckets ever share a key.
+    return k + '_' + _storageUid;
+  }
   return k;
 }
 function ls(k)      { try { return localStorage.getItem(_scopedKey(k)); } catch(e){ return null; } }
@@ -6966,7 +6974,7 @@ function bindAllEvents() {
     // it doesn't change how .hist-item itself behaves otherwise.
     if (t.closest('[data-histpin]') || t.closest('[data-histarchive]') ||
         t.closest('[data-histrestore]') || t.closest('[data-histmove]') ||
-        t.closest('[data-histdelete]')) {
+        t.closest('[data-histdelete]') || t.closest('[data-histdot]')) {
       dbg('delegate: ignoring history action-button tap');
       return;
     }
@@ -10679,7 +10687,7 @@ function renderHistItemHTML(c, lq, allFolders) {
   var pinIcon   = c.pinned ? '📌 ' : (c.isVoice ? '🎤 ' : '');
 
   // 3-dot menu button
-  var dotBtn = '<button class="hist-3dot-btn" data-histdot="' + c.id + '" title="More options" onclick="event.stopPropagation()">⋯</button>';
+  var dotBtn = '<button class="hist-3dot-btn" data-histdot="' + c.id + '" title="More options">⋯</button>';
 
   return '<div class="hist-item' + (c.pinned ? ' is-pinned' : '') + (c.isVoice ? ' is-voice' : '') + '" data-id="' + c.id + '">' +
     // Swipe delete background (right swipe → delete)
@@ -12683,16 +12691,18 @@ document.addEventListener('click', function(e) {
 // ══════════════════════════════════════════════════════════════════
 
 // ── Recent Search Suggestions ─────────────────────────────────────
+// Note: HIST_RECENT_SEARCHES_KEY is scoped via _scopedKey() inside
+// getRecentSearches/addRecentSearch so each account has its own list.
 var HIST_RECENT_SEARCHES_KEY = 'aleem_hist_recent_searches';
 function getRecentSearches() {
-  try { return JSON.parse(localStorage.getItem(HIST_RECENT_SEARCHES_KEY) || '[]'); } catch(e){ return []; }
+  try { return JSON.parse(localStorage.getItem(_scopedKey(HIST_RECENT_SEARCHES_KEY)) || '[]'); } catch(e){ return []; }
 }
 function addRecentSearch(q) {
   if (!q || q.trim().length < 2) return;
   var list = getRecentSearches().filter(function(s){ return s !== q; });
   list.unshift(q);
   list = list.slice(0, 5);
-  try { localStorage.setItem(HIST_RECENT_SEARCHES_KEY, JSON.stringify(list)); } catch(e){}
+  try { localStorage.setItem(_scopedKey(HIST_RECENT_SEARCHES_KEY), JSON.stringify(list)); } catch(e){}
 }
 function renderRecentSearches() {
   var row = document.getElementById('histRecentSearches');
@@ -13484,13 +13494,15 @@ window.__aleemSetConvSyncDB = function(db, uid) {
   CSYNC.uid = uid;
   CSYNC.ready = false;
 
-  // Always update the UID-scoped storage key so ls/lss use the right bucket
-  if (typeof _setStorageUid === 'function') _setStorageUid(uid);
+  // Always update the UID-scoped storage key so ls/lss use the right bucket.
+  // For signed-in users, use the real UID; for signed-out, use '__guest'.
+  if (typeof _setStorageUid === 'function') _setStorageUid(uid || '__guest');
 
   if (db && uid) {
     // ── Sign-in (or account switch) ──────────────────────────────
-    // If we just switched accounts, wipe in-memory history from the old
-    // account before loading the new user's conversations.
+    // If we just switched from a different account (or from guest), wipe
+    // in-memory history from the old account before loading the new user's
+    // conversations.
     if (prevUid && prevUid !== uid) {
       if (typeof S !== 'undefined') {
         S.history       = [];
@@ -13504,43 +13516,25 @@ window.__aleemSetConvSyncDB = function(db, uid) {
         S._liveId       = null;
         S._activeConvId = null;
       }
-      // ── [FIX] Legacy key migration ────────────────────────────────
-      // Before UID-scoped storage existed, history lived under the bare
-      // 'aleem_hist' key. On first sign-in for this uid, if the scoped
-      // bucket is empty but the bare key has data, adopt it so the user
-      // doesn't lose their pre-login history. The bare key is left in
-      // place (not deleted) so anonymous/offline usage is unaffected.
-      (function() {
-        try {
-          var scopedKey  = 'aleem_hist_' + uid;
-          var scopedRaw  = localStorage.getItem(scopedKey);
-          if (!scopedRaw || scopedRaw === '[]') {
-            var legacyRaw = localStorage.getItem('aleem_hist');
-            if (legacyRaw && legacyRaw !== '[]') {
-              localStorage.setItem(scopedKey, legacyRaw);
-              console.log('[CSYNC] Migrated legacy aleem_hist → aleem_hist_' + uid +
-                          ' (' + (JSON.parse(legacyRaw).length) + ' conversations)');
-            }
-          }
-          // Same one-time migration for folders
-          var scopedFolderKey = 'aleem_folders_' + uid;
-          var scopedFolderRaw = localStorage.getItem(scopedFolderKey);
-          if (!scopedFolderRaw || scopedFolderRaw === '[]') {
-            var legacyFolderRaw = localStorage.getItem('aleem_folders');
-            if (legacyFolderRaw && legacyFolderRaw !== '[]') {
-              localStorage.setItem(scopedFolderKey, legacyFolderRaw);
-              console.log('[CSYNC] Migrated legacy aleem_folders → aleem_folders_' + uid);
-            }
-          }
-        } catch(eMig) {
-          console.warn('[CSYNC] Legacy key migration error:', eMig);
-        }
-      })();
-      // ── [END FIX] ─────────────────────────────────────────────────
+      // ── [LEGACY KEY MIGRATION REMOVED] ───────────────────────────────
+      // The bare 'aleem_hist' / 'aleem_folders' keys were the pre-UID-scoping
+      // storage format. Migrating them into a signed-in user's UID bucket
+      // is unsafe: the bare key may contain conversations from any prior
+      // guest session or from a different account that was signed in on this
+      // device before UID-scoping was introduced. Migrating it would violate
+      // the account-isolation guarantee.
+      //
+      // Users who had data in the bare key before this fix was deployed will
+      // start with an empty history for their account (which will be populated
+      // from Firestore cloud sync on first sign-in). Guest sessions continue
+      // to use the '__guest' scoped bucket going forward.
+      // ── [END NOTE] ───────────────────────────────────────────────────
     }
-    // Load this user's local history from their scoped key
+    // Load this user's local history from their scoped key.
+    // _setStorageUid(uid) was already called above, so ls() now reads
+    // from aleem_hist_<uid> and aleem_folders_<uid> automatically.
     if (typeof S !== 'undefined') {
-      try { S.history = JSON.parse(localStorage.getItem('aleem_hist_' + uid) || '[]'); } catch(e) { S.history = []; }
+      try { S.history = JSON.parse(ls('aleem_hist') || '[]'); } catch(e) { S.history = []; }
       S.history.forEach(function(c) {
         delete c._live;
         if (c.pinned    === undefined) c.pinned    = false;
@@ -13550,12 +13544,9 @@ window.__aleemSetConvSyncDB = function(db, uid) {
         if (!c.createdAt) c.createdAt = c.id || 0;
         if (!c.updatedAt) c.updatedAt = c.id || 0;
       });
-      // ── [FIX] Reload S.folders for this uid on every account switch ──
-      // loadStorage() only runs once at boot, so in-session account
-      // switches left S.folders holding the previous user's custom folders.
-      // Reading directly from the scoped key (already set by _setStorageUid
-      // above) ensures each account sees only its own folder list.
-      try { S.folders = JSON.parse(localStorage.getItem('aleem_folders_' + uid) || '[]'); } catch(eF) { S.folders = []; }
+      // Reload S.folders for this uid on every account switch.
+      // ls() reads from aleem_folders_<uid> since _setStorageUid was called.
+      try { S.folders = JSON.parse(ls('aleem_folders') || '[]'); } catch(eF) { S.folders = []; }
       // ── [END FIX] ──────────────────────────────────────────────────
     }
     if (typeof renderHistory === 'function') renderHistory();
@@ -13571,12 +13562,27 @@ window.__aleemSetConvSyncDB = function(db, uid) {
       _csyncSetStatus('error', 'Sync Error');
     });
   } else {
-    // ── Sign-out — clear everything in memory ────────────────────
+    // ── Sign-out — clear signed-in account from memory, load guest bucket ──
     if (typeof S !== 'undefined') {
       S.history       = [];
       S._liveId       = null;
       S._activeConvId = null;
+      S.messages      = [];
+      // _setStorageUid('__guest') was already called above, so ls/lss now
+      // point to the __guest bucket. Load guest history and folders.
+      try { S.history = JSON.parse(ls('aleem_hist') || '[]'); } catch(e) { S.history = []; }
+      S.history.forEach(function(c) {
+        delete c._live;
+        if (c.pinned    === undefined) c.pinned    = false;
+        if (c.archived  === undefined) c.archived  = false;
+        if (c.folderId  === undefined) c.folderId  = null;
+        if (c.isVoice   === undefined) c.isVoice   = false;
+        if (!c.createdAt) c.createdAt = c.id || 0;
+        if (!c.updatedAt) c.updatedAt = c.id || 0;
+      });
+      try { S.folders = JSON.parse(ls('aleem_folders') || '[]'); } catch(eF) { S.folders = []; }
     }
+    if (typeof clearChat === 'function') clearChat();
     if (typeof renderHistory === 'function') renderHistory();
     // Clear queue (in-memory and persisted), reset status
     CSYNC.queue = [];
@@ -14117,7 +14123,7 @@ function _psyncBuildHistDoc() {
   var now = Date.now();
   var searches = [];
   try {
-    searches = JSON.parse(localStorage.getItem('aleem_hist_recent_searches') || '[]');
+    searches = JSON.parse(localStorage.getItem(_scopedKey('aleem_hist_recent_searches')) || '[]');
   } catch(e) {}
   return {
     searches:  searches.slice(0, 20), // keep up to 20, newest-first
@@ -14301,7 +14307,7 @@ async function _psyncLoadSearchHistory() {
 
   // Merge: combine cloud + local, deduplicate, keep newest order
   var local = [];
-  try { local = JSON.parse(localStorage.getItem('aleem_hist_recent_searches') || '[]'); } catch(e) {}
+  try { local = JSON.parse(localStorage.getItem(_scopedKey('aleem_hist_recent_searches')) || '[]'); } catch(e) {}
 
   // Build a merged unique list: cloud entries take precedence in ordering
   // because the cloud doc is either newer or equal; local extras appended
@@ -14319,7 +14325,7 @@ async function _psyncLoadSearchHistory() {
   });
   merged = merged.slice(0, 20); // cap at 20 entries
 
-  try { localStorage.setItem('aleem_hist_recent_searches', JSON.stringify(merged)); } catch(e) {}
+  try { localStorage.setItem(_scopedKey('aleem_hist_recent_searches'), JSON.stringify(merged)); } catch(e) {}
   lss('aleem_psync_hist_ts', String(Math.max(cloudTs, localTs)));
 
   // Refresh the recent-searches UI if renderRecentSearches is defined
@@ -14950,7 +14956,7 @@ async function _rsyncAttachHistListener() {
 
       // Merge: cloud + local, deduplicate, preserve newest
       var local = [];
-      try { local = JSON.parse(localStorage.getItem('aleem_hist_recent_searches') || '[]'); } catch(e) {}
+      try { local = JSON.parse(localStorage.getItem(_scopedKey('aleem_hist_recent_searches')) || '[]'); } catch(e) {}
 
       var cloudTs = data.updatedAt || 0;
       var localTs = parseInt(ls('aleem_psync_hist_ts') || '0', 10);
@@ -14966,7 +14972,7 @@ async function _rsyncAttachHistListener() {
       });
       merged = merged.slice(0, 20);
 
-      try { localStorage.setItem('aleem_hist_recent_searches', JSON.stringify(merged)); } catch(e) {}
+      try { localStorage.setItem(_scopedKey('aleem_hist_recent_searches'), JSON.stringify(merged)); } catch(e) {}
       lss('aleem_psync_hist_ts', String(Math.max(cloudTs, localTs)));
 
       // Refresh suggestions UI instantly
