@@ -6479,6 +6479,7 @@ function persist() {
     c.archived  = !!conv.archived;
     c.folderId  = conv.folderId || null;
     c.isVoice   = !!conv.isVoice;
+    c.personality = conv.personality || '';
     c.createdAt = conv.createdAt || conv.id || 0;
     c.updatedAt = conv.updatedAt || conv.id || 0;
     // deliberately omit _live
@@ -6491,6 +6492,7 @@ function persist() {
       id: conv.id, title: conv.title, date: conv.date,
       pinned: !!conv.pinned, archived: !!conv.archived,
       folderId: conv.folderId || null, isVoice: !!conv.isVoice,
+      personality: conv.personality || '',
       createdAt: conv.createdAt || conv.id || 0,
       updatedAt: conv.updatedAt || conv.id || 0,
       messages: conv.messages.map(function(m) {
@@ -7053,6 +7055,7 @@ function goPage(name) {
   if (name === 'settings')  syncSettingsUI();
   if (name === 'memories')  renderMemories();
   if (name === 'profile' && typeof renderProfilePage === 'function') renderProfilePage();
+  if (name === 'analytics' && typeof window.renderAnalytics === 'function') window.renderAnalytics();
 
   // Fix 1: pause particles on non-Chat pages, resume on Chat
   if (name === 'chat') { particleCtrl.resume(); } else { particleCtrl.pause(); }
@@ -9502,6 +9505,11 @@ function autoSaveConversation() {
     existing.date      = new Date().toLocaleDateString();
     existing.updatedAt = nowMs;
     if (S.model) existing.model = S.model;
+    // Tag with the active personality for UI/analytics display — does not
+    // affect saving. Mirrors the existing model/fastMode snapshot pattern;
+    // without this, conv.personality is never set and analytics' personality
+    // breakdown stays permanently empty.
+    if (S.personality) existing.personality = S.personality;
     // Once a session has been flagged as a voice chat, keep that tag even
     // if a later exchange in the SAME live session happens to read from
     // the chat page (e.g. user glances at the chat tab mid-conversation)
@@ -9531,7 +9539,8 @@ function autoSaveConversation() {
       folderId:  null,
       isVoice:   isVoiceNow,
       fastMode:  !!S.fastMode,   // UI/analytics flag only — never blocks saving
-      model:     S.model || ''
+      model:     S.model || '',
+      personality: S.personality || ''   // UI/analytics flag only — never blocks saving
     });
     // [MODIFIED] Cap raised 50 -> 500 -> 1000 conversations. History records
     // are lightweight (text-only chats rarely approach localStorage limits,
