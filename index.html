@@ -636,13 +636,14 @@
     border: 1px solid var(--border);
   }
   .vc-preview-btn {
-    display: inline-block; margin-top: 5px;
+    display: inline-block; margin-top: 6px;
     background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
-    color: var(--a1); border-radius: 6px; padding: 3px 10px;
+    color: var(--a1); border-radius: 6px; padding: 4px 12px;
     font-size: 0.7rem; font-weight: 600; cursor: pointer;
     transition: background var(--t);
     font-family: var(--font-body);
     user-select: none; -webkit-user-select: none;
+    width: 100%; text-align: center; box-sizing: border-box;
   }
   .vc-preview-btn:hover { background: rgba(56,189,248,0.22); }
 
@@ -1897,6 +1898,7 @@
     cursor: pointer; color: var(--text-2); font-family: var(--font-body);
     transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
     touch-action: manipulation;
+    min-height: 148px;
   }
   .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
   .pers-card:active { transform: translateY(0) scale(0.97); }
@@ -7538,11 +7540,12 @@ function buildVoiceCards() {
     var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
     var previewHtml = val
       ? '<span class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '" role="button" tabindex="0">▶ Preview</span>'
-      : '';
+      : '<span class="vc-preview-btn" style="visibility:hidden;pointer-events:none" tabindex="-1" aria-hidden="true">▶ Preview</span>';
     return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
               '<span class="pers-card-icon">' + flag + '</span>' +
               '<span class="pers-card-name">' + shortName + '</span>' +
               '<span class="pers-card-desc">' + desc + '</span>' +
+              '<span style="flex:1"></span>' +
               previewHtml +
               '<span class="pers-card-check">✓</span>' +
            '</button>';
