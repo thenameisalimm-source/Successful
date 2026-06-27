@@ -6249,6 +6249,7 @@ const S = {
   personality: 'friendly',
   voicePersonality: 'assistant',
   selectedVoiceName: '', // empty = auto (best match); set by voice selector
+  _voiceManuallySelected: false, // true once user explicitly picks a voice card/option
   voiceOn:     true,
   theme:       'dark',
   totalQ:      0,
@@ -6376,6 +6377,7 @@ function loadStorage() {
   S.personality = ls('aleem_pers') || 'friendly';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
   S.selectedVoiceName = ls('aleem_voice_name') || '';
+  S._voiceManuallySelected = !!(ls('aleem_voice_name'));
   S.voiceOn     = ls('aleem_voice') !== 'off';
   S.theme       = ls('aleem_theme') || 'dark';
   S.totalQ      = parseInt(ls('aleem_total') || '0', 10);
@@ -6895,6 +6897,13 @@ function bindAllEvents() {
   if (voiceSelect) {
     voiceSelect.addEventListener('change', function(e) {
       S.selectedVoiceName = e.target.value;
+      // Track whether this change came from a manual user selection or from
+      // the auto-filter. The applyTypeFilter function dispatches this event
+      // programmatically — it sets _vtfAutoDispatch before dispatching so we
+      // can distinguish the two cases here.
+      if (!e._vtfAutoDispatch) {
+        S._voiceManuallySelected = (e.target.value !== '');
+      }
       syncVoiceTrigger();
       var label = e.target.options[e.target.selectedIndex] ? e.target.options[e.target.selectedIndex].text : '';
       toast('🗣️ Voice: ' + (label || 'Default'));
@@ -7526,9 +7535,16 @@ function buildVoiceCards() {
     var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
     var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
     var qb = val ? getQualityBadge(shortName, isLocal) : null;
-    var qualityHtml = qb ? '<span class="voice-quality-badge ' + qb.cls + '">' + qb.label + '</span>' : '';
+    // Always render quality badge and preview button so every card has the same
+    // DOM structure and therefore the same height. The Default card gets invisible
+    // placeholder elements so its layout matches all other cards exactly.
+    var qualityHtml = qb
+      ? '<span class="voice-quality-badge ' + qb.cls + '">' + qb.label + '</span>'
+      : '<span class="voice-quality-badge" style="visibility:hidden;pointer-events:none">&#8203;</span>';
     var genderIcon = (gender === 'male') ? '♂' : (gender === 'female') ? '♀' : '';
-    var previewHtml = val ? '<button type="button" class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '">▶ Preview</button>' : '';
+    var previewHtml = val
+      ? '<button type="button" class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '">▶ Preview</button>'
+      : '<button type="button" class="vc-preview-btn" style="visibility:hidden;pointer-events:none" tabindex="-1" aria-hidden="true">▶ Preview</button>';
     return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
               '<span class="pers-card-icon">' + flag + '</span>' +
               '<span class="pers-card-name">' + shortName + (genderIcon ? ' <span style="opacity:0.55;font-size:0.8em">' + genderIcon + '</span>' : '') + '</span>' +
@@ -7797,34 +7813,57 @@ function initVoiceTypeFilter() {
     });
 
     if (type === 'auto') {
-      // Restore to Default (Auto) — clear explicit selection
+      // Restore to Default (Auto) — clear manual selection flag and explicit voice
+      S._voiceManuallySelected = false;
+      S.selectedVoiceName = '';
+      var autoSel = document.getElementById('voiceSelect');
+      if (autoSel) {
+        autoSel.value = '';
+        var autoEvt = document.createEvent('Event');
+        autoEvt.initEvent('change', true, true);
+        autoEvt._vtfAutoDispatch = true;
+        autoSel.dispatchEvent(autoEvt);
+      }
       if (bestBar) bestBar.classList.remove('show');
-      // Only reset if user hadn't picked a specific voice previously
-      // (respect their stored voice if it exists and isn't tied to this filter)
       _vtfFilterGrid(null); // show all cards
       return;
     }
 
-    // Male or Female — pick best and auto-select it
+    // Male or Female — only auto-pick a voice if no manual selection is active.
+    // If the user already manually picked a voice, just filter the grid and
+    // show an info bar for the selected voice without overwriting their choice.
+    if (S._voiceManuallySelected && S.selectedVoiceName) {
+      // User has an explicit voice selected — respect it, just filter the grid.
+      var genderLabel = type === 'male' ? '♂ Male' : '♀ Female';
+      if (bestBar && bestText) {
+        bestText.innerHTML = 'Showing ' + genderLabel + ' voices. Current voice: <span class="vtf-best-name">' + escHtml(S.selectedVoiceName.replace(/\s*\([^)]+\)/,'')) + '</span>';
+        bestBar.classList.add('show');
+      }
+      _vtfFilterGrid(type);
+      return;
+    }
+
+    // No manual selection — auto-pick the best gender-matched voice.
     var best = _vtfBestVoice(type);
     if (best) {
-      // Apply the voice selection
+      // Apply the voice selection — mark the event as auto so the change
+      // handler does NOT set _voiceManuallySelected.
       var sel = document.getElementById('voiceSelect');
       if (sel) {
         sel.value = best.name;
-        // Trigger the change event so existing listeners persist and sync
         var evt = document.createEvent('Event');
         evt.initEvent('change', true, true);
+        evt._vtfAutoDispatch = true;
         sel.dispatchEvent(evt);
       }
       S.selectedVoiceName = best.name;
+      // Do NOT set S._voiceManuallySelected here — this is an auto selection.
 
       var genderLabel = type === 'male' ? '♂ Male' : '♀ Female';
       if (bestBar && bestText) {
         bestText.innerHTML = 'Best ' + genderLabel + ' voice selected: <span class="vtf-best-name">' + escHtml(best.name) + '</span>';
         bestBar.classList.add('show');
       }
-      // Sync trigger button label
       if (typeof syncVoiceTrigger === 'function') syncVoiceTrigger();
       toast('🎙 ' + (type === 'male' ? '♂ Male' : '♀ Female') + ' voice: ' + best.name.replace(/\s*\([^)]+\)/,''));
     } else {
@@ -14250,6 +14289,10 @@ async function _psyncLoadPreferences() {
     }
     if (cloudPref.selectedVoiceName !== undefined) {
       S.selectedVoiceName = cloudPref.selectedVoiceName;
+      // Keep the manual-selection flag in sync with what cloud restored.
+      // A non-empty name means the cloud record itself was a manual pick;
+      // an empty string means the cloud record was Auto mode.
+      S._voiceManuallySelected = !!(cloudPref.selectedVoiceName);
       lss('aleem_voice_name', S.selectedVoiceName);
       // Re-populate voice dropdown to reflect restored preference
       if (typeof populateVoiceSelect === 'function') populateVoiceSelect();
@@ -14879,6 +14922,9 @@ async function _rsyncAttachPrefListener() {
         }
         if (data.selectedVoiceName !== undefined) {
           S.selectedVoiceName = data.selectedVoiceName;
+          // Keep the manual-selection flag in sync with what the sync data
+          // restored. A non-empty name is a manual pick; empty is Auto mode.
+          S._voiceManuallySelected = !!(data.selectedVoiceName);
           lss('aleem_voice_name', S.selectedVoiceName);
           if (typeof populateVoiceSelect === 'function') populateVoiceSelect();
         }
