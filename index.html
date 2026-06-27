@@ -636,12 +636,13 @@
     border: 1px solid var(--border);
   }
   .vc-preview-btn {
-    margin-top: 5px;
+    display: inline-block; margin-top: 5px;
     background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
     color: var(--a1); border-radius: 6px; padding: 3px 10px;
     font-size: 0.7rem; font-weight: 600; cursor: pointer;
     transition: background var(--t);
     font-family: var(--font-body);
+    user-select: none; -webkit-user-select: none;
   }
   .vc-preview-btn:hover { background: rgba(56,189,248,0.22); }
 
@@ -1884,6 +1885,7 @@
     overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px));
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    align-items: start;
   }
   @media (min-width: 460px) { .pers-grid { grid-template-columns: repeat(3, 1fr); } }
 
@@ -7535,7 +7537,7 @@ function buildVoiceCards() {
     var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
     var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
     var previewHtml = val
-      ? '<button type="button" class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '">▶ Preview</button>'
+      ? '<span class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '" role="button" tabindex="0">▶ Preview</span>'
       : '';
     return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
               '<span class="pers-card-icon">' + flag + '</span>' +
