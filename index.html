@@ -431,8 +431,220 @@
   .an-mem-val { font-size: 0.85rem; color: var(--text-1); font-weight: 600; }
 
   /* ================================================================
-     PARTICLE CANVAS
+     FAST MODE TOGGLE
   ================================================================ */
+  .fast-mode-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px 7px 14px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+  }
+  .fast-mode-label {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.8rem; color: var(--text-2); font-weight: 500;
+    user-select: none; cursor: pointer;
+  }
+  .fast-mode-label .fm-icon { font-size: 1rem; }
+  .fast-mode-label .fm-text { letter-spacing: 0.1px; }
+  .fast-mode-badge {
+    display: none;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px;
+    color: #f59e0b; background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.35);
+    border-radius: 99px; padding: 1px 8px;
+    text-transform: uppercase;
+  }
+  .fast-mode-active .fast-mode-badge { display: inline-block; }
+  .fast-mode-active .fast-mode-label .fm-text { color: #f59e0b; }
+
+  /* Toggle switch */
+  .fm-switch {
+    position: relative; display: inline-block;
+    width: 36px; height: 20px; flex-shrink: 0;
+  }
+  .fm-switch input { opacity: 0; width: 0; height: 0; }
+  .fm-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: rgba(255,255,255,0.1); border: 1px solid var(--border);
+    border-radius: 99px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .fm-slider::before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px;
+    left: 2px; top: 2px;
+    background: var(--text-3); border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .fm-switch input:checked + .fm-slider {
+    background: rgba(245,158,11,0.28); border-color: rgba(245,158,11,0.55);
+  }
+  .fm-switch input:checked + .fm-slider::before {
+    transform: translateX(16px); background: #f59e0b;
+  }
+
+  /* Status pill for fast mode */
+  .status-pill--fast {
+    --pill-color: #f59e0b;
+    display: none;
+  }
+  .status-pill--fast.active { display: inline-flex; }
+
+  /* ================================================================
+     MEMORY CAPTURE TOGGLE (sub-row under Fast Mode)
+  ================================================================ */
+  .mem-capture-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px 8px 14px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+    transition: opacity 0.2s;
+  }
+  .mem-capture-row.mc-disabled {
+    opacity: 0.38;
+    pointer-events: none;
+  }
+  .mem-capture-label {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.78rem; color: var(--text-2); font-weight: 500;
+    user-select: none; cursor: pointer;
+  }
+  .mem-capture-label .mc-icon { font-size: 0.95rem; }
+  .mem-capture-label .mc-text { letter-spacing: 0.1px; }
+  .mc-badge {
+    display: none;
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5px;
+    color: #34d399; background: rgba(52,211,153,0.15);
+    border: 1px solid rgba(52,211,153,0.35);
+    border-radius: 99px; padding: 1px 7px;
+    text-transform: uppercase;
+  }
+  .mem-capture-on .mc-badge { display: inline-block; }
+  .mem-capture-on .mem-capture-label .mc-text { color: #34d399; }
+
+  /* Toggle switch for mem capture (green) */
+  .mc-switch {
+    position: relative; display: inline-block;
+    width: 36px; height: 20px; flex-shrink: 0;
+  }
+  .mc-switch input { opacity: 0; width: 0; height: 0; }
+  .mc-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: rgba(255,255,255,0.1); border: 1px solid var(--border);
+    border-radius: 99px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .mc-slider::before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px;
+    left: 2px; top: 2px;
+    background: var(--text-3); border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .mc-switch input:checked + .mc-slider {
+    background: rgba(52,211,153,0.28); border-color: rgba(52,211,153,0.55);
+  }
+  .mc-switch input:checked + .mc-slider::before {
+    transform: translateX(16px); background: #34d399;
+  }
+
+  /* Status pill for memory capture */
+  .status-pill--memcap {
+    --pill-color: #34d399;
+    display: none;
+  }
+  .status-pill--memcap.active { display: inline-flex; }
+
+  /* ================================================================
+     VOICE TYPE FILTER (Auto / Male / Female)
+  ================================================================ */
+  .voice-type-filter {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 2px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .voice-type-filter-label {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--text-3);
+    flex-shrink: 0; margin-right: 4px;
+  }
+  .vtf-option {
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer; padding: 5px 13px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    font-size: 0.8rem; color: var(--text-2); font-weight: 500;
+    background: transparent;
+    transition: background var(--t), border-color var(--t), color var(--t);
+    user-select: none;
+    font-family: var(--font-body);
+  }
+  .vtf-option input[type="radio"] { display: none; }
+  .vtf-option:hover {
+    background: var(--bg-input); border-color: var(--border-hi); color: var(--text-1);
+  }
+  .vtf-option.active {
+    background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(129,140,248,0.10));
+    border-color: rgba(56,189,248,0.45); color: var(--a1); font-weight: 600;
+  }
+  .vtf-icon { font-size: 0.95rem; }
+  /* Best-voice info bar shown when Male/Female is active */
+  .vtf-best-bar {
+    width: 100%; margin: 6px 0 0;
+    padding: 7px 12px;
+    background: rgba(56,189,248,0.07);
+    border: 1px solid rgba(56,189,248,0.18);
+    border-radius: 10px;
+    font-size: 0.74rem; color: var(--text-2); line-height: 1.5;
+    display: none;
+  }
+  .vtf-best-bar.show { display: block; }
+  .vtf-best-name { color: var(--a1); font-weight: 600; }
+
+  /* ================================================================
+     VOICE GENDER SECTIONS
+  ================================================================ */
+  .voice-gender-section {
+    margin-bottom: 14px;
+  }
+  .voice-gender-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 4px 8px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--text-3);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+  }
+  .voice-gender-header .vgh-icon { font-size: 1rem; }
+  .voice-quality-badge {
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; border-radius: 99px; padding: 1px 6px;
+    display: inline-block; margin-top: 3px;
+  }
+  .vqb-premium {
+    background: rgba(245,158,11,0.18); color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.35);
+  }
+  .vqb-good {
+    background: rgba(52,211,153,0.15); color: #34d399;
+    border: 1px solid rgba(52,211,153,0.3);
+  }
+  .vqb-standard {
+    background: rgba(99,179,237,0.12); color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .vc-preview-btn {
+    margin-top: 5px;
+    background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3);
+    color: var(--a1); border-radius: 6px; padding: 3px 10px;
+    font-size: 0.7rem; font-weight: 600; cursor: pointer;
+    transition: background var(--t);
+    font-family: var(--font-body);
+  }
+  .vc-preview-btn:hover { background: rgba(56,189,248,0.22); }
+
   #particles {
     position: fixed; inset: 0; z-index: 0;
     pointer-events: none; opacity: 0.5;
@@ -1103,6 +1315,54 @@
   /* ALEEM AI logo avatar — fills the 36px msg-av cell, clipped to circle */
   .msg-av-logo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
   .msg-body { flex: 1; min-width: 0; }
+  /* ── USER BUBBLE SHRINK-WRAP ────────────────────────────────────────
+     Diagnosis (5-point check):
+
+     1. .msg-body { flex:1 } — partial cause. Makes the body fill the
+        full row after the avatar. Kept unchanged for AI rows.
+
+     2. .msg-bubble — NOT the root cause on its own. It is display:block
+        so it fills 100% of its parent (.msg-body). The bubble is the
+        symptom, not the source.
+
+     3. .msg.user { flex-direction:row-reverse; margin-left:auto } —
+        NOT the root cause. margin-left:auto correctly right-aligns the
+        whole .msg row within .chat-messages.
+
+     4. Mobile-only overrides — @media (max-width:480px) / (360px) only
+        adjust padding and avatar size. No .msg-body overrides there.
+
+     5. width / min-width / max-width further down — line 3282 sets
+        .msg-bubble { max-width:100% } globally (non-media-query). That
+        means the bubble fills its parent body. The real circular trap:
+        flex:0 1 auto alone does NOT shrink-wrap a block child because
+        the child tries to fill 100% of the parent, and the parent's
+        auto inline-size resolves to the available space.
+
+     TRUE FIX: width:fit-content on the user body breaks the circular
+     dependency. The body collapses to the bubble's content width. The
+     bubble (display:block) fills that collapsed body width. Short text
+     → tiny bubble. Long text → grows up to max-width:80%.
+
+     align-self:flex-end keeps the body flush to the right edge of the
+     reversed row. min-width:0 prevents overflow on long unbreakable
+     words. .msg-actions sits inside .msg-body so it inherits the same
+     content width — copy/edit/share buttons stay correctly aligned.
+     AI rows are untouched (flex:1 still applies there).
+  ── */
+  .msg.user .msg-body {
+    flex: 0 1 auto;
+    width: fit-content;
+    min-width: 0;
+    max-width: 80%;
+    align-self: flex-end;
+    /* [EC5/EC8] Reserve space below bubble for the absolute actions row.
+       56px = 44px (min-height touch target) + 6px gap + 6px safety buffer.
+       This prevents the next message from overlapping the actions row at
+       any font scale, including increased system font sizes. */
+    position: relative;
+    padding-bottom: 56px;
+  }
   /* [REFRESH] Bubble: roomier padding, shared --r-bubble radius, and a
      soft elevation shadow (box-shadow only — no filter/backdrop-filter)
      for a more premium, "lifted card" feel. */
@@ -1129,7 +1389,26 @@
     display: flex; align-items: center; gap: 1px;
     margin-top: 6px; flex-wrap: nowrap; min-height: 0;
   }
-  .msg.user .msg-actions { justify-content: flex-end; }
+  .msg.user .msg-actions {
+    /* [EC3/EC6/EC7] Absolute positioning within .msg-body's padding-bottom
+       zone. bottom:6px keeps a natural 6px gap from the bubble's baseline.
+       right:0 flush-aligns with the bubble's right edge.
+       width:max-content expands leftward freely.
+       min-width:0 + no overflow:hidden = buttons never get clipped.
+       z-index:1 ensures buttons stay above scroll containers' painting
+       order so they remain clickable after scrolling (EC6).
+       No left constraint: on short bubbles the row extends leftward past
+       the bubble edge but stays within .msg-body's max-width:80% — the
+       avatar is always outside that zone (EC7). */
+    position: absolute;
+    bottom: 6px;
+    right: 0;
+    width: max-content;
+    min-width: 0;
+    justify-content: flex-end;
+    margin-top: 0;
+    z-index: 1;
+  }
   .msg-time { font-size: 0.68rem; color: var(--text-3); padding: 0 4px; flex-shrink: 0; }
 
   /* Modern icon-only action button — ChatGPT/Gemini style */
@@ -1749,7 +2028,7 @@
   /* ── ChatGPT-style history card ── */
   .hist-item {
     background:var(--bg-card); border:1px solid var(--border);
-    border-radius:12px; padding:12px 14px 11px;
+    border-radius:12px; padding:12px 54px 11px 14px;
     cursor:pointer; transition:background var(--t), border-color var(--t);
     touch-action:pan-y; -webkit-tap-highlight-color:rgba(56,189,248,0.10);
     position:relative; overflow:hidden; user-select:none;
@@ -1780,21 +2059,22 @@
     background:transparent;
   }
 
-  .hist-q    { font-size:0.875rem; color:var(--text-1); font-weight:500; margin-bottom:2px; padding-right:34px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hist-q    { font-size:0.875rem; color:var(--text-1); font-weight:500; margin-bottom:2px; padding-right:38px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hist-snippet { font-size:0.75rem; color:var(--text-3); margin-top:3px; line-height:1.45; padding-right:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hist-mark { color:var(--a1); background:rgba(56,189,248,0.16); border-radius:3px; padding:0 2px; font-weight:600; }
   .hist-folder-tag { font-size:0.63rem; color:var(--a2); background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.22); border-radius:99px; padding:1px 7px; }
   .hist-voice-tag { font-size:0.63rem; color:var(--a3); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.22); border-radius:99px; padding:1px 7px; }
 
-  /* 3-dot menu button — only action visible by default */
-  .hist-actions { position:absolute; top:10px; right:10px; display:flex; gap:3px; z-index:2; }
+  /* 3-dot menu button — always visible, 44x44 touch target */
+  .hist-actions { position:absolute; top:50%; right:6px; transform:translateY(-50%); display:flex; gap:3px; z-index:3; }
   .hist-3dot-btn {
     background:none; border:none;
-    width:28px; height:28px; border-radius:50%;
+    width:44px; height:44px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
-    font-size:1rem; cursor:pointer; color:var(--text-3);
+    font-size:1.1rem; cursor:pointer; color:var(--text-2);
     transition:color var(--t), background var(--t);
     touch-action:manipulation; line-height:1; padding:0; letter-spacing:0;
+    flex-shrink:0;
   }
   .hist-3dot-btn:hover { color:var(--text-1); background:var(--bg-input); }
 
@@ -1899,9 +2179,9 @@
 
   @media (max-width:400px) {
     .hist-item { padding:10px 12px 9px; }
-    .hist-q { font-size:0.84rem; padding-right:30px; }
+    .hist-q { font-size:0.84rem; padding-right:42px; }
     .hist-snippet { font-size:0.71rem; }
-    .hist-3dot-btn { width:26px; height:26px; font-size:0.9rem; }
+    .hist-3dot-btn { width:44px; height:44px; font-size:1rem; }
   }
 
   /* ── VOICE CHAT SEARCH & HISTORY STYLES ──────────────────────────── */
@@ -2870,17 +3150,39 @@
     .msg.ai + .msg.ai, .msg.user + .msg.user { margin-top: -6px; }
     .msg-av { width: 32px; height: 32px; }
     .msg-bubble { padding: 12px 15px; }
+    /* [EC4/480] Actions stay absolute; only icon spacing tightened.
+       padding-bottom on .msg.user .msg-body unchanged (56px still needed). */
     .msg-actions { margin-top: 5px; gap: 0; flex-wrap: nowrap; }
     .act-btn { width: 36px; min-width: 44px; min-height: 44px; }
     .act-lbl { display: none; }
     .md-body th, .md-body td { padding: 6px 9px; }
   }
+  @media (max-width: 390px) {
+    /* [EC4/390] Slightly tighter gap between messages */
+    .chat-messages { gap: 14px; }
+    .msg-bubble { padding: 11px 14px; }
+    /* [EC4/390] Actions row: reduce gap to 0 to save horizontal space.
+       Buttons still meet 44px touch target via min-width/min-height. */
+    .msg.user .msg-actions { gap: 0; }
+  }
   @media (max-width: 360px) {
     .chat-messages { padding: 16px 12px 10px; gap: 14px; }
     .msg-av { width: 30px; height: 30px; }
     .msg-bubble { padding: 11px 13px; }
+    /* [EC4/360] On 360px the actions row can be ~176px wide (4 btns × 44px).
+       With avatar 30px + gap 10px = 40px used on left, body max-width 80%
+       of 360 = 288px. Actions fit within 288px — no avatar collision. */
   }
-  /* ── [END REFRESH] ── */
+  @media (max-width: 320px) {
+    /* [EC4/320] Absolute minimum: tighten everything. Actions still absolute. */
+    .chat-messages { padding: 14px 10px 8px; gap: 12px; }
+    .msg { gap: 8px; }
+    .msg-av { width: 28px; height: 28px; }
+    .msg-bubble { padding: 10px 12px; font-size: 0.82rem; }
+    .msg.user .msg-body { max-width: 85%; }
+    /* Reduce act-btn min-width slightly — still 40px for touch safety */
+    .act-btn { min-width: 40px; min-height: 40px; }
+  }
 
   /* ================================================================
      MOBILE TEXT OVERFLOW & WRAPPING FIXES
@@ -3512,12 +3814,17 @@
   .msg-img {
     max-width: 260px; width: 100%;
     border-radius: var(--r-md);
+    /* [EC1/2] Remove bottom margin when image is last child (image-only bubble).
+       When text follows, the text block provides its own spacing. */
     margin-bottom: 8px;
     border: 1px solid var(--border);
     display: block;
     box-shadow: 0 3px 12px rgba(0,0,0,0.28);
     cursor: zoom-in;
   }
+  /* [EC1] Image-only bubble: last-child img needs no bottom margin
+     (avoids double-gap between image bottom and actions row). */
+  .msg-bubble .msg-img:last-child { margin-bottom: 0; }
   @media (max-width: 480px) { .msg-img { max-width: 200px; } }
 
   /* Lightbox overlay for image zoom */
@@ -4351,6 +4658,14 @@
             <span class="status-pill-icon">🖼️</span>
             <span class="status-pill-text">Image Ready</span>
           </span>
+          <span class="status-pill status-pill--fast" id="fastModePill">
+            <span class="status-pill-icon">⚡</span>
+            <span class="status-pill-text">Fast Mode</span>
+          </span>
+          <span class="status-pill status-pill--memcap" id="memCapturePill">
+            <span class="status-pill-icon">🧠</span>
+            <span class="status-pill-text">Memory Capture</span>
+          </span>
         </div>
         <!-- [UPGRADED] Model selector — hidden <select> stays source of truth;
              premium popup trigger replaces the raw dropdown visually. -->
@@ -4528,6 +4843,25 @@
                 <button type="button" id="voiceSearchClear" class="voice-search-clear" aria-label="Clear search" style="display:none;">✕</button>
               </div>
             </div>
+            <!-- Voice Type filter: Auto / Male / Female -->
+            <div class="voice-type-filter" id="voiceTypeFilter">
+              <span class="voice-type-filter-label">🎙 Voice Type</span>
+              <label class="vtf-option active" id="vtfAuto">
+                <input type="radio" name="voiceType" value="auto" checked>
+                <span class="vtf-icon">🔄</span> Auto
+              </label>
+              <label class="vtf-option" id="vtfMale">
+                <input type="radio" name="voiceType" value="male">
+                <span class="vtf-icon">♂</span> Male
+              </label>
+              <label class="vtf-option" id="vtfFemale">
+                <input type="radio" name="voiceType" value="female">
+                <span class="vtf-icon">♀</span> Female
+              </label>
+              <div class="vtf-best-bar" id="vtfBestBar">
+                <span id="vtfBestText">—</span>
+              </div>
+            </div>
             <div class="pers-grid" id="voiceGrid"></div>
             <div class="voice-search-empty" id="voiceSearchEmpty" style="display:none;">No voices found</div>
           </div>
@@ -4540,6 +4874,33 @@
           </div>
           <div id="voiceDebugContent">Running…</div>
         </div>
+
+        <!-- ⚡ Fast Mode Toggle -->
+        <div class="fast-mode-row" id="fastModeRow">
+          <label class="fast-mode-label" for="fastModeToggle" title="AI only sees your current message — no history or memory context sent. Chats still save normally.">
+            <span class="fm-icon">⚡</span>
+            <span class="fm-text">Fast Mode</span>
+            <span class="fast-mode-badge" id="fastModeBadge">Active</span>
+          </label>
+          <label class="fm-switch">
+            <input type="checkbox" id="fastModeToggle">
+            <span class="fm-slider"></span>
+          </label>
+        </div>
+
+        <!-- 🧠 Memory Capture Toggle (only meaningful when Fast Mode is ON) -->
+        <div class="mem-capture-row mc-disabled" id="memCaptureRow">
+          <label class="mem-capture-label" for="memCaptureToggle" title="Allow new memories to be created even in Fast Mode. AI request stays Fast Mode (current message only) — this only enables memory extraction after each reply.">
+            <span class="mc-icon">🧠</span>
+            <span class="mc-text">Memory Capture</span>
+            <span class="mc-badge" id="memCaptureBadge">On</span>
+          </label>
+          <label class="mc-switch">
+            <input type="checkbox" id="memCaptureToggle">
+            <span class="mc-slider"></span>
+          </label>
+        </div>
+
       </div>
     </section>
 
@@ -5869,6 +6230,8 @@ const S = {
   histQuery:   '',      // current search text
   histFilter:  'all',   // 'all' | 'pinned' | 'voice' | 'recent' | 'archived'
   histFolder:  null,    // active folder id, or null for "no folder filter"
+  fastMode:    false,   // ⚡ Fast Mode — skips memory/history/profile context
+  memCapture:  false,   // 🧠 Memory Capture — allows memory creation in Fast Mode
 };
 
 
@@ -5904,6 +6267,7 @@ function init() {
   updateVoiceBtn();
   updateThemeBtn();
   updatePLabel();
+  updateFastModeUI();
   initMoreMenuDelegate();
   restoreMsgFeedbackUI();
   // Inject ALEEM AI avatar into the static welcome screen
@@ -6005,6 +6369,13 @@ function loadStorage() {
   S.typingAnim  = ls('aleem_typing_anim') !== 'off';
   S.autoScroll  = ls('aleem_auto_scroll') !== 'off';
 
+  // ⚡ Fast Mode + 🧠 Memory Capture — restored from localStorage
+  S.fastMode   = ls('aleem_fast_mode')   === 'on';
+  S.memCapture = ls('aleem_mem_capture') === 'on';
+
+  // 🎙 Voice Type filter (auto / male / female) — restored from localStorage
+  S._voiceTypeFilter = ls('aleem_voice_type') || 'auto';
+
   var today = new Date().toDateString();
   if (ls('aleem_ddate') !== today) {
     S.dailyQ = 0;
@@ -6075,7 +6446,7 @@ function persist() {
   var histToStore = S.history.map(function(conv) {
     var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages.map(function(m) {
       if (m.imgs && m.imgs.length) {
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, imgs: m.imgs, img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: m.imgs, img: null };
       }
       return m;
     }) };
@@ -6100,7 +6471,7 @@ function persist() {
       updatedAt: conv.updatedAt || conv.id || 0,
       messages: conv.messages.map(function(m) {
         if (!m.imgs || !m.imgs.length) return m;
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, imgs: [], img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: [], img: null };
       })
     };
   }
@@ -6137,20 +6508,38 @@ function persist() {
       } catch(e2) {
         // Final fallback: write an empty history directly, bypassing lss,
         // so the entry is cleared rather than left with a corrupt/stale value.
-        try { localStorage.setItem('aleem_hist', '[]'); } catch(e3) {}
+        try { localStorage.setItem(_scopedKey('aleem_hist'), '[]'); } catch(e3) {}
       }
     }
   }
   // [END MODIFIED]
   lss('aleem_typing_anim', S.typingAnim ? 'on' : 'off');
   lss('aleem_auto_scroll', S.autoScroll ? 'on' : 'off');
+  // ⚡ Fast Mode + 🧠 Memory Capture
+  lss('aleem_fast_mode',   S.fastMode   ? 'on' : 'off');
+  lss('aleem_mem_capture', S.memCapture ? 'on' : 'off');
+  // 🎙 Voice Type filter
+  if (S._voiceTypeFilter) lss('aleem_voice_type', S._voiceTypeFilter);
   // [ADDED] Custom folders — small payload, no image data, so no quota
   // handling needed beyond the existing try/catch inside lss().
   try { lss('aleem_folders', JSON.stringify(S.folders)); } catch(eFolderSave) {}
 }
 
-function ls(k)      { try { return localStorage.getItem(k); } catch(e){ return null; } }
-function lss(k, v)  { try { localStorage.setItem(k, v); } catch(e){ throw e; } }
+// ── UID-SCOPED STORAGE ───────────────────────────────────────────
+// History is stored under aleem_hist_<uid> so switching Google accounts
+// never leaks one user's conversations to another. Preference keys are
+// NOT scoped (theme, model, personality) — they're device-level settings.
+// The active UID is tracked in _storageUid; set by _setStorageUid().
+var _storageUid = null;
+function _setStorageUid(uid) { _storageUid = uid || null; }
+// Keys that must be UID-scoped (conversation data)
+var _UID_SCOPED_KEYS = { 'aleem_hist': 1, 'aleem_folders': 1 };
+function _scopedKey(k) {
+  if (_UID_SCOPED_KEYS[k] && _storageUid) return k + '_' + _storageUid;
+  return k;
+}
+function ls(k)      { try { return localStorage.getItem(_scopedKey(k)); } catch(e){ return null; } }
+function lss(k, v)  { try { localStorage.setItem(_scopedKey(k), v); } catch(e){ throw e; } }
 
 // ── EVENT BINDING ─────────────────────────────────────────────────
 //
@@ -6279,14 +6668,42 @@ function bindAllEvents() {
     dbg('micBtn click'); toggleMic();
   });
 
+  // ── ⚡ Fast Mode toggle ───────────────────────────────────────────
+  var fastToggle = document.getElementById('fastModeToggle');
+  if (fastToggle) {
+    fastToggle.addEventListener('change', function() {
+      S.fastMode = fastToggle.checked;
+      updateFastModeUI();
+      persist();
+      toast(S.fastMode ? '⚡ Fast Mode ON — no prior context sent to AI' : '⚡ Fast Mode OFF');
+    });
+  }
+
+  // ── 🧠 Memory Capture toggle ─────────────────────────────────────
+  // Only active while Fast Mode is ON. Controls ONLY memory creation;
+  // never re-enables memory context, history context, or profile context
+  // in the AI request. The AI still receives: System Prompt + Current Message + Attachments only.
+  var memCaptureToggle = document.getElementById('memCaptureToggle');
+  if (memCaptureToggle) {
+    memCaptureToggle.addEventListener('change', function() {
+      if (!S.fastMode) return; // guard: toggle is disabled when Fast Mode is OFF
+      S.memCapture = memCaptureToggle.checked;
+      updateFastModeUI();
+      persist();
+      toast(S.memCapture ? '🧠 Memory Capture ON — new memories will be created' : '🧠 Memory Capture OFF');
+    });
+  }
+
   // [ADDED] Model selector — updates S.model and persists to localStorage on change
   var modelSelect = document.getElementById('modelSelect');
   if (modelSelect) {
     modelSelect.addEventListener('change', function(e) {
+      console.time('pref-change-model');
       S.model = e.target.value;
-      persist();
       toast('🤖 Model: ' + (MODEL_LABELS[S.model] || S.model));
       dbg('modelSelect change → ' + S.model);
+      // Defer heavy I/O off the UI thread
+      setTimeout(function() { persist(); console.timeEnd('pref-change-model'); }, 0);
     });
   }
   // [END ADDED]
@@ -6295,12 +6712,13 @@ function bindAllEvents() {
   var personalitySelect = document.getElementById('personalitySelect');
   if (personalitySelect) {
     personalitySelect.addEventListener('change', function(e) {
+      console.time('pref-change-personality');
       S.personality = e.target.value;
-      persist();
       updatePLabel();
       var p = PERSONALITIES[S.personality];
       toast('🎭 Personality: ' + (p ? p.label : S.personality));
       dbg('personalitySelect change → ' + S.personality);
+      setTimeout(function() { persist(); console.timeEnd('pref-change-personality'); }, 0);
     });
   }
   // [END ADDED]
@@ -6310,8 +6728,8 @@ function bindAllEvents() {
   var voicePersonalitySelect = document.getElementById('voicePersonalitySelect');
   if (voicePersonalitySelect) {
     voicePersonalitySelect.addEventListener('change', function(e) {
+      console.time('pref-change-voice-personality');
       S.voicePersonality = e.target.value;
-      persist();
       // [MODIFIED] Label now read from VOICE_PERSONALITIES[key].label (which
       // now carries a 'label' field, same pattern as PERSONALITIES) instead
       // of a separate hardcoded lookup, so newly added voice personalities
@@ -6320,6 +6738,7 @@ function bindAllEvents() {
       var vp = VOICE_PERSONALITIES[S.voicePersonality];
       toast('🎙️ Voice: ' + (vp ? vp.label : S.voicePersonality));
       dbg('voicePersonalitySelect change → ' + S.voicePersonality);
+      setTimeout(function() { persist(); console.timeEnd('pref-change-voice-personality'); }, 0);
     });
   }
   // [END ADDED]
@@ -6379,6 +6798,7 @@ function bindAllEvents() {
   if (vsEl) vsEl.addEventListener('change', syncVoiceTrigger);
   syncVoiceTrigger();
   initVoiceSearch();
+  initVoiceTypeFilter();
 
   // [ADDED] Spoken Language popup wiring
   buildLangCards();
@@ -6957,33 +7377,170 @@ function buildVoiceCards() {
   var sel  = document.getElementById('voiceSelect');
   if (!grid || !sel) return;
   var VOICE_COLORS = ['#38bdf8','#818cf8','#34d399','#f59e0b','#ec4899','#a855f7','#06b6d4','#ef4444','#22c55e','#6366f1','#14b8a6','#f97316'];
-  var html = '';
+
+  // ── Gender detection heuristics ───────────────────────────────────
+  // Male voice name patterns (pure male voices, not pitch-manipulated female)
+  var MALE_PATTERNS = [
+    /\bmale\b/i, /\bman\b/i,
+    /\bgoogle uk english male\b/i, /\bgoogle us english male\b/i,
+    /\bDavid\b/i, /\bMark\b/i, /\bJames\b/i, /\bRyan\b/i,
+    /\bMichael\b/i, /\bAlex\b/i, /\bGuy\b/i, /\bRoger\b/i,
+    /\bLiam\b/i, /\bNoah\b/i, /\bEthan\b/i, /\bBenjamin\b/i,
+    /\bLucas\b/i, /\bOliver\b/i, /\bWilliam\b/i, /\bJackson\b/i,
+    /\bHenry\b/i, /\bChristopher\b/i, /\bElliott\b/i, /\bCharles\b/i,
+    /\bPaul\b/i, /\bJohn\b/i, /\bGeorge\b/i, /\bThomas\b/i,
+    /\bAdam\b/i, /\bPhilip\b/i, /\bSean\b/i, /\bDaniel\b/i,
+    /\bAndrew\b/i, /\bMatthew\b/i, /\bJoseph\b/i, /\bSamuel\b/i,
+    /\bHarvey\b/i, /\bArthur\b/i, /\bFelix\b/i, /\bOscar\b/i,
+    /\bHugo\b/i, /\bEdward\b/i, /\bKing\b/i, /\bErnest\b/i,
+    // Indian/Hindi male names
+    /\bRajan\b/i, /\bArun\b/i, /\bVikram\b/i, /\bAmit\b/i, /\bRahul\b/i,
+    // Specific known TTS male voice names
+    /\bBrian\b/i, /\bEric\b/i, /\bRuss\b/i, /\bStephen\b/i, /\bFrank\b/i,
+    /\bFred\b/i, /\bJarvis\b/i, /\bRalph\b/i, /\bAlbert\b/i, /\bBruce\b/i,
+    /\bBad\s*News\b/i, /\bBubbles\b/i, /\bDeranged\b/i, /\bGood\s*News\b/i,
+    /\bJester\b/i, /\bOracle\b/i, /\bOscar\b/i, /\bSandy\b/i, /\bWhisper\b/i,
+    // Neural/Microsoft male voices
+    /\bGuyNeural\b/i, /\bDavisNeural\b/i, /\bTonyNeural\b/i, /\bJasonNeural\b/i,
+    /\bRyanNeural\b/i, /\bRogerNeural\b/i, /\bEthanNeural\b/i, /\bBrandonNeural\b/i,
+    /\bChristopherNeural\b/i, /\bEricNeural\b/i, /\bJacobNeural\b/i,
+    /\bAndrew\s*Neural\b/i, /\bBrian\s*Neural\b/i,
+  ];
+  var FEMALE_PATTERNS = [
+    /\bfemale\b/i, /\bwoman\b/i,
+    /\bgoogle uk english female\b/i, /\bgoogle us english female\b/i,
+    /\bAva\b/i, /\bSamantha\b/i, /\bSiri\b/i, /\bAlice\b/i, /\bSusan\b/i,
+    /\bKaren\b/i, /\bVictoria\b/i, /\bMoira\b/i, /\bFiona\b/i, /\bTessa\b/i,
+    /\bGigole\b/i, /\bZira\b/i, /\bHazel\b/i, /\bHedda\b/i, /\bHelena\b/i,
+    /\bLaura\b/i, /\bLinda\b/i, /\bLucy\b/i, /\bMaria\b/i, /\bNarrator\b/i,
+    /\bNatasha\b/i, /\bNora\b/i, /\bSarah\b/i, /\bStellaNeural\b/i,
+    /\bElizabethNeural\b/i, /\bJennyNeural\b/i, /\bAriaNeural\b/i,
+    /\bEmmaNeural\b/i, /\bMichelleNeural\b/i, /\bMonicaNeural\b/i,
+    /\bAmberNeural\b/i, /\bAnaNeural\b/i, /\bAshleyNeural\b/i,
+    /\bCoraNeural\b/i, /\bDavisNeural\b/i,
+  ];
+
+  function detectGender(voiceName) {
+    if (!voiceName) return 'unknown';
+    for (var mi = 0; mi < MALE_PATTERNS.length; mi++) {
+      if (MALE_PATTERNS[mi].test(voiceName)) return 'male';
+    }
+    for (var fi = 0; fi < FEMALE_PATTERNS.length; fi++) {
+      if (FEMALE_PATTERNS[fi].test(voiceName)) return 'female';
+    }
+    return 'unknown';
+  }
+
+  // ── Quality scoring ───────────────────────────────────────────────
+  // Higher = better quality (preferred voices for male)
+  var PREMIUM_MALE_VOICES = [
+    'Google UK English Male', 'Google US English Male',
+    'Microsoft Guy Online (Natural)', 'Microsoft Ryan Online (Natural)',
+    'Microsoft Davis Online (Natural)',
+  ];
+  function getQualityBadge(voiceName, isLocal) {
+    var n = voiceName || '';
+    // Check exact premium match
+    for (var pi = 0; pi < PREMIUM_MALE_VOICES.length; pi++) {
+      if (n.toLowerCase().indexOf(PREMIUM_MALE_VOICES[pi].toLowerCase()) !== -1) {
+        return { label: '★ Premium', cls: 'vqb-premium' };
+      }
+    }
+    // Neural voices are high quality
+    if (/neural/i.test(n)) return { label: '◆ Neural', cls: 'vqb-good' };
+    // Google voices are generally good
+    if (/^google/i.test(n)) return { label: '● Google', cls: 'vqb-good' };
+    // Local voices can vary
+    if (isLocal) return { label: '○ Local', cls: 'vqb-standard' };
+    return { label: '○ Standard', cls: 'vqb-standard' };
+  }
+
+  // ── Build card HTML ───────────────────────────────────────────────
+  function makeCard(opt, colorIdx, gender) {
+    var val = opt.value;
+    var lbl = opt.textContent;
+    var locale = opt.getAttribute('data-lang') || '';
+    var isLocal = lbl.indexOf('★') !== -1;
+    var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
+    var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim();
+    var color = VOICE_COLORS[colorIdx % VOICE_COLORS.length];
+    var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
+    var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
+    var qb = val ? getQualityBadge(shortName, isLocal) : null;
+    var qualityHtml = qb ? '<span class="voice-quality-badge ' + qb.cls + '">' + qb.label + '</span>' : '';
+    var genderIcon = (gender === 'male') ? '♂' : (gender === 'female') ? '♀' : '';
+    var previewHtml = val ? '<button type="button" class="vc-preview-btn" data-preview-voice="' + val.replace(/"/g,'&quot;') + '" data-preview-lang="' + locale + '">▶ Preview</button>' : '';
+    return '<button type="button" class="pers-card" data-key="' + val.replace(/"/g,'&quot;') + '" data-locale="' + locale + '" data-gender="' + gender + '" style="' + style + '">' +
+              '<span class="pers-card-icon">' + flag + '</span>' +
+              '<span class="pers-card-name">' + shortName + (genderIcon ? ' <span style="opacity:0.55;font-size:0.8em">' + genderIcon + '</span>' : '') + '</span>' +
+              '<span class="pers-card-desc">' + desc + '</span>' +
+              qualityHtml +
+              previewHtml +
+              '<span class="pers-card-check">✓</span>' +
+           '</button>';
+  }
+
+  // Collect options and separate by gender
+  var defaultOpt = null;
+  var maleOpts   = [];
+  var femaleOpts = [];
+  var otherOpts  = [];
   var idx = 0;
   for (var oi = 0; oi < sel.options.length; oi++) {
     var opt = sel.options[oi];
-    var val = opt.value;
-    var lbl = opt.textContent;
-    // Derive flag from the ACTUAL voice locale (data-lang, set from
-    // speechSynthesis voice.lang in populateVoiceSelect) — not from
-    // parsing the visible label text, which can contain its own
-    // parentheses or multi-segment tags that break a text-based regex.
-    var locale = opt.getAttribute('data-lang') || '';
-    var flag = val === '' ? '🔄' : voiceFlagForLocale(locale);
-    // Short display name: strip locale suffix and ★
-    var shortName = lbl.replace(/\s*\([^)]+\)\s*★?$/, '').replace(/\s*★$/, '').trim();
-    var color = VOICE_COLORS[idx % VOICE_COLORS.length];
-    var style = '--card-color:' + color + ';--card-glow:' + hexToRgba(color, 0.28) + ';';
-    // Subtitle: prefer accent label derived from locale, fall back to raw label remainder
-    var desc = locale ? voiceAccentLabel(locale) : (val === '' ? 'Auto-selected by language' : 'TTS voice');
-    html += '<button type="button" class="pers-card" data-key="' + val.replace(/"/g, '&quot;') + '" data-locale="' + locale + '" style="' + style + '">' +
-              '<span class="pers-card-icon">' + flag + '</span>' +
-              '<span class="pers-card-name">' + shortName + '</span>' +
-              '<span class="pers-card-desc">' + desc + '</span>' +
-              '<span class="pers-card-check">✓</span>' +
-            '</button>';
+    if (!opt.value) { defaultOpt = { opt: opt, idx: idx }; idx++; continue; }
+    var g = detectGender(opt.textContent || opt.value);
+    if (g === 'male')   maleOpts.push({ opt: opt, idx: idx });
+    else if (g === 'female') femaleOpts.push({ opt: opt, idx: idx });
+    else                otherOpts.push({ opt: opt, idx: idx });
     idx++;
   }
+
+  var html = '';
+
+  // Default option (always first)
+  if (defaultOpt) {
+    html += makeCard(defaultOpt.opt, defaultOpt.idx, 'unknown');
+  }
+
+  // Male Voices section
+  if (maleOpts.length) {
+    html += '<div class="voice-gender-section">' +
+              '<div class="voice-gender-header"><span class="vgh-icon">♂</span> Male Voices</div>' +
+              maleOpts.map(function(e) { return makeCard(e.opt, e.idx, 'male'); }).join('') +
+            '</div>';
+  }
+
+  // Female Voices section
+  if (femaleOpts.length) {
+    html += '<div class="voice-gender-section">' +
+              '<div class="voice-gender-header"><span class="vgh-icon">♀</span> Female Voices</div>' +
+              femaleOpts.map(function(e) { return makeCard(e.opt, e.idx, 'female'); }).join('') +
+            '</div>';
+  }
+
+  // Other / Unknown voices
+  if (otherOpts.length) {
+    html += '<div class="voice-gender-section">' +
+              '<div class="voice-gender-header"><span class="vgh-icon">🔊</span> Other Voices</div>' +
+              otherOpts.map(function(e) { return makeCard(e.opt, e.idx, 'unknown'); }).join('') +
+            '</div>';
+  }
+
   grid.innerHTML = html || '<p style="color:var(--text-3);font-size:0.82rem;padding:16px;">No voices available yet — try again after the page fully loads.</p>';
+
+  // Bind preview buttons (delegated inside grid)
+  grid.querySelectorAll('.vc-preview-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var voiceName = btn.getAttribute('data-preview-voice');
+      var lang      = btn.getAttribute('data-preview-lang') || 'en-US';
+      previewVoice(voiceName, lang);
+    });
+  });
+
+  // Re-apply active Voice Type filter after grid rebuild
+  if (typeof window._vtfReapply === 'function') window._vtfReapply();
 }
 
 // ── Voice search filter ───────────────────────────────────────────
@@ -7059,6 +7616,223 @@ function initVoiceSearch() {
   });
 }
 // ── End voice search filter ───────────────────────────────────────
+
+// ── Voice Type Filter (Auto / Male / Female) ──────────────────────
+// Manages the 3-way radio in the Choose Voice popup.
+// Selected type is stored in S._voiceTypeFilter ('auto'|'male'|'female').
+// When Male or Female is chosen: automatically picks the best available
+// voice of that gender and selects it, then filters the grid to show only
+// that gender. When Auto: restores "Default (Auto)" and shows all voices.
+
+// Gender detection re-used from buildVoiceCards — defined once here so
+// both functions share the same lists without duplication.
+var _VTF_MALE_RE = [
+  /\bmale\b/i, /\bgoogle uk english male\b/i, /\bgoogle us english male\b/i,
+  /\bDavid\b/i, /\bMark\b/i, /\bJames\b/i, /\bRyan\b/i, /\bMichael\b/i,
+  /\bAlex\b/i, /\bGuy\b/i, /\bRoger\b/i, /\bLiam\b/i, /\bNoah\b/i,
+  /\bEthan\b/i, /\bBenjamin\b/i, /\bLucas\b/i, /\bOliver\b/i, /\bWilliam\b/i,
+  /\bJackson\b/i, /\bHenry\b/i, /\bChristopher\b/i, /\bElliott\b/i,
+  /\bCharles\b/i, /\bPaul\b/i, /\bJohn\b/i, /\bGeorge\b/i, /\bThomas\b/i,
+  /\bAdam\b/i, /\bPhilip\b/i, /\bSean\b/i, /\bDaniel\b/i, /\bAndrew\b/i,
+  /\bMatthew\b/i, /\bJoseph\b/i, /\bSamuel\b/i, /\bHarvey\b/i, /\bArthur\b/i,
+  /\bFelix\b/i, /\bHugo\b/i, /\bEdward\b/i, /\bErnest\b/i,
+  /\bBrian\b/i, /\bEric\b/i, /\bRuss\b/i, /\bStephen\b/i, /\bFrank\b/i,
+  /\bFred\b/i, /\bJarvis\b/i, /\bRalph\b/i, /\bAlbert\b/i, /\bBruce\b/i,
+  /\bGuyNeural\b/i, /\bDavisNeural\b/i, /\bTonyNeural\b/i, /\bJasonNeural\b/i,
+  /\bRyanNeural\b/i, /\bRogerNeural\b/i, /\bEthanNeural\b/i, /\bBrandonNeural\b/i,
+  /\bChristopherNeural\b/i, /\bEricNeural\b/i, /\bJacobNeural\b/i,
+  /\bAndrew\s*Neural\b/i, /\bBrian\s*Neural\b/i,
+];
+var _VTF_FEMALE_RE = [
+  /\bfemale\b/i, /\bgoogle uk english female\b/i, /\bgoogle us english female\b/i,
+  /\bAva\b/i, /\bSamantha\b/i, /\bSiri\b/i, /\bAlice\b/i, /\bSusan\b/i,
+  /\bKaren\b/i, /\bVictoria\b/i, /\bMoira\b/i, /\bFiona\b/i, /\bTessa\b/i,
+  /\bZira\b/i, /\bHazel\b/i, /\bLaura\b/i, /\bLinda\b/i, /\bLucy\b/i,
+  /\bMaria\b/i, /\bNatasha\b/i, /\bNora\b/i, /\bSarah\b/i,
+  /\bStellaNeural\b/i, /\bElizabethNeural\b/i, /\bJennyNeural\b/i,
+  /\bAriaNeural\b/i, /\bEmmaNeural\b/i, /\bMichelleNeural\b/i,
+  /\bMonicaNeural\b/i, /\bAmberNeural\b/i, /\bAnaNeural\b/i,
+  /\bAshleyNeural\b/i, /\bCoraNeural\b/i,
+];
+
+// Priority order for best male voice selection
+var _VTF_MALE_PRIORITY = [
+  'google uk english male', 'google us english male',
+  'microsoft guy online', 'microsoft ryan online', 'microsoft davis online',
+  'microsoft andrew online', 'microsoft brian online',
+];
+// Priority order for best female voice selection
+var _VTF_FEMALE_PRIORITY = [
+  'google uk english female', 'google us english female',
+  'microsoft aria online', 'microsoft jenny online', 'microsoft emma online',
+  'microsoft michelle online', 'microsoft monica online',
+  'samantha', 'karen', 'victoria',
+];
+
+function _vtfDetectGender(name) {
+  if (!name) return 'unknown';
+  for (var mi = 0; mi < _VTF_MALE_RE.length; mi++) {
+    if (_VTF_MALE_RE[mi].test(name)) return 'male';
+  }
+  for (var fi = 0; fi < _VTF_FEMALE_RE.length; fi++) {
+    if (_VTF_FEMALE_RE[fi].test(name)) return 'female';
+  }
+  return 'unknown';
+}
+
+// Pick the best available voice of a given gender from speechSynthesis.
+// Prefers English (en-US / en-GB) voices. Within that, uses a priority list.
+function _vtfBestVoice(gender) {
+  if (!('speechSynthesis' in window)) return null;
+  var voices = window.speechSynthesis.getVoices();
+  if (!voices || !voices.length) return null;
+
+  var priorityList = gender === 'male' ? _VTF_MALE_PRIORITY : _VTF_FEMALE_PRIORITY;
+
+  // 1. Try priority list first (exact substring match, English only)
+  for (var pi = 0; pi < priorityList.length; pi++) {
+    var pkey = priorityList[pi];
+    var found = voices.find(function(v) {
+      var n = (v.name || '').toLowerCase();
+      var l = (v.lang || '').toLowerCase();
+      return n.indexOf(pkey) !== -1 && l.indexOf('en') === 0;
+    });
+    if (found) return found;
+  }
+
+  // 2. Any gender-matched English voice
+  var anyEn = voices.find(function(v) {
+    return _vtfDetectGender(v.name) === gender &&
+           (v.lang || '').toLowerCase().indexOf('en') === 0;
+  });
+  if (anyEn) return anyEn;
+
+  // 3. Any gender-matched voice of any language
+  var anyLang = voices.find(function(v) {
+    return _vtfDetectGender(v.name) === gender;
+  });
+  return anyLang || null;
+}
+
+function initVoiceTypeFilter() {
+  var filterEl = document.getElementById('voiceTypeFilter');
+  if (!filterEl) return;
+
+  var options  = filterEl.querySelectorAll('.vtf-option');
+  var bestBar  = document.getElementById('vtfBestBar');
+  var bestText = document.getElementById('vtfBestText');
+  var grid     = document.getElementById('voiceGrid');
+
+  S._voiceTypeFilter = S._voiceTypeFilter || 'auto';
+
+  function applyTypeFilter(type) {
+    S._voiceTypeFilter = type;
+    // Persist voice type selection so it survives reload / sign-in
+    try { lss('aleem_voice_type', type); } catch(e) {}
+
+    // Update radio active state
+    options.forEach(function(opt) {
+      var r = opt.querySelector('input[type="radio"]');
+      opt.classList.toggle('active', r && r.value === type);
+      if (r) r.checked = (r.value === type);
+    });
+
+    if (type === 'auto') {
+      // Restore to Default (Auto) — clear explicit selection
+      if (bestBar) bestBar.classList.remove('show');
+      // Only reset if user hadn't picked a specific voice previously
+      // (respect their stored voice if it exists and isn't tied to this filter)
+      _vtfFilterGrid(null); // show all cards
+      return;
+    }
+
+    // Male or Female — pick best and auto-select it
+    var best = _vtfBestVoice(type);
+    if (best) {
+      // Apply the voice selection
+      var sel = document.getElementById('voiceSelect');
+      if (sel) {
+        sel.value = best.name;
+        // Trigger the change event so existing listeners persist and sync
+        var evt = document.createEvent('Event');
+        evt.initEvent('change', true, true);
+        sel.dispatchEvent(evt);
+      }
+      S.selectedVoiceName = best.name;
+
+      var genderLabel = type === 'male' ? '♂ Male' : '♀ Female';
+      if (bestBar && bestText) {
+        bestText.innerHTML = 'Best ' + genderLabel + ' voice selected: <span class="vtf-best-name">' + escHtml(best.name) + '</span>';
+        bestBar.classList.add('show');
+      }
+      // Sync trigger button label
+      if (typeof syncVoiceTrigger === 'function') syncVoiceTrigger();
+      toast('🎙 ' + (type === 'male' ? '♂ Male' : '♀ Female') + ' voice: ' + best.name.replace(/\s*\([^)]+\)/,''));
+    } else {
+      if (bestBar && bestText) {
+        bestText.textContent = 'No ' + type + ' voice found on this device — try installing one or pick manually.';
+        bestBar.classList.add('show');
+      }
+    }
+
+    // Filter grid to show only that gender (+ selected card always visible)
+    _vtfFilterGrid(type);
+  }
+
+  function _vtfFilterGrid(type) {
+    if (!grid) return;
+    var cards = grid.querySelectorAll('.pers-card');
+    var visible = 0;
+    cards.forEach(function(card) {
+      if (!type) { card.style.display = ''; visible++; return; }
+      var g = card.getAttribute('data-gender') || 'unknown';
+      var isSelected = card.classList.contains('selected');
+      var show = (g === type) || isSelected || g === 'unknown';
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    // Also handle gender section headers: hide a section if all its cards are hidden
+    var sections = grid.querySelectorAll('.voice-gender-section');
+    sections.forEach(function(sec) {
+      var secCards = sec.querySelectorAll('.pers-card');
+      var anyVisible = false;
+      secCards.forEach(function(c){ if (c.style.display !== 'none') anyVisible = true; });
+      sec.style.display = anyVisible ? '' : 'none';
+    });
+    var emptyEl = document.getElementById('voiceSearchEmpty');
+    if (emptyEl) emptyEl.style.display = (visible === 0) ? 'block' : 'none';
+  }
+
+  // Bind click on each radio option label
+  options.forEach(function(opt) {
+    opt.addEventListener('click', function() {
+      var r = opt.querySelector('input[type="radio"]');
+      if (r) applyTypeFilter(r.value);
+    });
+  });
+
+  // Re-apply current filter whenever grid is rebuilt
+  window._vtfReapply = function() {
+    // Always apply the stored type (including 'auto') when grid rebuilds
+    applyTypeFilter(S._voiceTypeFilter || 'auto');
+  };
+
+  // When popup opens, restore the persisted voice type filter
+  var overlay = document.getElementById('voicePopupOverlay');
+  if (overlay) {
+    overlay.addEventListener('transitionend', function() {
+      if (overlay.classList.contains('show')) {
+        // Popup just opened — restore the saved filter
+        applyTypeFilter(S._voiceTypeFilter || 'auto');
+      }
+      // No longer reset to 'auto' on close — selection is now persistent
+    });
+  }
+
+  // Apply stored filter immediately on init (restores radio button state)
+  applyTypeFilter(S._voiceTypeFilter || 'auto');
+}
+// ── End Voice Type Filter ─────────────────────────────────────────
 
 function syncVoiceTrigger() {
   var sel = document.getElementById('voiceSelect');
@@ -7166,7 +7940,12 @@ async function handleSend() {
   if (effectiveText && !S._editRestore) trackQ(effectiveText);
   S._editRestore = false;
   // Auto-analyse for long-term memories (non-blocking, silent fail)
-  if (effectiveText && effectiveText.trim().length > 8) {
+  // In Fast Mode: only run memory extraction if Memory Capture is ON.
+  // Memory Capture ON = create new memories, but NEVER re-enables context (history/memory/profile).
+  // AI request is always: System Prompt + Current Message + Attachments only (in Fast Mode).
+  var shouldCaptureMem = effectiveText && effectiveText.trim().length > 8 &&
+    (!S.fastMode || S.memCapture);
+  if (shouldCaptureMem) {
     analyseAndSaveMemory(effectiveText);
   }
   if (S.model === 'groq') {
@@ -7193,15 +7972,25 @@ function hideWelcome() {
   if (w) w.style.display = 'none';
 }
 
-function addMsg(role, text, noRender, imgDataArr, _existingMid) {
+function addMsg(role, text, noRender, imgDataArr, _existingMid, _existingTime, _existingTs) {
   // noRender=true    → leave bubble empty (typeMessage will fill it, AI only)
   // imgDataArr       → array of { dataUrl, mimeType } OR single legacy object OR null
   // _existingMid     → per-message UUID from a stored message object (loadConv replay);
   //                    when provided, reuse it so feedback keys stay stable across reloads.
+  // _existingTime    → stored time string (e.g. "2:05 PM") from a replayed message;
+  //                    when provided, use it instead of generating a fresh timestamp.
+  // _existingTs      → stored epoch-ms timestamp from a replayed message;
+  //                    when provided, use it instead of Date.now().
 
   var now = new Date();
-  var t   = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-  var ts  = now.getTime(); // raw epoch ms, used for date filtering (e.g. "today" modal) and re-formatting times reliably
+  // Use stored time/ts when replaying a saved message (loadConv), so reopening a
+  // conversation always shows the original send time instead of the current time.
+  var t   = (_existingTime && typeof _existingTime === 'string' && _existingTime.length)
+              ? _existingTime
+              : now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  var ts  = (_existingTs && typeof _existingTs === 'number' && _existingTs > 0)
+              ? _existingTs
+              : now.getTime(); // raw epoch ms, used for date filtering (e.g. "today" modal) and re-formatting times reliably
 
   // Normalise imgDataArr → clean array of objects that have a dataUrl
   var imgs = [];
@@ -8070,17 +8859,13 @@ var RETRY_BASE_MS = 1200;
 function buildGeminiBody(imgsData) {
   // imgsData: array of { dataUrl, mimeType } for the current turn's images, or [] / null.
   //
-  // IMPORTANT — Gemini only processes inline_data images that appear in the
-  // FINAL user turn of the contents array.  Images sent in earlier turns are
-  // silently ignored, which causes "It looks like you sent an empty message"
-  // responses when the user asks a follow-up like "Explain the photo".
-  //
-  // Fix: if the current turn carries no new images, walk back through
-  // S.messages to find the most-recently uploaded image set and attach those
-  // images to the final user turn so Gemini always has them in scope.
-  var memCtx = buildMemoryContext ? buildMemoryContext() : '';
+  // ⚡ FAST MODE: skip memory context, only use current message + personality system prompt.
+  var isFast = S.fastMode;
+  var memCtx = (!isFast && buildMemoryContext) ? buildMemoryContext() : '';
   var sys = PERSONALITIES[S.personality].sys + memCtx;
-  var msgs = S.messages.slice(-20);
+
+  // In Fast Mode, only send the last user message (not full history).
+  var msgs = isFast ? S.messages.slice(-1) : S.messages.slice(-20);
 
   // Resolve the images that should appear on the LAST user turn:
   //   1. Prefer freshly-uploaded images passed in via imgsData.
@@ -8468,10 +9253,11 @@ async function callGroqDirect() {
 
   var msgs = S.messages.slice(-20);
   var groqMessages = [];
-  var memCtxGroq = buildMemoryContext ? buildMemoryContext() : '';
+  var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
   var sys = PERSONALITIES[S.personality].sys + memCtxGroq;
   if (sys) groqMessages.push({ role: 'system', content: sys });
-  msgs.forEach(function(m) {
+  var histMsgs = S.fastMode ? S.messages.slice(-1) : msgs;
+  histMsgs.forEach(function(m) {
     groqMessages.push({
       role: m.role === 'ai' ? 'assistant' : 'user',
       content: m.text || ''
@@ -8542,9 +9328,9 @@ async function callGroqVisionFallback(imgs) {
   // Build chat-style messages identical in spirit to callGroqDirect(),
   // but the final user message becomes multimodal content blocks
   // (text + image_url) per Groq's OpenAI-compatible vision format.
-  var msgs = S.messages.slice(-20);
+  var msgs = S.fastMode ? S.messages.slice(-1) : S.messages.slice(-20);
   var groqMessages = [];
-  var memCtxGroq = buildMemoryContext ? buildMemoryContext() : '';
+  var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
   var sys = PERSONALITIES[S.personality].sys + memCtxGroq;
   if (sys) groqMessages.push({ role: 'system', content: sys });
 
@@ -8669,6 +9455,8 @@ function autoSaveConversation() {
     // — it only ever upgrades to true, never silently reverts to false.
     if (isVoiceNow) existing.isVoice = true;
     if (existing.isVoice === undefined) existing.isVoice = isVoiceNow;
+    // Tag with fastMode for UI/analytics display — does not affect saving.
+    if (S.fastMode) existing.fastMode = true;
   } else {
     // S._liveId / S._activeConvId may already have been pre-seeded by the first
     // addMsg() call of this session to guarantee first-message feedback keys are
@@ -8689,6 +9477,7 @@ function autoSaveConversation() {
       archived:  false,
       folderId:  null,
       isVoice:   isVoiceNow,
+      fastMode:  !!S.fastMode,   // UI/analytics flag only — never blocks saving
       model:     S.model || ''
     });
     // [MODIFIED] Cap raised 50 -> 500 -> 1000 conversations. History records
@@ -9153,6 +9942,21 @@ function detectSpeechLang(t) {
 // the chosen voice is skipped and the language-matched voice below is used
 // instead, so non-English replies are never read by a mismatched voice.
 // For language-matched voices we pick purely by locale/name — NO pitch manipulation.
+//
+// MALE VOICE PREFERENCE: When no voice is explicitly chosen, for English content
+// the function prefers high-quality male voices (Google UK/US Male, Neural male
+// voices) over generic fallbacks, giving natural-sounding male output.
+var PREFERRED_MALE_VOICE_NAMES = [
+  'Google UK English Male',
+  'Google US English Male',
+  'Microsoft Guy Online (Natural) - English (United States)',
+  'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+  'Microsoft Davis Online (Natural) - English (United States)',
+  'Microsoft Andrew Online (Natural) - English (United States)',
+  'Microsoft Brian Online (Natural) - English (United States)',
+  // Fallback well-known male voices
+  'Alex', 'Daniel', 'Fred',
+];
 function pickVoiceForLang(lang) {
   if (!('speechSynthesis' in window)) return null;
   var voices = window.speechSynthesis.getVoices();
@@ -9262,11 +10066,29 @@ function populateVoiceSelect() {
   var voices = window.speechSynthesis.getVoices();
   if (!voices || !voices.length) return;
 
-  // Sort: English voices first, then by language name, then by voice name
+  // Sort: English voices first (within English: preferred male voices first),
+  // then by language name, then by voice name.
+  var MALE_PRIORITY_NAMES = [
+    'google uk english male', 'google us english male',
+    'microsoft guy online', 'microsoft ryan online', 'microsoft davis online',
+    'microsoft andrew online', 'microsoft brian online',
+  ];
+  function malePriority(name) {
+    var n = (name || '').toLowerCase();
+    for (var i = 0; i < MALE_PRIORITY_NAMES.length; i++) {
+      if (n.indexOf(MALE_PRIORITY_NAMES[i]) !== -1) return i;
+    }
+    return 99;
+  }
   var sorted = voices.slice().sort(function(a, b) {
     var aEn = a.lang && a.lang.toLowerCase().indexOf('en') === 0 ? 0 : 1;
     var bEn = b.lang && b.lang.toLowerCase().indexOf('en') === 0 ? 0 : 1;
     if (aEn !== bEn) return aEn - bEn;
+    // Within English: preferred male voices float to the top
+    if (aEn === 0) {
+      var ap = malePriority(a.name), bp = malePriority(b.name);
+      if (ap !== bp) return ap - bp;
+    }
     var langCmp = (a.lang || '').localeCompare(b.lang || '');
     if (langCmp !== 0) return langCmp;
     return (a.name || '').localeCompare(b.name || '');
@@ -9322,6 +10144,26 @@ function speakText(t) {
   window.speechSynthesis.speak(u);
 }
 
+// ── Voice Preview (for voice picker) ─────────────────────────────
+// Speaks a short sample using the named voice directly — does NOT
+// change the user's selected voice or interact with S.voiceOn.
+// Pitch is always 1.0 (natural) — no manipulation for any voice.
+function previewVoice(voiceName, lang) {
+  if (!('speechSynthesis' in window)) return;
+  var voices = window.speechSynthesis.getVoices();
+  var v = voices.find(function(vv) { return vv.name === voiceName; });
+  if (!v) { toast('⚠️ Voice not found — may still be loading'); return; }
+  window.speechSynthesis.cancel();
+  var u = new SpeechSynthesisUtterance('Hello! This is a preview of ' + voiceName + '. How can I help you today?');
+  u.voice  = v;
+  u.lang   = lang || v.lang || 'en-US';
+  u.rate   = 1.0;
+  u.pitch  = 1.0;
+  u.volume = 0.9;
+  window.speechSynthesis.speak(u);
+  toast('🔊 Previewing: ' + voiceName.replace(/\s*\([^)]+\)/, '').trim());
+}
+
 // [NOTE] onvoiceschanged is wired in loadStorage() (populateVoiceSelect)
 // and in the init() welcome-speech gate — no additional primer needed here.
 
@@ -9334,6 +10176,33 @@ function toggleVoice() {
 function updateVoiceBtn() {
   var btn = document.getElementById('voiceBtn');
   if (btn) btn.textContent = S.voiceOn ? '🔊 Voice' : '🔇 Voice';
+}
+
+function updateFastModeUI() {
+  var row    = document.getElementById('fastModeRow');
+  var badge  = document.getElementById('fastModeBadge');
+  var pill   = document.getElementById('fastModePill');
+  var toggle = document.getElementById('fastModeToggle');
+  if (toggle) toggle.checked = !!S.fastMode;
+  if (row)   row.classList.toggle('fast-mode-active', !!S.fastMode);
+  if (badge) badge.style.display = S.fastMode ? 'inline-block' : 'none';
+  if (pill)  pill.classList.toggle('active', !!S.fastMode);
+
+  // Memory Capture row — enabled only when Fast Mode is ON
+  var mcRow    = document.getElementById('memCaptureRow');
+  var mcToggle = document.getElementById('memCaptureToggle');
+  var mcBadge  = document.getElementById('memCaptureBadge');
+  var mcPill   = document.getElementById('memCapturePill');
+  if (mcRow) {
+    mcRow.classList.toggle('mc-disabled', !S.fastMode);
+    mcRow.classList.toggle('mem-capture-on', !!(S.fastMode && S.memCapture));
+  }
+  if (mcToggle) {
+    mcToggle.checked = !!S.memCapture;
+    mcToggle.disabled = !S.fastMode;
+  }
+  if (mcBadge) mcBadge.style.display = (S.fastMode && S.memCapture) ? 'inline-block' : 'none';
+  if (mcPill)  mcPill.classList.toggle('active', !!(S.fastMode && S.memCapture));
 }
 
 function toggleMic() { S.micOn ? stopMic() : startMic(); }
@@ -9972,7 +10841,9 @@ function loadConv(id) {
     // Pass m.mid so addMsg reuses the stored per-message UUID instead of
     // generating a new one — this is what makes feedback keys stable across
     // all reload and restore paths (including after deleteMsg index shifts).
-    addMsg(m.role, m.text, false, imgArg, m.mid || null);
+    // Also pass m.time and m.ts so the original send timestamp is preserved
+    // instead of being replaced with the current time on every reload.
+    addMsg(m.role, m.text, false, imgArg, m.mid || null, m.time || null, m.ts || 0);
   });
   S.messages = c.messages.slice();
   goPage('chat');
@@ -12555,10 +13426,87 @@ function _csyncClearQueue() {
 
 // ── PUBLIC INIT (called by Firebase auth module) ──────────────────
 window.__aleemSetConvSyncDB = function(db, uid) {
+  var prevUid = CSYNC.uid;
   CSYNC.db  = db;
   CSYNC.uid = uid;
   CSYNC.ready = false;
+
+  // Always update the UID-scoped storage key so ls/lss use the right bucket
+  if (typeof _setStorageUid === 'function') _setStorageUid(uid);
+
   if (db && uid) {
+    // ── Sign-in (or account switch) ──────────────────────────────
+    // If we just switched accounts, wipe in-memory history from the old
+    // account before loading the new user's conversations.
+    if (prevUid && prevUid !== uid) {
+      if (typeof S !== 'undefined') {
+        S.history       = [];
+        S._liveId       = null;
+        S._activeConvId = null;
+      }
+    } else if (!prevUid) {
+      // First sign-in: clear any history that was loaded before uid was set
+      if (typeof S !== 'undefined') {
+        S.history       = [];
+        S._liveId       = null;
+        S._activeConvId = null;
+      }
+      // ── [FIX] Legacy key migration ────────────────────────────────
+      // Before UID-scoped storage existed, history lived under the bare
+      // 'aleem_hist' key. On first sign-in for this uid, if the scoped
+      // bucket is empty but the bare key has data, adopt it so the user
+      // doesn't lose their pre-login history. The bare key is left in
+      // place (not deleted) so anonymous/offline usage is unaffected.
+      (function() {
+        try {
+          var scopedKey  = 'aleem_hist_' + uid;
+          var scopedRaw  = localStorage.getItem(scopedKey);
+          if (!scopedRaw || scopedRaw === '[]') {
+            var legacyRaw = localStorage.getItem('aleem_hist');
+            if (legacyRaw && legacyRaw !== '[]') {
+              localStorage.setItem(scopedKey, legacyRaw);
+              console.log('[CSYNC] Migrated legacy aleem_hist → aleem_hist_' + uid +
+                          ' (' + (JSON.parse(legacyRaw).length) + ' conversations)');
+            }
+          }
+          // Same one-time migration for folders
+          var scopedFolderKey = 'aleem_folders_' + uid;
+          var scopedFolderRaw = localStorage.getItem(scopedFolderKey);
+          if (!scopedFolderRaw || scopedFolderRaw === '[]') {
+            var legacyFolderRaw = localStorage.getItem('aleem_folders');
+            if (legacyFolderRaw && legacyFolderRaw !== '[]') {
+              localStorage.setItem(scopedFolderKey, legacyFolderRaw);
+              console.log('[CSYNC] Migrated legacy aleem_folders → aleem_folders_' + uid);
+            }
+          }
+        } catch(eMig) {
+          console.warn('[CSYNC] Legacy key migration error:', eMig);
+        }
+      })();
+      // ── [END FIX] ─────────────────────────────────────────────────
+    }
+    // Load this user's local history from their scoped key
+    if (typeof S !== 'undefined') {
+      try { S.history = JSON.parse(localStorage.getItem('aleem_hist_' + uid) || '[]'); } catch(e) { S.history = []; }
+      S.history.forEach(function(c) {
+        delete c._live;
+        if (c.pinned    === undefined) c.pinned    = false;
+        if (c.archived  === undefined) c.archived  = false;
+        if (c.folderId  === undefined) c.folderId  = null;
+        if (c.isVoice   === undefined) c.isVoice   = false;
+        if (!c.createdAt) c.createdAt = c.id || 0;
+        if (!c.updatedAt) c.updatedAt = c.id || 0;
+      });
+      // ── [FIX] Reload S.folders for this uid on every account switch ──
+      // loadStorage() only runs once at boot, so in-session account
+      // switches left S.folders holding the previous user's custom folders.
+      // Reading directly from the scoped key (already set by _setStorageUid
+      // above) ensures each account sees only its own folder list.
+      try { S.folders = JSON.parse(localStorage.getItem('aleem_folders_' + uid) || '[]'); } catch(eF) { S.folders = []; }
+      // ── [END FIX] ──────────────────────────────────────────────────
+    }
+    if (typeof renderHistory === 'function') renderHistory();
+
     // Restore any queue saved under this user's key from a previous session
     _csyncRestoreQueue(uid);
     _csyncSetStatus('busy', 'Syncing…');
@@ -12570,7 +13518,14 @@ window.__aleemSetConvSyncDB = function(db, uid) {
       _csyncSetStatus('error', 'Sync Error');
     });
   } else {
-    // Signed out — clear queue (in-memory and persisted), reset status
+    // ── Sign-out — clear everything in memory ────────────────────
+    if (typeof S !== 'undefined') {
+      S.history       = [];
+      S._liveId       = null;
+      S._activeConvId = null;
+    }
+    if (typeof renderHistory === 'function') renderHistory();
+    // Clear queue (in-memory and persisted), reset status
     CSYNC.queue = [];
     _csyncClearQueue();
     clearTimeout(CSYNC.flushTimer);
@@ -12723,9 +13678,19 @@ async function _csyncLoadFromCloud() {
     });
 
     // Persist merged result to localStorage
+    // [PERF] Timing instrumentation — reports slowest stage to console.
+    // Remove or guard with a debug flag once the lag bug is confirmed closed.
+    console.time('[PERF] cloud-merge: persist()');
     if (typeof persist === 'function') persist();
+    console.timeEnd('[PERF] cloud-merge: persist()');
+
+    console.time('[PERF] cloud-merge: renderHistory()');
     if (typeof renderHistory === 'function') renderHistory();
+    console.timeEnd('[PERF] cloud-merge: renderHistory()');
+
+    console.time('[PERF] cloud-merge: renderAnalytics()');
     if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+    console.timeEnd('[PERF] cloud-merge: renderAnalytics()');
 
     if (restored > 0) {
       if (typeof toast === 'function') toast('☁️ Restored ' + restored + ' conversation' + (restored > 1 ? 's' : '') + ' from cloud');
@@ -12865,12 +13830,19 @@ async function _csyncFlush() {
   if (typeof persist !== 'function') return;
   var _origPersist = persist;
   persist = function() {
+    // [PERF] Time the original localStorage write independently
+    console.time('[PERF] persist(): localStorage write');
     _origPersist.apply(this, arguments);
+    console.timeEnd('[PERF] persist(): localStorage write');
     // After persist, queue any changed conversations for cloud sync
     if (CSYNC.db && CSYNC.uid && CSYNC.ready) {
+      // [PERF] Time the upsert-queue loop — large history arrays can
+      // make this the hidden bottleneck on every save.
+      console.time('[PERF] persist(): csyncUpsertConv loop (' + (S.history || []).length + ' convs)');
       (S.history || []).forEach(function(c) {
         if (!c._live) csyncUpsertConv(c);
       });
+      console.timeEnd('[PERF] persist(): csyncUpsertConv loop (' + (S.history || []).length + ' convs)');
     }
   };
 })();
@@ -13372,24 +14344,32 @@ document.addEventListener('change', function(e) {
   if (!CSYNC.db || !CSYNC.uid) return;
   var id = e.target && e.target.id;
   if (id === 'personalitySelect' || id === 'voicePersonalitySelect') {
-    lss('aleem_psync_pers_ts', String(Date.now()));
-    _psyncSchedulePref();
+    setTimeout(function() {
+      lss('aleem_psync_pers_ts', String(Date.now()));
+      _psyncSchedulePref();
+    }, 0);
   }
   if (id === 'modelSelect') {
-    lss('aleem_psync_model_ts', String(Date.now()));
-    _psyncSchedulePref();
+    setTimeout(function() {
+      lss('aleem_psync_model_ts', String(Date.now()));
+      _psyncSchedulePref();
+    }, 0);
   }
   // Voice language selector
   if (id === 'voiceLangSelect') {
-    lss('aleem_voice_lang', e.target.value || '');
-    lss('aleem_psync_voice_ts', String(Date.now()));
-    _psyncSchedulePref();
+    setTimeout(function() {
+      lss('aleem_voice_lang', e.target.value || '');
+      lss('aleem_psync_voice_ts', String(Date.now()));
+      _psyncSchedulePref();
+    }, 0);
   }
   // TTS speed slider
   if (id === 'ttsSpeedRange' || id === 'voiceSpeedRange') {
-    lss('aleem_tts_speed', String(e.target.value || '1'));
-    lss('aleem_psync_voice_ts', String(Date.now()));
-    _psyncSchedulePref();
+    setTimeout(function() {
+      lss('aleem_tts_speed', String(e.target.value || '1'));
+      lss('aleem_psync_voice_ts', String(Date.now()));
+      _psyncSchedulePref();
+    }, 0);
   }
 }, false);
 
@@ -13644,7 +14624,7 @@ function _rsyncFlushConvBatch() {
           model:     data.model     || '',
           messages:  (data.messages || []).map(function(m) {
             return { role: m.role, text: m.text || '', time: m.time || '',
-                     ts: m.ts || 0, imgs: [] };
+                     ts: m.ts || 0, mid: m.mid || '', imgs: [] };
           }),
         });
         needFullRender = true;
@@ -13668,7 +14648,7 @@ function _rsyncFlushConvBatch() {
           if (data.messages && data.messages.length > (local.messages || []).length) {
             local.messages = data.messages.map(function(m) {
               return { role: m.role, text: m.text || '', time: m.time || '',
-                       ts: m.ts || 0, imgs: [] };
+                       ts: m.ts || 0, mid: m.mid || '', imgs: [] };
             });
           }
           // Surgical card update first (fast path)
