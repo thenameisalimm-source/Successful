@@ -14024,16 +14024,30 @@ function _csyncRestoreQueue(uid) {
     if (raw) {
       var saved = JSON.parse(raw);
       if (Array.isArray(saved) && saved.length) {
-        // Merge: deduplicate against anything already in queue
+        // Collapse any upsert+delete pairs that may have been persisted
+        // before the delete-wins guard was in place: build a map of
+        // id → winning op (delete always wins over upsert).
+        var opMap = {};
         saved.forEach(function(op) {
           var id = op && op.conv && op.conv.id;
           if (!id || !op.type) return;
+          var existing = opMap[id];
+          if (!existing || op.type === 'delete') {
+            // A delete always replaces whatever was there; first upsert wins
+            // only when no delete exists yet.
+            opMap[id] = op;
+          }
+        });
+
+        // Merge deduplicated ops into live queue
+        Object.keys(opMap).forEach(function(id) {
+          var op = opMap[id];
           var exists = CSYNC.queue.some(function(q) {
-            return q.conv && q.conv.id === id && q.type === op.type;
+            return q.conv && q.conv.id === id;
           });
           if (!exists) CSYNC.queue.push(op);
         });
-        console.log('[CSYNC] Restored', saved.length, 'pending op(s) from localStorage (key: ' + key + ').');
+        console.log('[CSYNC] Restored', Object.keys(opMap).length, 'pending op(s) from localStorage (key: ' + key + ').');
       }
     }
   } catch(e) { /* corrupt data — ignore */ }
@@ -14249,8 +14263,16 @@ async function _csyncLoadFromCloud() {
     cloudConvs.forEach(function(c) { cloudMap[c.id] = c; });
 
     // Conversations that exist only in cloud — restore them locally
+    // but skip any that are already queued for deletion on this device.
     var restored = 0;
     cloudConvs.forEach(function(cc) {
+      // If a delete is pending for this id, the user deleted it on this
+      // device before the flush completed. Do NOT restore it from cloud.
+      var pendingDelete = CSYNC.queue.some(function(op) {
+        return op.type === 'delete' && op.conv && op.conv.id === cc.id;
+      });
+      if (pendingDelete) return;
+
       var local = localMap[cc.id];
       if (!local) {
         // Cloud-only: add to local history (messages come from cloud,
@@ -14383,10 +14405,26 @@ window.csyncDeleteConv = function(convId) {
 function _csyncEnqueue(type, conv) {
   var id = conv && conv.id;
   if (!id) return;
-  // Replace any earlier op for the same id so we never do redundant writes
+
+  // Delete-wins: if a delete is already queued for this id, an upsert
+  // must never override it (the conversation was intentionally removed).
+  if (type === 'upsert') {
+    var hasDelete = CSYNC.queue.some(function(op) {
+      return op.conv && op.conv.id === id && op.type === 'delete';
+    });
+    if (hasDelete) return; // drop the upsert — delete takes precedence
+  }
+
+  // Remove any earlier op of the SAME type for this id (dedup),
+  // AND if we are enqueueing a delete, also remove any pending upsert
+  // so there is never an upsert + delete pair in the queue for the same id.
   CSYNC.queue = CSYNC.queue.filter(function(op) {
-    return !((op.conv && op.conv.id === id) && op.type === type);
+    if (!(op.conv && op.conv.id === id)) return true; // different id — keep
+    if (op.type === type) return false;               // same type — remove (dedup)
+    if (type === 'delete' && op.type === 'upsert') return false; // delete cancels upsert
+    return true;
   });
+
   CSYNC.queue.push({ type: type, conv: conv });
   // Persist queue to localStorage so it survives app close / refresh
   _csyncSaveQueue();
