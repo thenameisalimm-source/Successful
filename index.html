@@ -6648,7 +6648,16 @@ function persist() {
   var histToStore = S.history.map(function(conv) {
     var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages.map(function(m) {
       if (m.imgs && m.imgs.length) {
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: m.imgs, img: null };
+        // For each image: if it has a Cloudinary URL, persist only the URL metadata.
+        // If it only has a base64 dataUrl (legacy or upload failed), persist the base64.
+        var persistImgs = m.imgs.map(function(img) {
+          if (img.url && typeof img.url === 'string' && img.url.startsWith('http')) {
+            return { url: img.url, width: img.width || null, height: img.height || null, mimeType: img.mimeType || 'image/jpeg' };
+          }
+          // Legacy base64 fallback
+          return { dataUrl: img.dataUrl || '', mimeType: img.mimeType || 'image/jpeg' };
+        });
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: persistImgs, img: null };
       }
       return m;
     }) };
@@ -8158,6 +8167,12 @@ async function handleSend() {
   // Allow send if there is text OR at least one pending image
   if ((!text && !S.pendingImages.length) || S.busy) return;
 
+  // Block send if any image is still uploading to Cloudinary
+  if (S.pendingImages.some(function(p){ return p._uploading; })) {
+    toast('⏳ Please wait — image is still uploading…');
+    return;
+  }
+
   inp.value = '';
   inp.style.height = '';
   hideWelcome();
@@ -8226,18 +8241,30 @@ function addMsg(role, text, noRender, imgDataArr, _existingMid, _existingTime, _
               ? _existingTs
               : now.getTime(); // raw epoch ms, used for date filtering (e.g. "today" modal) and re-formatting times reliably
 
-  // Normalise imgDataArr → clean array of objects that have a dataUrl
+  // Normalise imgDataArr → clean array of objects that have a dataUrl (for AI) and/or url (Cloudinary)
   var imgs = [];
   if (imgDataArr) {
     var raw = Array.isArray(imgDataArr) ? imgDataArr : [imgDataArr];
     for (var ri = 0; ri < raw.length; ri++) {
       var item = raw[ri];
-      // Strong validation: must be a data URL with a non-empty base64 payload
+      if (!item) continue;
+      // New format: has a Cloudinary url (and optionally a dataUrl for AI vision)
+      if (item.url && typeof item.url === 'string' && item.url.startsWith('http')) {
+        imgs.push({
+          url:      item.url,
+          width:    item.width  || null,
+          height:   item.height || null,
+          dataUrl:  (typeof item.dataUrl === 'string' && item.dataUrl.startsWith('data:') && item.dataUrl.indexOf(',') !== -1 && item.dataUrl.split(',')[1].length > 0) ? item.dataUrl : null,
+          mimeType: item.mimeType || 'image/jpeg'
+        });
+        continue;
+      }
+      // Legacy format: base64 dataUrl only
       if (item && typeof item.dataUrl === 'string' &&
           item.dataUrl.startsWith('data:') &&
           item.dataUrl.indexOf(',') !== -1 &&
           item.dataUrl.split(',')[1].length > 0) {
-        imgs.push({ dataUrl: item.dataUrl, mimeType: item.mimeType || 'image/jpeg' });
+        imgs.push({ dataUrl: item.dataUrl, mimeType: item.mimeType || 'image/jpeg', url: null, width: null, height: null });
       }
     }
   }
@@ -8300,10 +8327,13 @@ function addMsg(role, text, noRender, imgDataArr, _existingMid, _existingTime, _
       '<button class="act-btn" data-act="share" data-target="' + bubId + '" title="Share">🔗</button>';
 
   // Build image HTML — one <img> per uploaded image, above the text
+  // Prefer Cloudinary URL for display; fall back to base64 dataUrl for
+  // old/in-session messages where upload may not have completed yet.
   var imgHtml = '';
   if (imgs.length) {
     imgHtml = imgs.map(function(img) {
-      return '<img class="msg-img" src="' + img.dataUrl + '" alt="Uploaded image" onclick="openLightbox(this.src)">';
+      var src = img.url || img.dataUrl || '';
+      return '<img class="msg-img" src="' + src + '" alt="Uploaded image" onclick="openLightbox(this.src)">';
     }).join('');
   }
 
@@ -8825,8 +8855,77 @@ function copyCodeBlock(btn) {
 }
 
 // ── IMAGE UPLOAD ─────────────────────────────────────────────────
-// S.pendingImages = [{ dataUrl, mimeType }, ...]
-// Multiple images can be queued; all are sent with the next message.
+// S.pendingImages = [{ dataUrl, mimeType, url, width, height }, ...]
+// dataUrl   – kept in RAM only, used for AI vision; NEVER persisted
+// url       – Cloudinary secure_url (persisted + synced)
+// width/height – stored alongside url
+
+// ── Canvas-based image compression ───────────────────────────────
+// Resizes the longest side to MAX_PX (never upscales), converts to
+// JPEG at QUALITY%, returns a Promise<{ blob, dataUrl, width, height }>.
+function compressImage(file) {
+  var MAX_PX  = 1024;
+  var QUALITY = 0.80;
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var objectUrl = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(objectUrl);
+      var ow = img.naturalWidth;
+      var oh = img.naturalHeight;
+      var scale = 1;
+      if (ow > MAX_PX || oh > MAX_PX) {
+        scale = MAX_PX / Math.max(ow, oh);
+      }
+      var tw = Math.round(ow * scale);
+      var th = Math.round(oh * scale);
+      var canvas = document.createElement('canvas');
+      canvas.width  = tw;
+      canvas.height = th;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, tw, th);
+      canvas.toBlob(function(blob) {
+        if (!blob) { reject(new Error('Canvas compression failed')); return; }
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          resolve({ blob: blob, dataUrl: ev.target.result, width: tw, height: th });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', QUALITY);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Image load failed'));
+    };
+    img.src = objectUrl;
+  });
+}
+
+// ── Upload compressed Blob to Cloudinary ─────────────────────────
+// Returns Promise<{ secure_url, width, height }>.
+function uploadToCloudinary(blob, width, height) {
+  var cloudName   = window._CLOUDINARY_CLOUD_NAME  || 'dqgha35s8';
+  var uploadPreset = window._CLOUDINARY_CHAT_PRESET || 'aleem_chat_images';
+  var formData = new FormData();
+  formData.append('file',           blob, 'chat-image.jpg');
+  formData.append('upload_preset',  uploadPreset);
+  return fetch('https://api.cloudinary.com/v1_1/' + cloudName + '/image/upload', {
+    method: 'POST',
+    body:   formData
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (!data || !data.secure_url) {
+      throw new Error((data && data.error && data.error.message) || 'Cloudinary upload failed');
+    }
+    return {
+      secure_url: data.secure_url,
+      width:  data.width  || width,
+      height: data.height || height
+    };
+  });
+}
 
 function initImageUpload() {
   var fileInput = document.getElementById('imgFileInput');
@@ -8845,20 +8944,19 @@ function initImageUpload() {
       if (!files || !files.length) return;
 
       var file = files[0];
+      // Reset value immediately so same file can be picked again (iOS Safari fix)
+      fileInput.value = '';
 
       if (!file.type.startsWith('image/')) {
         toast('⚠️ Please select an image file.');
-        fileInput.value = '';
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        toast('⚠️ Image too large. Max 10 MB.');
-        fileInput.value = '';
+      if (file.size > 20 * 1024 * 1024) {
+        toast('⚠️ Image too large. Max 20 MB.');
         return;
       }
       if (S.pendingImages.length >= 5) {
         toast('⚠️ Maximum 5 images at a time.');
-        fileInput.value = '';
         return;
       }
       if (S.model === 'groq') {
@@ -8869,19 +8967,60 @@ function initImageUpload() {
         persist();
       }
 
-      var reader = new FileReader();
-      reader.onload = function(ev) {
-        S.pendingImages.push({
-          dataUrl:  ev.target.result,
-          mimeType: file.type || 'image/jpeg'
+      // Reserve a slot immediately so the user sees a "uploading" thumb
+      // and we prevent duplicate uploads if they tap again quickly.
+      var slotIdx = S.pendingImages.length;
+      var uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+      S.pendingImages.push({
+        _uploadId:  uploadId,
+        _uploading: true,
+        dataUrl:    null,   // filled after compress
+        mimeType:   'image/jpeg',
+        url:        null,   // filled after Cloudinary upload
+        width:      null,
+        height:     null
+      });
+      renderPreviewStrip();
+      toast('⏳ Compressing & uploading image…');
+
+      // Step 1: Compress
+      compressImage(file)
+        .then(function(compressed) {
+          // Store the dataUrl in RAM for AI vision (never persisted)
+          var slot = S.pendingImages.find(function(p) { return p._uploadId === uploadId; });
+          if (!slot) return Promise.reject(new Error('Slot removed'));
+          slot.dataUrl = compressed.dataUrl;
+          slot.width   = compressed.width;
+          slot.height  = compressed.height;
+          // Step 2: Upload to Cloudinary
+          return uploadToCloudinary(compressed.blob, compressed.width, compressed.height)
+            .then(function(result) {
+              if (!slot._uploadId) return; // removed while uploading
+              slot.url        = result.secure_url;
+              slot.width      = result.width  || compressed.width;
+              slot.height     = result.height || compressed.height;
+              slot._uploading = false;
+              renderPreviewStrip();
+              var n = S.pendingImages.filter(function(p){ return !p._uploading; }).length;
+              toast(n > 1 ? ('🖼️ ' + n + ' images ready — send when ready!') : '🖼️ Image ready — add a question and send!');
+            });
+        })
+        .catch(function(err) {
+          console.error('[Cloudinary] Chat image upload failed:', err);
+          // Remove the failed slot and fall back to raw dataUrl (base64) so the user isn't blocked
+          var idx = S.pendingImages.findIndex(function(p) { return p._uploadId === uploadId; });
+          if (idx !== -1) {
+            // Try to at least keep the dataUrl for AI vision if compression worked
+            if (S.pendingImages[idx].dataUrl) {
+              S.pendingImages[idx]._uploading = false;
+              S.pendingImages[idx].url = null; // will fall back to base64 for display
+            } else {
+              S.pendingImages.splice(idx, 1);
+            }
+          }
+          renderPreviewStrip();
+          toast('⚠️ Image upload failed — sending without cloud backup.');
         });
-        renderPreviewStrip();
-        var n = S.pendingImages.length;
-        toast(n > 1 ? ('🖼️ ' + n + ' images ready — send when ready!') : '🖼️ Image ready — add a question and send!');
-        // Reset value so the same file can be picked again (iOS Safari fix)
-        fileInput.value = '';
-      };
-      reader.readAsDataURL(file);
     });
   }
 }
@@ -8905,14 +9044,20 @@ function renderPreviewStrip() {
   strip.classList.add('has-image');
 
   // Build thumb HTML — each thumb gets its own remove button
-  // Using data-rmidx attribute and a delegated listener to avoid inline-onclick issues
+  // Uploading thumbs show a spinner overlay; completed thumbs show the image.
   thumbs.innerHTML = S.pendingImages.map(function(img, i) {
+    var src = img.url || img.dataUrl || '';
+    var uploading = img._uploading;
+    var thumbContent = uploading
+      ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;opacity:0.7">⏳</div>'
+      : '<img src="' + src + '" alt="Preview ' + (i + 1) + '">';
     return '<div class="img-preview-thumb" data-rmidx="' + i + '">' +
-             '<img src="' + img.dataUrl + '" alt="Preview ' + (i + 1) + '">' +
+             thumbContent +
              '<button class="img-remove-btn" data-rmidx="' + i + '" title="Remove">✕</button>' +
            '</div>';
   }).join('');
 
+  var readyCount = S.pendingImages.filter(function(p){ return !p._uploading; }).length;
   if (count) count.textContent = n + (n === 1 ? ' image ready' : ' images ready');
   if (input && !input.value.trim()) {
     input.placeholder = n > 1 ? 'Ask about these images…' : 'What is in this image? (or ask anything…)';
@@ -9089,6 +9234,66 @@ function restoreSelectedModelDisplay() {
 
 var MAX_RETRIES   = 3;
 var RETRY_BASE_MS = 1200;
+
+// ── IN-MEMORY IMAGE CACHE (Cloudinary URL → base64 dataUrl) ──────
+// Keyed by Cloudinary URL. Populated the first time a URL-only image
+// needs to be sent to a vision model. Never re-downloaded or re-uploaded.
+var _imgBase64Cache = {};
+
+// Download a Cloudinary image URL once and return its base64 dataUrl.
+// Subsequent calls for the same URL return the cached value immediately.
+function fetchImageAsBase64(url) {
+  if (_imgBase64Cache[url]) {
+    return Promise.resolve(_imgBase64Cache[url]);
+  }
+  return fetch(url, { cache: 'default' })
+    .then(function(res) {
+      if (!res.ok) throw new Error('Image fetch failed: ' + res.status);
+      return res.blob();
+    })
+    .then(function(blob) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload  = function(ev) {
+          _imgBase64Cache[url] = { dataUrl: ev.target.result, mimeType: blob.type || 'image/jpeg' };
+          resolve(_imgBase64Cache[url]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    });
+}
+
+// Ensure every image in the array has a dataUrl in memory.
+// Images that already have one are passed through unchanged.
+// Images that only have a Cloudinary URL are downloaded once and cached.
+// Returns a Promise<Array> with the same items, all with dataUrl populated.
+function hydrateImgsForVision(imgs) {
+  if (!imgs || !imgs.length) return Promise.resolve([]);
+  var promises = imgs.map(function(img) {
+    // Already has a usable dataUrl — nothing to do
+    if (img && typeof img.dataUrl === 'string' &&
+        img.dataUrl.startsWith('data:') &&
+        img.dataUrl.indexOf(',') !== -1 &&
+        img.dataUrl.split(',')[1].length > 0) {
+      return Promise.resolve(img);
+    }
+    // Has a Cloudinary URL — fetch it once, cache it, return hydrated copy
+    if (img && typeof img.url === 'string' && img.url.startsWith('http')) {
+      return fetchImageAsBase64(img.url).then(function(cached) {
+        // Mutate the in-memory object so repeated sends don't re-fetch
+        img.dataUrl  = cached.dataUrl;
+        img.mimeType = img.mimeType || cached.mimeType;
+        return img;
+      }).catch(function(err) {
+        console.warn('[Vision] Could not fetch image from Cloudinary URL:', img.url, err);
+        return img; // return as-is; the vision builder will skip it
+      });
+    }
+    return Promise.resolve(img);
+  });
+  return Promise.all(promises);
+}
 
 function buildGeminiBody(imgsData) {
   // imgsData: array of { dataUrl, mimeType } for the current turn's images, or [] / null.
@@ -9310,7 +9515,8 @@ async function fetchViaProxy(model, imgs) {
 
 async function callGemini(imgsData) {
   // imgsData: array of { dataUrl, mimeType } or [] / undefined
-  var imgs = imgsData || [];
+  // Hydrate any URL-only images (Cloudinary) into base64 in memory first.
+  var imgs = await hydrateImgsForVision(imgsData || []);
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
 
@@ -9323,6 +9529,26 @@ async function callGemini(imgsData) {
 
   var preferred   = S.model || 'gemini-2.5-flash-lite';
   var modelQueue  = [preferred].concat(FALLBACK_MODELS.filter(function(m){ return m !== preferred; }));
+
+  // Pre-hydrate any URL-only images stored in S.messages (e.g. from history
+  // or edited messages). buildGeminiBody() reads these synchronously, so they
+  // must be populated before the first fetchViaProxy call.
+  var histImgsToHydrate = [];
+  S.messages.forEach(function(m) {
+    if (m.imgs && m.imgs.length) {
+      m.imgs.forEach(function(img) {
+        if (img && img.url && (!img.dataUrl || !img.dataUrl.startsWith('data:'))) {
+          histImgsToHydrate.push(img);
+        }
+      });
+    }
+    if (m.img && m.img.url && (!m.img.dataUrl || !m.img.dataUrl.startsWith('data:'))) {
+      histImgsToHydrate.push(m.img);
+    }
+  });
+  if (histImgsToHydrate.length) {
+    await hydrateImgsForVision(histImgsToHydrate);
+  }
 
   var lastErr = null;
 
@@ -9555,6 +9781,8 @@ async function callGroqDirect() {
 // Returns false -> Groq Vision failed too; caller should fall back to the
 //                  existing text-only callGroqDirect()
 async function callGroqVisionFallback(imgs) {
+  // Hydrate any URL-only images (Cloudinary) into base64 in memory first.
+  imgs = await hydrateImgsForVision(imgs || []);
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
   var typId = addTyping('ALEEM AI is thinking…');
@@ -11074,13 +11302,18 @@ function loadConv(id) {
   document.getElementById('chatMessages').innerHTML = '';
   c.messages.forEach(function(m) {
     // Resolve image data from whatever format was saved:
-    //   new format: m.imgs = [{dataUrl, mimeType}, ...]
+    //   new format (Cloudinary): m.imgs = [{url, width, height, mimeType}, ...]
+    //   old new format (base64): m.imgs = [{dataUrl, mimeType}, ...]
     //   legacy format: m.img = {dataUrl, mimeType}
     //   no images: both null/undefined
     var imgArg = null;
     if (m.imgs && Array.isArray(m.imgs) && m.imgs.length) {
       var validImgs = m.imgs.filter(function(img) {
-        return img && typeof img.dataUrl === 'string' &&
+        if (!img) return false;
+        // Accept Cloudinary URL format
+        if (img.url && typeof img.url === 'string' && img.url.startsWith('http')) return true;
+        // Accept legacy base64 format
+        return typeof img.dataUrl === 'string' &&
                img.dataUrl.startsWith('data:') &&
                img.dataUrl.indexOf(',') !== -1 &&
                img.dataUrl.split(',')[1].length > 0;
@@ -11092,11 +11325,6 @@ function loadConv(id) {
                m.img.dataUrl.split(',')[1].length > 0) {
       imgArg = [m.img];
     }
-    // Pass m.mid so addMsg reuses the stored per-message UUID instead of
-    // generating a new one — this is what makes feedback keys stable across
-    // all reload and restore paths (including after deleteMsg index shifts).
-    // Also pass m.time and m.ts so the original send timestamp is preserved
-    // instead of being replaced with the current time on every reload.
     addMsg(m.role, m.text, false, imgArg, m.mid || null, m.time || null, m.ts || 0);
   });
   S.messages = c.messages.slice();
@@ -13273,6 +13501,10 @@ if ('serviceWorker' in navigator) {
   // Cloudinary config for profile photo uploads
   const CLOUDINARY_CLOUD_NAME = "dqgha35s8";
   const CLOUDINARY_UPLOAD_PRESET = "aleem_profile_photos";
+
+  // Cloudinary config for chat image uploads (expose globally for initImageUpload)
+  window._CLOUDINARY_CLOUD_NAME   = "dqgha35s8";
+  window._CLOUDINARY_CHAT_PRESET  = "aleem_chat_images";
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
 
@@ -13834,9 +14066,16 @@ function _csyncConvToDoc(conv) {
     isVoice:   !!conv.isVoice,
     model:     conv.model     || '',
     messages:  (conv.messages || []).map(function(m) {
-      // Strip base64 image data — text and metadata are kept.
+      // Strip base64 image data — text, metadata, and Cloudinary URLs are kept.
+      // Cloudinary URLs are small (~100 chars) and safe for Firestore documents.
       // mid (per-message UUID) is included so feedback keys survive
       // cross-device Cloud Sync restores without index-based drift.
+      var imgMeta = [];
+      if (m.imgs && m.imgs.length) {
+        imgMeta = m.imgs
+          .filter(function(img) { return img && img.url && typeof img.url === 'string' && img.url.startsWith('http'); })
+          .map(function(img) { return { url: img.url, width: img.width || null, height: img.height || null, mimeType: img.mimeType || 'image/jpeg' }; });
+      }
       return {
         role: m.role,
         text: m.text || '',
@@ -13845,6 +14084,8 @@ function _csyncConvToDoc(conv) {
         mid:  m.mid  || '',
         // Preserve the fact that images existed, but not the bytes
         hasImages: !!(m.imgs && m.imgs.length) || !!m.img,
+        // Include Cloudinary URLs so images persist on other devices
+        imgs: imgMeta
       };
     }),
   };
@@ -13895,7 +14136,12 @@ async function _csyncLoadFromCloud() {
           isVoice:   !!cc.isVoice,
           model:     cc.model     || '',
           messages:  (cc.messages || []).map(function(m) {
-            return { role: m.role, text: m.text || '', time: m.time || '', ts: m.ts || 0, mid: m.mid || '', imgs: [] };
+            // Restore Cloudinary image URLs if present in the cloud document
+            var restoredImgs = [];
+            if (m.imgs && Array.isArray(m.imgs)) {
+              restoredImgs = m.imgs.filter(function(img) { return img && img.url; });
+            }
+            return { role: m.role, text: m.text || '', time: m.time || '', ts: m.ts || 0, mid: m.mid || '', imgs: restoredImgs };
           }),
         };
         S.history.push(restored_conv);
@@ -13916,7 +14162,11 @@ async function _csyncLoadFromCloud() {
           // Only replace messages if cloud has more of them
           if ((cc.messages || []).length > (local.messages || []).length) {
             local.messages = (cc.messages || []).map(function(m) {
-              return { role: m.role, text: m.text || '', time: m.time || '', ts: m.ts || 0, mid: m.mid || '', imgs: [] };
+              var restoredImgs = [];
+              if (m.imgs && Array.isArray(m.imgs)) {
+                restoredImgs = m.imgs.filter(function(img) { return img && img.url; });
+              }
+              return { role: m.role, text: m.text || '', time: m.time || '', ts: m.ts || 0, mid: m.mid || '', imgs: restoredImgs };
             });
           }
         }
