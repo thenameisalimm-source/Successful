@@ -13227,6 +13227,7 @@ document.addEventListener('click', function(e) {
       renderHistory();
       toast('🗑️ Conversation deleted');
       if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+      if (typeof window.csyncDeleteConv === 'function') window.csyncDeleteConv(delId);
     }
     return;
   }
@@ -13347,6 +13348,7 @@ function showHistCtxMenu(anchor, cid) {
           if (_ctxDelConv) cleanupConversationImages(_ctxDelConv);
           S.history = S.history.filter(function(x){ return x.id !== cid; });
           persist(); renderHistory(); toast('🗑️ Deleted');
+          if (typeof window.csyncDeleteConv === 'function') window.csyncDeleteConv(cid);
         }
         closeCtxMenu();
       }
@@ -13439,6 +13441,7 @@ function attachSwipeHandlers() {
           if (_swipeDelConv) cleanupConversationImages(_swipeDelConv);
           S.history = S.history.filter(function(x){ return x.id !== cid; });
           persist(); renderHistory(); toast('🗑️ Deleted');
+          if (typeof window.csyncDeleteConv === 'function') window.csyncDeleteConv(cid);
         }
       } else if (curX > TRIGGER) {
         // Swipe right → pin
