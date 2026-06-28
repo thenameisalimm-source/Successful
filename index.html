@@ -8905,25 +8905,50 @@ function compressImage(file) {
 // ── Upload compressed Blob to Cloudinary ─────────────────────────
 // Returns Promise<{ secure_url, width, height }>.
 function uploadToCloudinary(blob, width, height) {
-  var cloudName   = window._CLOUDINARY_CLOUD_NAME  || 'dqgha35s8';
+  var cloudName    = window._CLOUDINARY_CLOUD_NAME  || 'dqgha35s8';
   var uploadPreset = window._CLOUDINARY_CHAT_PRESET || 'aleem_chat_images';
+
+  // Validate blob before sending
+  if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+    return Promise.reject(new Error('[Cloudinary] compressImage returned an invalid or empty Blob — size: ' + (blob ? blob.size : 'null')));
+  }
+
+  var uploadUrl = 'https://api.cloudinary.com/v1_1/' + cloudName + '/image/upload';
+  console.log('[Cloudinary] Upload URL:', uploadUrl);
+  console.log('[Cloudinary] Upload preset:', uploadPreset);
+  console.log('[Cloudinary] Blob size:', (blob.size / 1024).toFixed(1) + ' KB');
+  console.log('[Cloudinary] Blob type:', blob.type);
+
   var formData = new FormData();
-  formData.append('file',           blob, 'chat-image.jpg');
-  formData.append('upload_preset',  uploadPreset);
-  return fetch('https://api.cloudinary.com/v1_1/' + cloudName + '/image/upload', {
+  formData.append('file',          blob, 'chat-image.jpg');
+  formData.append('upload_preset', uploadPreset);
+
+  return fetch(uploadUrl, {
     method: 'POST',
     body:   formData
   })
-  .then(function(res) { return res.json(); })
-  .then(function(data) {
-    if (!data || !data.secure_url) {
-      throw new Error((data && data.error && data.error.message) || 'Cloudinary upload failed');
-    }
-    return {
-      secure_url: data.secure_url,
-      width:  data.width  || width,
-      height: data.height || height
-    };
+  .then(function(res) {
+    var httpStatus = res.status;
+    return res.json().then(function(data) {
+      console.log('[Cloudinary] HTTP status:', httpStatus);
+      console.log('[Cloudinary] Response JSON:', JSON.stringify(data, null, 2));
+
+      if (!res.ok || !data || !data.secure_url) {
+        var cloudinaryMsg = (data && data.error && data.error.message) || 'Unknown Cloudinary error';
+        var err = new Error('[Cloudinary] Upload failed — HTTP ' + httpStatus + ' — ' + cloudinaryMsg);
+        err.httpStatus      = httpStatus;
+        err.cloudinaryError = (data && data.error) || null;
+        err.responseBody    = data || null;
+        throw err;
+      }
+
+      console.log('[Cloudinary] Upload success — url:', data.secure_url);
+      return {
+        secure_url: data.secure_url,
+        width:  data.width  || width,
+        height: data.height || height
+      };
+    });
   });
 }
 
@@ -9006,7 +9031,10 @@ function initImageUpload() {
             });
         })
         .catch(function(err) {
-          console.error('[Cloudinary] Chat image upload failed:', err);
+          console.error('[Cloudinary] Chat image upload failed:', err.message);
+          if (err.httpStatus)      console.error('[Cloudinary] HTTP status:', err.httpStatus);
+          if (err.cloudinaryError) console.error('[Cloudinary] Error object:', JSON.stringify(err.cloudinaryError, null, 2));
+          if (err.responseBody)    console.error('[Cloudinary] Full response body:', JSON.stringify(err.responseBody, null, 2));
           // Remove the failed slot and fall back to raw dataUrl (base64) so the user isn't blocked
           var idx = S.pendingImages.findIndex(function(p) { return p._uploadId === uploadId; });
           if (idx !== -1) {
