@@ -8902,6 +8902,112 @@ function compressImage(file) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  CLOUDINARY IMAGE CLEANUP
+//  Deletes orphaned Cloudinary assets whenever conversations are
+//  permanently removed. Uses the backend so no API Secret is exposed.
+// ══════════════════════════════════════════════════════════════════
+
+// Endpoint — reuses the same Netlify Functions path already in use.
+var _CLOUDINARY_DELETE_FN = '/.netlify/functions/cloudinary-delete';
+
+/**
+ * Extract every unique Cloudinary public_id from a conversation object.
+ * Works with both legacy base64-only msgs and new Cloudinary-URL msgs.
+ * Pattern: https://res.cloudinary.com/<cloud>/image/upload/<transforms>/<public_id>.<ext>
+ */
+function _extractCloudinaryIds(conversation) {
+  var ids = {};
+  var re = /https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:[^/]+\/)*([^/.]+)\.[a-z]+/gi;
+
+  if (!conversation || !Array.isArray(conversation.messages)) return [];
+
+  conversation.messages.forEach(function(msg) {
+    if (!Array.isArray(msg.imgs)) return;
+    msg.imgs.forEach(function(img) {
+      if (!img || !img.url || typeof img.url !== 'string') return;
+      var m = re.exec(img.url);
+      re.lastIndex = 0; // reset after exec
+      if (m && m[1]) ids[m[1]] = true;
+    });
+  });
+
+  return Object.keys(ids);
+}
+
+/**
+ * Check if a public_id is still referenced by any OTHER conversation
+ * not in the list being deleted.
+ */
+function _isIdReferencedElsewhere(publicId, deletedConvIds) {
+  var deletedSet = {};
+  deletedConvIds.forEach(function(id) { deletedSet[id] = true; });
+
+  return (S.history || []).some(function(conv) {
+    if (deletedSet[conv.id]) return false; // skip conversations being deleted
+    if (!Array.isArray(conv.messages)) return false;
+    return conv.messages.some(function(msg) {
+      if (!Array.isArray(msg.imgs)) return false;
+      return msg.imgs.some(function(img) {
+        return img && img.url && typeof img.url === 'string' && img.url.indexOf(publicId) !== -1;
+      });
+    });
+  });
+}
+
+/**
+ * Send public_ids to the backend for authenticated deletion.
+ * Fire-and-forget — never blocks the UI.
+ */
+function _deleteFromCloudinaryBackend(publicIds) {
+  if (!publicIds || !publicIds.length) return;
+  fetch(_CLOUDINARY_DELETE_FN, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ public_ids: publicIds })
+  }).catch(function(err) {
+    console.warn('Cloudinary cleanup: backend request failed —', err.message);
+  });
+}
+
+/**
+ * Main cleanup helper.
+ * Pass one conversation OR an array of conversations to delete.
+ * Safe to call with null/undefined — it will no-op gracefully.
+ *
+ * Usage:
+ *   cleanupConversationImages(conversation);
+ *   cleanupConversationImages([conv1, conv2, ...]);
+ */
+function cleanupConversationImages(conversations) {
+  try {
+    var convList = Array.isArray(conversations) ? conversations : [conversations];
+    convList = convList.filter(Boolean);
+    if (!convList.length) return;
+
+    var deletedConvIds = convList.map(function(c) { return c.id; });
+
+    // Collect all unique IDs across all conversations being deleted
+    var allIds = {};
+    convList.forEach(function(conv) {
+      _extractCloudinaryIds(conv).forEach(function(id) { allIds[id] = true; });
+    });
+
+    // Filter out any IDs still referenced by conversations that are NOT being deleted
+    var toDelete = Object.keys(allIds).filter(function(id) {
+      return !_isIdReferencedElsewhere(id, deletedConvIds);
+    });
+
+    if (!toDelete.length) return;
+
+    // Non-blocking async deletion via backend
+    setTimeout(function() { _deleteFromCloudinaryBackend(toDelete); }, 0);
+  } catch (e) {
+    // Never crash the UI
+    console.warn('Cloudinary cleanup: unexpected error —', e.message);
+  }
+}
+
 // ── Upload compressed Blob to Cloudinary ─────────────────────────
 // Returns Promise<{ secure_url, width, height }>.
 function uploadToCloudinary(blob, width, height) {
@@ -8914,10 +9020,6 @@ function uploadToCloudinary(blob, width, height) {
   }
 
   var uploadUrl = 'https://api.cloudinary.com/v1_1/' + cloudName + '/image/upload';
-  console.log('[Cloudinary] Upload URL:', uploadUrl);
-  console.log('[Cloudinary] Upload preset:', uploadPreset);
-  console.log('[Cloudinary] Blob size:', (blob.size / 1024).toFixed(1) + ' KB');
-  console.log('[Cloudinary] Blob type:', blob.type);
 
   var formData = new FormData();
   formData.append('file',          blob, 'chat-image.jpg');
@@ -8930,19 +9032,15 @@ function uploadToCloudinary(blob, width, height) {
   .then(function(res) {
     var httpStatus = res.status;
     return res.json().then(function(data) {
-      console.log('[Cloudinary] HTTP status:', httpStatus);
-      console.log('[Cloudinary] Response JSON:', JSON.stringify(data, null, 2));
-
       if (!res.ok || !data || !data.secure_url) {
         var cloudinaryMsg = (data && data.error && data.error.message) || 'Unknown Cloudinary error';
-        var err = new Error('[Cloudinary] Upload failed — HTTP ' + httpStatus + ' — ' + cloudinaryMsg);
+        var err = new Error('Cloudinary upload failed — HTTP ' + httpStatus + ' — ' + cloudinaryMsg);
         err.httpStatus      = httpStatus;
         err.cloudinaryError = (data && data.error) || null;
         err.responseBody    = data || null;
         throw err;
       }
 
-      console.log('[Cloudinary] Upload success — url:', data.secure_url);
       return {
         secure_url: data.secure_url,
         width:  data.width  || width,
@@ -9031,10 +9129,7 @@ function initImageUpload() {
             });
         })
         .catch(function(err) {
-          console.error('[Cloudinary] Chat image upload failed:', err.message);
-          if (err.httpStatus)      console.error('[Cloudinary] HTTP status:', err.httpStatus);
-          if (err.cloudinaryError) console.error('[Cloudinary] Error object:', JSON.stringify(err.cloudinaryError, null, 2));
-          if (err.responseBody)    console.error('[Cloudinary] Full response body:', JSON.stringify(err.responseBody, null, 2));
+          console.error('Image upload failed:', err.message);
           // Remove the failed slot and fall back to raw dataUrl (base64) so the user isn't blocked
           var idx = S.pendingImages.findIndex(function(p) { return p._uploadId === uploadId; });
           if (idx !== -1) {
@@ -10813,6 +10908,8 @@ function updateThemeSwatches() {
 
 function clearAllHistory() {
   if (!confirm('Clear all conversation history? This cannot be undone.')) return;
+  // Cleanup Cloudinary assets before wiping S.history
+  if (S.history && S.history.length) cleanupConversationImages(S.history.slice());
   S.history = [];
   S.messages = [];
   // [ADDED] Reset history UI state too, so the page doesn't keep showing
@@ -13123,6 +13220,8 @@ document.addEventListener('click', function(e) {
     e.stopPropagation();
     var delId = parseInt(delBtn.getAttribute('data-histdelete'), 10);
     if (confirm('Permanently delete this conversation? This cannot be undone.')) {
+      var _delConv = S.history.find(function(x){ return x.id === delId; });
+      if (_delConv) cleanupConversationImages(_delConv);
       S.history = S.history.filter(function(x){ return x.id !== delId; });
       persist();
       renderHistory();
@@ -13244,6 +13343,8 @@ function showHistCtxMenu(anchor, cid) {
     { icon: '🗑️', label: 'Delete', danger: true,
       action: function(){
         if (confirm('Permanently delete this conversation?')) {
+          var _ctxDelConv = S.history.find(function(x){ return x.id === cid; });
+          if (_ctxDelConv) cleanupConversationImages(_ctxDelConv);
           S.history = S.history.filter(function(x){ return x.id !== cid; });
           persist(); renderHistory(); toast('🗑️ Deleted');
         }
@@ -13334,6 +13435,8 @@ function attachSwipeHandlers() {
       if (curX < -TRIGGER) {
         // Swipe left → delete
         if (confirm('Delete this conversation?')) {
+          var _swipeDelConv = S.history.find(function(x){ return x.id === cid; });
+          if (_swipeDelConv) cleanupConversationImages(_swipeDelConv);
           S.history = S.history.filter(function(x){ return x.id !== cid; });
           persist(); renderHistory(); toast('🗑️ Deleted');
         }
@@ -15136,7 +15239,9 @@ function _rsyncFlushConvBatch() {
 
   changes.forEach(function(ch) {
     if (ch.type === 'removed') {
-      // Remove from S.history
+      // Remove from S.history — cleanup Cloudinary assets first
+      var _rsyncDelConv = S.history.find(function(c) { return c.id === ch.id; });
+      if (_rsyncDelConv) cleanupConversationImages(_rsyncDelConv);
       S.history = S.history.filter(function(c) { return c.id !== ch.id; });
       needFullRender = true;
     } else {
