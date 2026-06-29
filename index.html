@@ -10006,12 +10006,67 @@ async function callGroqVisionFallback(imgs) {
 // Called after every AI reply. Creates a new history entry the first time,
 // then updates the same entry (matched by id) on every subsequent exchange
 // so one chat session = one history card (not a new card per message).
+// ── AI TITLE GENERATION ───────────────────────────────────────────
+// Called asynchronously after the first AI reply. Uses the existing
+// Netlify chat proxy (Gemini/Groq) — no new API or key needed.
+// Generates a concise 3–7 word title, saves it to history + Firestore.
+// Falls back to the first user message (max 40 chars) on any error.
+async function generateConvTitle(convId, userText, aiText) {
+  var fallback = userText ? userText.trim().slice(0, 40) : 'Chat';
+  try {
+    var prompt =
+      'Create a concise, specific 3-7 word title for this conversation.\n' +
+      'Return ONLY the title text, no punctuation at the end, no quotes.\n' +
+      'Examples: "Build a Workout Plan", "Python Debugging Help", "Image Analysis Request"\n\n' +
+      'User: ' + userText.slice(0, 300) + '\n' +
+      'AI: ' + aiText.slice(0, 300);
+
+    var res = await fetch(NETLIFY_FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-2.5-flash-lite',
+        geminiBody: {
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 24, temperature: 0.4 }
+        }
+      })
+    });
+
+    var data = await res.json();
+    var raw = (data.candidates && data.candidates[0] &&
+               data.candidates[0].content && data.candidates[0].content.parts &&
+               data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
+    var title = raw.trim().replace(/^["']|["']$/g, '').replace(/[.!?]+$/, '').trim();
+    if (!title || title.length < 3) throw new Error('empty title');
+
+    // Apply to the matching history entry
+    var entry = S.history.find(function(c){ return c.id === convId; });
+    if (entry) {
+      entry.title = title;
+      persist();
+      // Update Firestore if CSYNC is available
+      if (typeof csyncUpsertConv === 'function') {
+        try { csyncUpsertConv(entry); } catch(e) {}
+      }
+      // Refresh history sidebar if open
+      var histPage = document.getElementById('page-history');
+      if (histPage && histPage.classList.contains('active')) renderHistory();
+    }
+  } catch(e) {
+    // Fallback: keep the already-set raw title (already ≤40 chars from autoSaveConversation)
+    console.warn('[ALEEM-TITLE] Title generation failed, keeping fallback:', e.message);
+  }
+}
+// ── END AI TITLE GENERATION ───────────────────────────────────────
+
 function autoSaveConversation() {
   if (!S.messages.length) return;
   var first = S.messages.find(function(m){ return m.role === 'user'; });
   var title;
+  // Fallback title (raw text, max 40 chars) — overwritten by AI title asynchronously
   if (first && first.text && first.text.trim()) {
-    title = first.text.slice(0, 60);
+    title = first.text.slice(0, 40);
   } else if (first && ((first.imgs && first.imgs.length) || first.img)) {
     var imgCount = (first.imgs && first.imgs.length) ? first.imgs.length : 1;
     title = imgCount > 1 ? 'Image conversation (' + imgCount + ' images)' : 'Image conversation';
@@ -10088,6 +10143,22 @@ function autoSaveConversation() {
     }
   }
   persist();
+
+  // ── Async AI title generation (first exchange only) ───────────────
+  (function() {
+    var liveEntry = S.history.find(function(c){ return c._live; });
+    if (!liveEntry || liveEntry._titleGenerated) return;
+    var userMsgs = S.messages.filter(function(m){ return m.role === 'user'; });
+    var aiMsgs   = S.messages.filter(function(m){ return m.role === 'ai' || m.role === 'model'; });
+    if (userMsgs.length !== 1 || aiMsgs.length !== 1) return;
+    liveEntry._titleGenerated = true;
+    var userText = userMsgs[0].text || (userMsgs[0].imgs ? '[image]' : '');
+    var aiText   = aiMsgs[0].text || '';
+    var cid      = liveEntry.id;
+    generateConvTitle(cid, userText, aiText);
+  })();
+  // ── End async AI title generation ────────────────────────────────
+
   // Keep the History page live if the user has it open in another tab-like
   // view (e.g. switched pages mid-voice-chat) — cheap no-op if not visible.
   var histPage = document.getElementById('page-history');
@@ -13597,9 +13668,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
-    .then(() => console.log('Service Worker registered'))
-    .catch(err => console.log('SW registration failed', err));
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+      console.log('[SW] Registered, scope:', reg.scope);
+      // Activate waiting SW immediately so users get the new version on next load
+      reg.addEventListener('updatefound', function() {
+        var newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        }
+      });
+    }).catch(function(err) {
+      console.warn('[SW] Registration failed:', err);
+    });
+  });
 }
 </script>
     
