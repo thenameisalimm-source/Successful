@@ -39,12 +39,14 @@ self.addEventListener('message', function(event) {
 });
 
 // ── INSTALL: precache shell assets ────────────────────────────────
+// Note: intentionally NOT calling self.skipWaiting() here.
+// The new SW waits in the 'installed' state until the page posts
+// SKIP_WAITING, which triggers a controlled reload (see index.html).
+// This prevents the new SW from activating mid-session.
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_STATIC).then(function(cache) {
       return cache.addAll(PRECACHE_URLS);
-    }).then(function() {
-      return self.skipWaiting();
     })
   );
 });
