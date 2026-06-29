@@ -1948,10 +1948,38 @@
   }
   .pers-card.selected .pers-card-check { opacity: 1; transform: scale(1); }
 
+  /* [ADDED] Popular badge — top-left corner, subtle gold pill */
+  .pers-card-badge {
+    position: absolute; top: 7px; left: 8px;
+    font-size: 0.52rem; font-weight: 700; letter-spacing: 0.3px;
+    color: #f59e0b; background: rgba(245,158,11,0.13);
+    border: 1px solid rgba(245,158,11,0.32);
+    border-radius: 20px; padding: 1px 6px;
+    line-height: 1.5; white-space: nowrap;
+    pointer-events: none;
+  }
+  /* Push icon down slightly when badge is present so they don't overlap */
+  .pers-card:has(.pers-card-badge) .pers-card-icon { margin-top: 10px; }
+
   @media (max-width: 480px) {
     .pers-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .pers-card { padding: 12px 10px 10px; }
   }
+
+  /* ── [ADDED] AI Mode popup — two-section divider ── */
+  .pers-section-header {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 0 2px;
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.8px;
+    color: var(--text-3); text-transform: uppercase;
+  }
+  .pers-section-header::before,
+  .pers-section-header::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,179,237,0.18), transparent);
+  }
+  .pers-section-header:first-child { padding-top: 0; }
   /* ── [END ADDED] ── */
 
   /* ================================================================
@@ -4913,8 +4941,8 @@
         </div>
         <div class="pers-trigger-row pers-trigger-row--personality">
           <span class="pers-trigger-label-wrap">
-            <span class="pers-trigger-label">🎭 AI Personality</span>
-            <span class="pers-trigger-subtitle">How ALEEM Responds</span>
+            <span class="pers-trigger-label">🧠 AI Mode</span>
+            <span class="pers-trigger-subtitle">Personality &amp; Agent</span>
           </span>
           <button type="button" class="pers-trigger-btn" id="personalityTriggerBtn"
                   aria-haspopup="true" aria-expanded="false" aria-controls="personalityPopupOverlay">
@@ -4968,7 +4996,7 @@
         <div class="pers-popup-overlay" id="personalityPopupOverlay">
           <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="personalityPopupTitle">
             <div class="pers-popup-header">
-              <span class="pers-popup-title" id="personalityPopupTitle">🎭 Choose AI Personality</span>
+              <span class="pers-popup-title" id="personalityPopupTitle">🧠 Choose AI Mode</span>
               <button type="button" class="pers-popup-close" id="personalityPopupClose" aria-label="Close">✕</button>
             </div>
             <div class="pers-grid" id="personalityGrid"></div>
@@ -6224,46 +6252,74 @@ const MEMORY_HONESTY_INSTRUCTION = ' Regarding memory: only treat information as
 // its creator when relevant. Applies in every language.
 const IDENTITY_INSTRUCTION = ' Your own name is "ALEEM AI" — that is who you are. Aleem Sudamaniya is your creator/founder/developer, NOT your name. If the user asks your name (in any language, e.g. "What is your name?", "आपका नाम क्या है?", "तुझे नाव काय आहे?"), always answer that your name is ALEEM AI (e.g. "My name is ALEEM AI.", "मेरा नाम ALEEM AI है।", "माझे नाव ALEEM AI आहे."). You may optionally add that you were created by Aleem Sudamaniya, but never say that Aleem Sudamaniya is your own name or refer to yourself by that name.';
 
-const PERSONALITIES = {
-  friendly:  { label: '😊 Friendly Assistant', sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  teacher:   { label: '👨‍🏫 Teacher',        sys: 'You are ALEEM AI in Teacher mode, created by Aleem Sudamaniya. Explain every concept step by step in an educational style. Use clear examples, analogies, and break down complex ideas so anyone can understand. Encourage curiosity and deeper learning.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  coding:    { label: '💻 Coding Expert',   sys: 'You are ALEEM AI in Coding Expert mode, created by Aleem Sudamaniya. Focus on programming and software development. Include relevant code examples, snippets, and explanations whenever useful. Cover all languages and tech stacks with precision.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  writer:    { label: '✍️ Writer',           sys: 'You are ALEEM AI in Writer mode, created by Aleem Sudamaniya. Use a detailed, eloquent writing style. Help craft better articles, essays, stories, and creative content. Pay close attention to structure, word choice, and narrative flow.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  motivator: { label: '🚀 Motivator',       sys: 'You are ALEEM AI in Motivator mode, created by Aleem Sudamaniya. Give positive, encouraging, and uplifting responses. Inspire action, build confidence, and always highlight the person\'s potential. Use energetic and empowering language.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  // [ADDED] 7 new personalities — same established pattern (role instruction
-  // + the 3 shared instructions). Existing 5 entries above are untouched
-  // except the 'friendly' display label, which now reads "Friendly Assistant"
-  // per the requested personality list; its 'sys' prompt text is unchanged.
-  funny:       { label: '😂 Funny Friend',     sys: 'You are ALEEM AI in Funny Friend mode, created by Aleem Sudamaniya. Be humorous, witty, and entertaining. Use playful language, light jokes, and a fun conversational style while still being genuinely helpful and accurate. Keep things upbeat and never mean-spirited.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  fitness:     { label: '🏋️ Fitness Coach',   sys: 'You are ALEEM AI in Fitness Coach mode, created by Aleem Sudamaniya. Focus on workouts, exercise technique, training plans, and general diet and fitness guidance. Be encouraging and practical. For medical concerns, injuries, or specific clinical nutrition needs, recommend the person consult a doctor or certified professional.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  business:    { label: '💼 Business Advisor', sys: 'You are ALEEM AI in Business Advisor mode, created by Aleem Sudamaniya. Focus on business strategy, productivity, entrepreneurship, marketing, and professional advice. Be clear, structured, and pragmatic, offering actionable insights grounded in sound business thinking.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  creative:    { label: '🎨 Creative Genius',  sys: 'You are ALEEM AI in Creative Genius mode, created by Aleem Sudamaniya. Focus on creative ideation — brainstorming, storytelling, original concepts, and imaginative angles. Be inventive and expressive while keeping ideas useful and well-structured.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  deepthinker: { label: '🧠 Deep Thinker',     sys: 'You are ALEEM AI in Deep Thinker mode, created by Aleem Sudamaniya. Provide analytical, detailed, and well-reasoned responses. Break down complex topics from multiple angles, consider nuance and trade-offs, and favor depth and rigor over brevity.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  news:        { label: '📰 News Analyst',     sys: 'You are ALEEM AI in News Analyst mode, created by Aleem Sudamaniya. Summarize and analyze news and current events in a balanced, neutral, fact-focused way. Present multiple relevant perspectives where appropriate and avoid editorializing or political bias.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-  travel:      { label: '🌍 Travel Guide',     sys: 'You are ALEEM AI in Travel Guide mode, created by Aleem Sudamaniya. Focus on travel planning — destinations, itineraries, local tips, budgeting, and practical recommendations. Be enthusiastic and helpful, like a knowledgeable local guide.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
-};
-// ── [END ADDED] ───────────────────────────────────────────────────
+// ── [ADDED] AI PERSONALITIES — unified array ───────────────────────────
+// Each entry is a single source of truth: key, icon, name, color, desc
+// for the UI and sys for the AI prompt. Adding a new personality = one
+// object appended here; no other code needs to change.
+// The legacy PERSONALITIES[key].label / .sys lookup helpers below keep all
+// existing call-sites working without modification.
+const PERSONALITIES = [
+  { key: 'friendly',    icon: '😊', name: 'Friendly Assistant', color: '#3b82f6', desc: 'Casual, warm and conversational',                badge: '⭐ Popular', sys: 'You are ALEEM AI, a warm, friendly, enthusiastic personal knowledge assistant created by Aleem Sudamaniya. Communicate in a cheerful, conversational tone. Be helpful, encouraging, and positive.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'teacher',     icon: '👨‍🏫', name: 'Teacher',            color: '#22c55e', desc: 'Explains concepts clearly and step-by-step',     badge: '⭐ Popular', sys: 'You are ALEEM AI in Teacher mode, created by Aleem Sudamaniya. Explain every concept step by step in an educational style. Use clear examples, analogies, and break down complex ideas so anyone can understand. Encourage curiosity and deeper learning.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'coding',      icon: '💻', name: 'Coding Expert',       color: '#a855f7', desc: 'Programming, debugging and development help',    badge: null,   sys: 'You are ALEEM AI in Coding Expert mode, created by Aleem Sudamaniya. Focus on programming and software development. Include relevant code examples, snippets, and explanations whenever useful. Cover all languages and tech stacks with precision.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'writer',      icon: '✍️', name: 'Writer',              color: '#f97316', desc: 'Writing, editing and content creation',          badge: null,   sys: 'You are ALEEM AI in Writer mode, created by Aleem Sudamaniya. Use a detailed, eloquent writing style. Help craft better articles, essays, stories, and creative content. Pay close attention to structure, word choice, and narrative flow.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'motivator',   icon: '🚀', name: 'Motivator',           color: '#eab308', desc: 'Encouraging and goal-oriented responses',        badge: null,   sys: 'You are ALEEM AI in Motivator mode, created by Aleem Sudamaniya. Give positive, encouraging, and uplifting responses. Inspire action, build confidence, and always highlight the person\'s potential. Use energetic and empowering language.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'funny',       icon: '😂', name: 'Funny Friend',        color: '#ec4899', desc: 'Humorous and entertaining conversations',        badge: null,   sys: 'You are ALEEM AI in Funny Friend mode, created by Aleem Sudamaniya. Be humorous, witty, and entertaining. Use playful language, light jokes, and a fun conversational style while still being genuinely helpful and accurate. Keep things upbeat and never mean-spirited.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'fitness',     icon: '🏋️', name: 'Fitness Coach',       color: '#ef4444', desc: 'Workout, diet and fitness guidance',             badge: null,   sys: 'You are ALEEM AI in Fitness Coach mode, created by Aleem Sudamaniya. Focus on workouts, exercise technique, training plans, and general diet and fitness guidance. Be encouraging and practical. For medical concerns, injuries, or specific clinical nutrition needs, recommend the person consult a doctor or certified professional.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'business',    icon: '💼', name: 'Business Advisor',    color: '#06b6d4', desc: 'Business, productivity and strategy advice',     badge: null,   sys: 'You are ALEEM AI in Business Advisor mode, created by Aleem Sudamaniya. Focus on business strategy, productivity, entrepreneurship, marketing, and professional advice. Be clear, structured, and pragmatic, offering actionable insights grounded in sound business thinking.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'creative',    icon: '🎨', name: 'Creative Genius',     color: '#8b5cf6', desc: 'Creative ideas, storytelling and brainstorming', badge: null,   sys: 'You are ALEEM AI in Creative Genius mode, created by Aleem Sudamaniya. Focus on creative ideation — brainstorming, storytelling, original concepts, and imaginative angles. Be inventive and expressive while keeping ideas useful and well-structured.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'deepthinker', icon: '🧠', name: 'Deep Thinker',        color: '#6366f1', desc: 'Analytical and detailed reasoning',              badge: null,   sys: 'You are ALEEM AI in Deep Thinker mode, created by Aleem Sudamaniya. Provide analytical, detailed, and well-reasoned responses. Break down complex topics from multiple angles, consider nuance and trade-offs, and favor depth and rigor over brevity.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'news',        icon: '📰', name: 'News Analyst',        color: '#14b8a6', desc: 'News summaries and balanced analysis',           badge: null,   sys: 'You are ALEEM AI in News Analyst mode, created by Aleem Sudamaniya. Summarize and analyze news and current events in a balanced, neutral, fact-focused way. Present multiple relevant perspectives where appropriate and avoid editorializing or political bias.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+  { key: 'travel',      icon: '🌍', name: 'Travel Guide',        color: '#0ea5e9', desc: 'Travel planning and recommendations',            badge: null,   sys: 'You are ALEEM AI in Travel Guide mode, created by Aleem Sudamaniya. Focus on travel planning — destinations, itineraries, local tips, budgeting, and practical recommendations. Be enthusiastic and helpful, like a knowledgeable local guide.' + LANGUAGE_INSTRUCTION + IDENTITY_INSTRUCTION + MEMORY_HONESTY_INSTRUCTION },
+];
+// ── [END ADDED] ───────────────────────────────────────────────────────
 
-// ── [ADDED] PREMIUM PERSONALITY PICKER DATA ─────────────────────────
-// Presentation-only metadata for the new card popup — subtitle text and a
-// category color per personality (per the requested color scheme). Reading
-// this data never affects PERSONALITIES, S.personality, or storage; it only
-// feeds buildPersonalityCards() below to render the popup UI.
-const PERSONALITY_ORDER = ['friendly','teacher','coding','writer','motivator','funny','fitness','business','creative','deepthinker','news','travel'];
-const PERSONALITY_META = {
-  friendly:    { desc: 'Casual, warm and conversational',               color: '#3b82f6' }, // Blue
-  teacher:     { desc: 'Explains concepts clearly and step-by-step',     color: '#22c55e' }, // Green
-  coding:      { desc: 'Programming, debugging and development help',   color: '#a855f7' }, // Purple
-  writer:      { desc: 'Writing, editing and content creation',         color: '#f97316' }, // Orange
-  motivator:   { desc: 'Encouraging and goal-oriented responses',       color: '#eab308' }, // Gold
-  funny:       { desc: 'Humorous and entertaining conversations',       color: '#ec4899' }, // Pink
-  fitness:     { desc: 'Workout, diet and fitness guidance',            color: '#ef4444' }, // Red
-  business:    { desc: 'Business, productivity and strategy advice',    color: '#06b6d4' }, // Cyan
-  creative:    { desc: 'Creative ideas, storytelling and brainstorming',color: '#8b5cf6' }, // Violet
-  deepthinker: { desc: 'Analytical and detailed reasoning',             color: '#6366f1' }, // Indigo
-  news:        { desc: 'News summaries and balanced analysis',          color: '#14b8a6' }, // Teal
-  travel:      { desc: 'Travel planning and recommendations',           color: '#0ea5e9' }, // Sky Blue
-};
+// Lookup helpers — keep every existing PERSONALITIES[key].label / .sys call
+// working without touching the call sites. O(n) over 12 items, called rarely.
+function _persFind(key) {
+  for (var _i = 0; _i < PERSONALITIES.length; _i++) {
+    if (PERSONALITIES[_i].key === key) return PERSONALITIES[_i];
+  }
+  return null;
+}
+// Proxy so PERSONALITIES[key] still works everywhere it's used.
+// Wraps the array in an ES5-compatible object with a custom getter per key.
+(function() {
+  PERSONALITIES.forEach(function(p) {
+    // label = "icon name" — the format the old object used (e.g. "😊 Friendly Assistant")
+    Object.defineProperty(PERSONALITIES, p.key, {
+      get: function() { return { label: p.icon + ' ' + p.name, sys: p.sys }; },
+      enumerable: false, configurable: true
+    });
+  });
+})();
+
+// ── [ADDED] AI AGENTS ────────────────────────────────────────────────
+// Each agent adds domain specialization on top of the active personality.
+// 'none' is the default — no agent suffix is appended to the system prompt.
+const AGENTS = [
+  { key: 'none',     icon: '✨', name: 'None',     color: '#64748b', desc: 'No specialization — general assistant',       badge: null,   sys: '' },
+  { key: 'coding',   icon: '💻', name: 'Coding',   color: '#a855f7', desc: 'Expert software engineer & debugger',         badge: '⭐ Popular', sys: 'AGENT SPECIALIZATION — Coding Expert: You are also an expert software engineer. For every reply, prioritize precise, working code with brief inline comments. Suggest best practices, catch edge cases, and explain the "why" behind technical decisions. Support all languages and frameworks.' },
+  { key: 'fitness',  icon: '💪', name: 'Fitness',  color: '#ef4444', desc: 'Personal trainer & nutrition advisor',         badge: null,   sys: 'AGENT SPECIALIZATION — Fitness Expert: You are also a certified personal trainer and nutrition advisor. Give practical workout plans, exercise technique guidance, and evidence-based diet tips. For injuries or clinical medical needs, recommend consulting a professional.' },
+  { key: 'study',    icon: '📚', name: 'Study',    color: '#22c55e', desc: 'Academic tutor & study strategist',           badge: '⭐ Popular', sys: 'AGENT SPECIALIZATION — Study Coach: You are also an expert academic tutor. Break down difficult subjects, suggest proven study techniques (spaced repetition, active recall), create summaries, and help the user prepare for exams with clarity and precision.' },
+  { key: 'business', icon: '💼', name: 'Business', color: '#06b6d4', desc: 'Business strategist & entrepreneur',          badge: null,   sys: 'AGENT SPECIALIZATION — Business Advisor: You are also a seasoned business strategist. Provide actionable advice on strategy, marketing, productivity, startup growth, and professional decision-making. Be structured and data-driven.' },
+  { key: 'travel',   icon: '✈️', name: 'Travel',   color: '#0ea5e9', desc: 'Travel planner & local guide',               badge: null,   sys: 'AGENT SPECIALIZATION — Travel Expert: You are also an expert travel planner. Suggest itineraries, local tips, budget strategies, visa info, and must-see experiences. Be enthusiastic and practical like an insider guide.' },
+  { key: 'creative', icon: '🎨', name: 'Creative', color: '#8b5cf6', desc: 'Creative director & ideation partner',        badge: null,   sys: 'AGENT SPECIALIZATION — Creative Director: You are also a creative director and ideation expert. Generate bold, original ideas, help with storytelling, branding, design thinking, and content creation. Push boundaries while keeping ideas actionable.' },
+  { key: 'research', icon: '🔬', name: 'Research', color: '#14b8a6', desc: 'Deep researcher & fact analyst',             badge: null,   sys: 'AGENT SPECIALIZATION — Research Expert: You are also a meticulous research analyst. Provide thorough, well-structured research with multiple perspectives. Cite reasoning, distinguish fact from opinion, and flag uncertainty. Prioritize depth and accuracy.' },
+  { key: 'chef',     icon: '🍳', name: 'Chef',     color: '#f97316', desc: 'Professional chef & recipe creator',         badge: null,   sys: 'AGENT SPECIALIZATION — Chef: You are also a professional chef. Help with recipes, cooking techniques, ingredient substitutions, meal planning, and kitchen tips. Tailor advice to the user\'s skill level and available ingredients.' },
+  { key: 'legal',    icon: '⚖️', name: 'Legal',    color: '#f59e0b', desc: 'Legal research & document assistant',        badge: null,   sys: 'AGENT SPECIALIZATION — Legal Assistant: You are also a legal research assistant. Explain laws, legal concepts, and document structures in plain language. Always clarify that you provide information only — not legal advice — and recommend consulting a qualified attorney for specific legal matters.' },
+  { key: 'medical',  icon: '🩺', name: 'Medical',  color: '#ec4899', desc: 'Health info & medical knowledge guide',      badge: null,   sys: 'AGENT SPECIALIZATION — Medical Information Guide: You are also a medical knowledge guide. Explain symptoms, conditions, medications, and health concepts clearly using accurate medical information. Always recommend consulting a qualified healthcare professional for personal medical decisions or diagnosis.' },
+];
+// Returns the active agent's system suffix, or '' if agent is 'none' / unset.
+function getAgentSys() {
+  var key = S.agent || 'none';
+  if (key === 'none') return '';
+  for (var i = 0; i < AGENTS.length; i++) {
+    if (AGENTS[i].key === key) return '\n\n' + AGENTS[i].sys;
+  }
+  return '';
+}
+// ── [END ADDED] ──────────────────────────────────────────────────────
 
 // Small helper so each card's colored glow (box-shadow) can be derived from
 // its hex color without relying on the CSS color-mix() function, which is
@@ -6407,6 +6463,7 @@ const S = {
   messages:    [],
   model:       'gemini-2.5-flash',
   personality: 'friendly',
+  agent: 'none',
   voicePersonality: 'assistant',
   selectedVoiceName: '', // empty = auto (best match); set by voice selector
   _voiceManuallySelected: false, // true once user explicitly picks a voice card/option
@@ -6538,6 +6595,7 @@ function loadStorage() {
   // default model + fallback chain (Flash Lite -> Flash -> Groq).
   S.model       = ls('aleem_model') || 'gemini-2.5-flash-lite';
   S.personality = ls('aleem_pers') || 'friendly';
+  S.agent = ls('aleem_agent') || 'none';
   S.voicePersonality = ls('aleem_voice_pers') || 'assistant';
   S.selectedVoiceName = ls('aleem_voice_name') || '';
   S._voiceManuallySelected = !!(ls('aleem_voice_name'));
@@ -6616,6 +6674,7 @@ function loadStorage() {
 function persist() {
   lss('aleem_model',  S.model);
   lss('aleem_pers',   S.personality);
+  lss('aleem_agent',  S.agent || 'none');
   lss('aleem_voice_pers', S.voicePersonality);
   lss('aleem_voice_name', S.selectedVoiceName);
   lss('aleem_voice',  S.voiceOn ? 'on' : 'off');
@@ -6756,6 +6815,7 @@ function persist() {
 function persistPrefsOnly() {
   lss('aleem_model',      S.model);
   lss('aleem_pers',       S.personality);
+  lss('aleem_agent',      S.agent || 'none');
   lss('aleem_voice_pers', S.voicePersonality);
   lss('aleem_voice_name', S.selectedVoiceName);
 }
@@ -6957,8 +7017,8 @@ function bindAllEvents() {
       S.personality = e.target.value;
       updatePLabel();
       syncPersonalityTrigger();
-      var p = PERSONALITIES[S.personality];
-      toast('🎭 Personality: ' + (p ? p.label : S.personality));
+      var p = _persFind(S.personality);
+      toast('🎭 Personality: ' + (p ? p.icon + ' ' + p.name : S.personality));
       dbg('personalitySelect change → ' + S.personality);
       persistPrefsOnly();
     });
@@ -6980,22 +7040,77 @@ function bindAllEvents() {
   }
   // [END ADDED]
 
-  // [ADDED] Premium personality popup wiring — pure UI layer on top of the
-  // existing #personalitySelect / #voicePersonalitySelect. Card clicks only
-  // set select.value + dispatch 'change' (see bindPersonalityPopup()); the
-  // primary handlers above are the only code that writes to S.personality /
-  // S.voicePersonality or localStorage. The sync-trigger functions are now
-  // called directly inside those primary handlers, so no second change
-  // listener is needed here.
+  // [ADDED] AI Mode popup wiring — two-section popup (Personality + Agent).
+  // Card clicks are handled here directly; data-section attribute determines
+  // which state variable (S.personality or S.agent) is updated. The hidden
+  // #personalitySelect is still updated for backward-compat (cloud sync etc).
   buildPersonalityCards();
   buildVoicePersonalityCards();
-  bindPersonalityPopup(
-    document.getElementById('personalityPopupOverlay'),
-    document.getElementById('personalityTriggerBtn'),
-    document.getElementById('personalityPopupClose'),
-    document.getElementById('personalityGrid'),
-    personalitySelect
-  );
+  (function() {
+    var overlay  = document.getElementById('personalityPopupOverlay');
+    var btn      = document.getElementById('personalityTriggerBtn');
+    var closeBtn = document.getElementById('personalityPopupClose');
+    var grid     = document.getElementById('personalityGrid');
+    if (!overlay || !btn) return;
+
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (overlay.classList.contains('show')) closePersPopup(overlay, btn);
+      else openPersPopup(overlay, btn);
+    });
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closePersPopup(overlay, btn);
+      });
+    }
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closePersPopup(overlay, btn);
+    });
+
+    if (grid) {
+      grid.addEventListener('click', function(e) {
+        var card = e.target.closest ? e.target.closest('.pers-card') : null;
+        if (!card) return;
+        var key     = card.getAttribute('data-key');
+        var section = card.getAttribute('data-section');
+        if (key === null || !section) return;
+
+        if (section === 'personality') {
+          S.personality = key;
+          // Keep the hidden <select> in sync (for cloud sync / analytics).
+          var pSel = document.getElementById('personalitySelect');
+          if (pSel && pSel.value !== key) {
+            pSel.value = key;
+            pSel.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            updatePLabel();
+            syncPersonalityTrigger();
+            var p = _persFind(key);
+            toast('🎭 Personality: ' + (p ? p.icon + ' ' + p.name : key));
+            persistPrefsOnly();
+          }
+          // Scroll the Agent section into view so the user naturally picks next.
+          var agentHeader = document.getElementById('aiModeAgentHeader');
+          if (agentHeader) {
+            setTimeout(function() {
+              agentHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 80);
+          }
+        } else if (section === 'agent') {
+          S.agent = key;
+          syncPersonalityTrigger();
+          var agentObj = null;
+          for (var ai = 0; ai < AGENTS.length; ai++) { if (AGENTS[ai].key === key) { agentObj = AGENTS[ai]; break; } }
+          toast('🤖 Agent: ' + (agentObj ? agentObj.name : key));
+          dbg('agent → ' + key);
+          persistPrefsOnly();
+          // Both selections made — close the popup automatically.
+          closePersPopup(overlay, btn);
+        }
+      });
+    }
+  })();
   bindPersonalityPopup(
     document.getElementById('voicePersonalityPopupOverlay'),
     document.getElementById('voicePersonalityTriggerBtn'),
@@ -7298,7 +7413,8 @@ function buildKnowledgeGrid() {
 
 function updatePLabel() {
   var el = document.getElementById('pLabel');
-  if (el) el.textContent = PERSONALITIES[S.personality].label;
+  var p = _persFind(S.personality);
+  if (el) el.textContent = p ? (p.icon + ' ' + p.name) : S.personality;
 }
 
 // ── [ADDED] PREMIUM PERSONALITY PICKER (UI only) ────────────────────
@@ -7311,25 +7427,40 @@ function updatePLabel() {
 // state is read, written, or duplicated anywhere in this block — it only
 // reflects whatever the <select> already contains.
 
-// Builds the AI Personality card grid from PERSONALITIES + PERSONALITY_META.
-function buildPersonalityCards() {
-  var grid = document.getElementById('personalityGrid');
-  if (!grid) return;
-  grid.innerHTML = PERSONALITY_ORDER.map(function(key) {
-    var p = PERSONALITIES[key];
-    var meta = PERSONALITY_META[key];
-    if (!p || !meta) return '';
-    var sp = p.label.indexOf(' ');
-    var icon = sp > -1 ? p.label.slice(0, sp) : '🎭';
-    var name = sp > -1 ? p.label.slice(sp + 1) : p.label;
-    var style = '--card-color:' + meta.color + ';--card-glow:' + hexToRgba(meta.color, 0.38) + ';';
-    return '<button type="button" class="pers-card" data-key="' + key + '" style="' + style + '">' +
-             '<span class="pers-card-icon">' + icon + '</span>' +
-             '<span class="pers-card-name">' + name + '</span>' +
-             '<span class="pers-card-desc">' + meta.desc + '</span>' +
+// Renders one section of cards from a config array (PERSONALITIES or AGENTS).
+// Both arrays share the same shape: { key, icon, name, color, desc, badge, sys }.
+// badge is a display string shown as a pill (e.g. '⭐ Popular', '🆕 New',
+// '👑 Premium', '🔥 Trending') or null for no badge. The rendering code
+// never needs to change — just set badge on the data object.
+function renderAiModeSection(items, sectionKey) {
+  return items.map(function(item) {
+    var style = '--card-color:' + item.color + ';--card-glow:' + hexToRgba(item.color, 0.38) + ';';
+    var badge = item.badge
+      ? '<span class="pers-card-badge">' + item.badge + '</span>'
+      : '';
+    return '<button type="button" class="pers-card" data-key="' + item.key +
+           '" data-section="' + sectionKey + '" style="' + style + '">' +
+             badge +
+             '<span class="pers-card-icon">' + item.icon + '</span>' +
+             '<span class="pers-card-name">' + item.name + '</span>' +
+             '<span class="pers-card-desc">' + item.desc + '</span>' +
              '<span class="pers-card-check">✓</span>' +
            '</button>';
   }).join('');
+}
+
+// Builds the AI Mode card grid — two sections rendered by renderAiModeSection().
+// To add a new personality: append one object to PERSONALITIES.
+// To add a new agent:       append one object to AGENTS.
+// No changes to this function are needed either way.
+function buildPersonalityCards() {
+  var grid = document.getElementById('personalityGrid');
+  if (!grid) return;
+  grid.innerHTML =
+    '<div class="pers-section-header" id="aiModePersHeader">🎭 Personality</div>' +
+    renderAiModeSection(PERSONALITIES, 'personality') +
+    '<div class="pers-section-header" id="aiModeAgentHeader">🤖 Agent</div>' +
+    renderAiModeSection(AGENTS, 'agent');
 }
 
 // Builds the Voice Personality card grid from VOICE_PERSONALITIES +
@@ -7356,28 +7487,35 @@ function buildVoicePersonalityCards() {
   }).join('');
 }
 
-// Reflects the CURRENT value of #personalitySelect into the trigger button
-// text and the matching card's selected/glow state. Called once at startup
-// (after the select has been restored from localStorage) and again on every
-// 'change' event — i.e. it only ever reads from the select, never writes to it.
+// Reflects the CURRENT S.personality and S.agent values into the AI Mode
+// trigger button text and highlights the matching cards in both sections.
 function syncPersonalityTrigger() {
-  var sel = document.getElementById('personalitySelect');
-  if (!sel) return;
-  var key = sel.value;
-  var p = PERSONALITIES[key];
-  var label = p ? p.label : key;
-  var sp = label.indexOf(' ');
-  var icon = sp > -1 ? label.slice(0, sp) : '🎭';
-  var name = sp > -1 ? label.slice(sp + 1) : label;
+  // ── Trigger button display ──
+  var persObj = _persFind(S.personality);
+  var persIcon = persObj ? persObj.icon : '🎭';
+  var persName = persObj ? persObj.name : S.personality;
+
+  var agentKey = S.agent || 'none';
+  var agentObj = null;
+  for (var ai = 0; ai < AGENTS.length; ai++) { if (AGENTS[ai].key === agentKey) { agentObj = AGENTS[ai]; break; } }
+  var agentName = agentObj ? agentObj.name : 'None';
+
   var iconEl = document.getElementById('personalityTriggerIcon');
   var nameEl = document.getElementById('personalityTriggerName');
-  if (iconEl) iconEl.textContent = icon;
-  if (nameEl) nameEl.textContent = name;
+  if (iconEl) iconEl.textContent = persIcon;
+  if (nameEl) nameEl.textContent = persName + ' • ' + agentName;
+
+  // ── Card highlight in the popup grid ──
   var grid = document.getElementById('personalityGrid');
   if (grid) {
     var cards = grid.querySelectorAll('.pers-card');
     for (var i = 0; i < cards.length; i++) {
-      cards[i].classList.toggle('selected', cards[i].getAttribute('data-key') === key);
+      var card = cards[i];
+      var section = card.getAttribute('data-section');
+      var key = card.getAttribute('data-key');
+      var isSelected = (section === 'personality' && key === S.personality) ||
+                       (section === 'agent'       && key === agentKey);
+      card.classList.toggle('selected', isSelected);
     }
   }
 }
@@ -9424,7 +9562,7 @@ function buildGeminiBody(imgsData) {
   // ⚡ FAST MODE: skip memory context, only use current message + personality system prompt.
   var isFast = S.fastMode;
   var memCtx = (!isFast && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + memCtx;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtx;
 
   // In Fast Mode, only send the last user message (not full history).
   var msgs = isFast ? S.messages.slice(-1) : S.messages.slice(-20);
@@ -9837,7 +9975,7 @@ async function callGroqDirect() {
   var msgs = S.messages.slice(-20);
   var groqMessages = [];
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + memCtxGroq;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtxGroq;
   if (sys) groqMessages.push({ role: 'system', content: sys });
   var histMsgs = S.fastMode ? S.messages.slice(-1) : msgs;
   histMsgs.forEach(function(m) {
@@ -9916,7 +10054,7 @@ async function callGroqVisionFallback(imgs) {
   var msgs = S.fastMode ? S.messages.slice(-1) : S.messages.slice(-20);
   var groqMessages = [];
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + memCtxGroq;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtxGroq;
   if (sys) groqMessages.push({ role: 'system', content: sys });
 
   // Find the index of the last user message (the one that should carry images)
