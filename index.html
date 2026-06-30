@@ -1709,6 +1709,123 @@
   @keyframes recPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
   /* ── [END ADDED] ── */
 
+  /* ── [AI CANVAS] toggle button + panel ───────────────────────────── */
+  #canvasBtn { --iact-color: #38bdf8; --iact-glow: rgba(56,189,248,0.30); }
+  #canvasBtn.active {
+    color: #38bdf8;
+    box-shadow: 0 0 0 1px #38bdf8, 0 4px 12px rgba(56,189,248,0.32);
+  }
+
+  #aiCanvasPanel {
+    position: fixed; top: 0; right: 0; height: 100%;
+    width: 92%; max-width: 720px;
+    background: var(--glass);
+    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    border-left: 1px solid var(--glass-border);
+    box-shadow: -8px 0 40px rgba(0,0,0,0.35);
+    z-index: 7500;
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.32s cubic-bezier(.2,.85,.3,1);
+    box-sizing: border-box;
+  }
+  #aiCanvasPanel.open { transform: translateX(0); }
+  @media (min-width: 980px) {
+    #aiCanvasPanel { width: 46%; min-width: 440px; max-width: 760px; }
+  }
+
+  .cv-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-bottom: 1px solid var(--glass-border);
+    flex-shrink: 0;
+  }
+  .cv-header-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .cv-header-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .cv-title {
+    font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+    color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: none; border: none; outline: none; width: 100%; padding: 0;
+  }
+  .cv-lang-badge {
+    align-self: flex-start;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--a1); background: var(--bg-input); border: 1px solid var(--border);
+    padding: 1px 8px; border-radius: 99px;
+  }
+  .cv-header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .cv-icon-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg-input); color: var(--text-2); font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: color var(--t), border-color var(--t), transform 0.15s ease;
+  }
+  .cv-icon-btn:hover { color: var(--text-1); border-color: var(--a1); transform: translateY(-1px); }
+  .cv-icon-btn:active { transform: translateY(0) scale(0.92); }
+  .cv-icon-btn.cv-close { color: #ef4444; }
+
+  .cv-toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-bottom: 1px solid var(--glass-border); flex-shrink: 0; flex-wrap: wrap;
+  }
+  .cv-toolbar-spacer { flex: 1; }
+  .cv-chip {
+    font-size: 0.72rem; font-weight: 600; color: var(--text-2);
+    background: var(--bg-input); border: 1px solid var(--border);
+    padding: 5px 11px; border-radius: 99px; cursor: pointer;
+    transition: color var(--t), border-color var(--t);
+  }
+  .cv-chip:hover { color: var(--text-1); border-color: var(--a1); }
+  .cv-chip.cv-chip-active { color: #38bdf8; border-color: #38bdf8; }
+  .cv-chip:disabled { opacity: .35; cursor: not-allowed; }
+
+  .cv-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 24px; }
+  .cv-body .md-body { font-size: 0.9rem; line-height: 1.65; }
+  #cvEditArea {
+    width: 100%; height: 100%; min-height: 60vh; resize: none;
+    background: none; border: none; outline: none;
+    font-family: var(--font-mono, monospace); font-size: 0.84rem; line-height: 1.6;
+    color: var(--text-1); box-sizing: border-box;
+  }
+
+  .cv-edit-bar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid var(--glass-border); flex-shrink: 0;
+    background: var(--bg-input);
+  }
+  #cvEditInput {
+    flex: 1; min-width: 0; background: none; border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 8px 12px; font-size: 0.82rem;
+    color: var(--text-1); outline: none;
+  }
+  #cvEditInput:focus { border-color: var(--a1); }
+  .cv-edit-send {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#38bdf8,#818cf8); color: #000;
+    display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+  }
+  .cv-edit-suggest { display: flex; gap: 6px; padding: 0 14px 10px; flex-wrap: wrap; }
+
+  .cv-open-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.72rem; font-weight: 600; color: var(--a1);
+    background: var(--bg-input); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 99px; cursor: pointer; margin-top: 6px;
+  }
+  .cv-open-chip:hover { border-color: var(--a1); }
+
+  .cv-doc-card {
+    margin-top: 8px; max-width: 280px; cursor: pointer;
+    background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 12px 14px;
+    transition: border-color var(--t), transform 0.15s ease;
+  }
+  .cv-doc-card:hover { border-color: var(--a1); transform: translateY(-1px); }
+  .cv-doc-card-top { font-size: 0.7rem; font-weight: 700; color: var(--text-2); letter-spacing: .03em; text-transform: uppercase; }
+  .cv-doc-card-title { font-size: 0.88rem; font-weight: 700; color: var(--text-1); margin: 4px 0 8px; }
+  .cv-doc-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cv-doc-card-open { font-size: 0.74rem; font-weight: 600; color: var(--a1); }
+  /* ── [END AI CANVAS] ── */
+
   .send-btn {
     width: 38px; height: 38px; border-radius: 50%;
     background: linear-gradient(135deg,#38bdf8,#818cf8);
@@ -2024,6 +2141,36 @@
   .pers-popup-close:hover { border-color: var(--border-hi); color: var(--text-1); }
   .pers-popup-close:active { transform: scale(0.9); }
 
+  /* Rename Conversation modal (reuses .pers-popup glassmorphism shell) */
+  .rename-modal-body { padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .rename-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 10px 13px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color var(--t);
+  }
+  .rename-input:focus { border-color: var(--border-hi); }
+  .rename-modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;
+  }
+  .rename-btn-cancel, .rename-btn-save {
+    border-radius: var(--r-sm); padding: 9px 18px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); font-family: var(--font-body);
+    transition: border-color var(--t), transform 0.15s ease;
+  }
+  .rename-btn-cancel { background: var(--bg-input); color: var(--text-2); }
+  .rename-btn-cancel:hover { border-color: var(--border-hi); color: var(--text-1); }
+  .rename-btn-save { background: linear-gradient(135deg, var(--a1), var(--a2)); color: #fff; border-color: transparent; }
+  .rename-btn-save:hover { transform: translateY(-1px); }
+  .rename-btn-save:active, .rename-btn-cancel:active { transform: scale(0.96); }
+
   /* Card grid — scrolls independently so long lists work on small screens */
   .pers-grid {
     overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -2273,6 +2420,15 @@
   .hist-mark { color:var(--a1); background:rgba(56,189,248,0.16); border-radius:3px; padding:0 2px; font-weight:600; }
   .hist-folder-tag { font-size:0.63rem; color:var(--a2); background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.22); border-radius:99px; padding:1px 7px; }
   .hist-voice-tag  { font-size:0.63rem; color:var(--a3); background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.22); border-radius:99px; padding:1px 7px; }
+  .hist-title-src  {
+    display:inline-flex; align-items:center;
+    height:22px; line-height:1; box-sizing:border-box;
+    font-size:11px; font-weight:600; letter-spacing:0.2px; text-transform:uppercase;
+    border-radius:9px; padding:0 11px; white-space:nowrap;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .hist-title-src.ai     { color:var(--text-3); background:rgba(255,255,255,0.05); border:1px solid var(--border); }
+  .hist-title-src.custom { color:var(--a2); background:rgba(129,140,248,0.12); border:1px solid rgba(129,140,248,0.28); }
   .hist-3dot-btn {
     background:none; border:none;
     width:44px; height:44px; border-radius:50%;
@@ -4814,6 +4970,23 @@
 
 <!-- TOAST -->
 <div id="toast"><span id="toastMsg"></span></div>
+
+<!-- RENAME CONVERSATION MODAL (glassmorphism, mirrors .pers-popup style) -->
+<div class="pers-popup-overlay" id="renamePopupOverlay">
+  <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="renamePopupTitle" style="max-width:420px;">
+    <div class="pers-popup-header">
+      <span class="pers-popup-title" id="renamePopupTitle">✏️ Rename Conversation</span>
+      <button type="button" class="pers-popup-close" id="renamePopupClose" aria-label="Close">✕</button>
+    </div>
+    <div class="rename-modal-body">
+      <input type="text" id="renameInput" class="rename-input" maxlength="80" placeholder="Conversation title">
+      <div class="rename-modal-actions">
+        <button type="button" class="rename-btn-cancel" id="renameCancelBtn">Cancel</button>
+        <button type="button" class="rename-btn-save" id="renameSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="memory-saving-indicator" id="memSavingIndicator">
   <span>🧠</span><span>Saving memory…</span>
 </div>
@@ -4956,6 +5129,7 @@
               placeholder="Ask anything… science, cricket, history, tech, jokes…"></textarea>
             <button class="iact-btn img-btn" id="imgUploadBtn" title="Attach image">🖼️</button>
             <button class="iact-btn" id="micBtn" title="Voice input">🎤</button>
+            <button class="iact-btn" id="canvasBtn" title="Open in Canvas">📄</button>
           </div>
           <button class="send-btn" id="sendBtn" title="Send">➤</button>
         </div>
@@ -7703,7 +7877,7 @@ function persist() {
           // Legacy base64 fallback
           return { dataUrl: img.dataUrl || '', mimeType: img.mimeType || 'image/jpeg' };
         });
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: persistImgs, img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: persistImgs, img: null, canvas: m.canvas || undefined };
       }
       return m;
     }) };
@@ -7730,7 +7904,7 @@ function persist() {
       updatedAt: conv.updatedAt || conv.id || 0,
       messages: conv.messages.map(function(m) {
         if (!m.imgs || !m.imgs.length) return m;
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: [], img: null };
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: [], img: null, canvas: m.canvas || undefined };
       })
     };
   }
@@ -10362,6 +10536,7 @@ function typeMessage(bubId, rawText, onDone) {
     bub.innerHTML = fmtMsg(rawText);
     var area = document.getElementById('chatMessages');
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
+    if (typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
     if (onDone) onDone();
     return;
   }
@@ -10400,6 +10575,7 @@ function typeMessage(bubId, rawText, onDone) {
       bub.classList.remove('typing-active');
       bub.innerHTML = fmtMsg(rawText);
       if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
+      if (typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
       if (onDone) onDone();
       return;
     }
@@ -11180,9 +11356,10 @@ async function generateConvTitle(convId, userText, aiText) {
     var title = raw.trim().replace(/^["']|["']$/g, '').replace(/[.!?]+$/, '').trim();
     if (!title || title.length < 3) throw new Error('empty title');
 
-    // Apply to the matching history entry
+    // Apply to the matching history entry — but never overwrite a title
+    // the user explicitly chose via Rename.
     var entry = S.history.find(function(c){ return c.id === convId; });
-    if (entry) {
+    if (entry && !entry.userRenamed) {
       entry.title = title;
       persist();
       // Update Firestore if CSYNC is available
@@ -11224,7 +11401,7 @@ function autoSaveConversation() {
   var existing = S.history.find(function(c){ return c._live; });
   var nowMs = Date.now();
   if (existing) {
-    existing.title     = title;
+    if (!existing.userRenamed) existing.title = title;
     existing.messages  = S.messages.slice();
     existing.date      = new Date().toLocaleDateString();
     existing.updatedAt = nowMs;
@@ -11317,6 +11494,7 @@ function clearChat() {
   S._liveId       = null;
   S._activeConvId = null;
   S.messages = [];
+  if (typeof window.resetCanvasForNewChat === 'function') window.resetCanvasForNewChat();
   var area = document.getElementById('chatMessages');
   area.innerHTML =
     '<div class="chat-welcome" id="chatWelcome">' +
@@ -12443,8 +12621,16 @@ function renderHistItemHTML(c, lq, allFolders) {
   var folder    = c.folderId ? allFolders.find(function(f){ return f.id === c.folderId; }) : null;
   var folderTag = folder ? '<span class="hist-folder-tag">' + folder.icon + ' ' + esc(folder.name) + '</span>' : '';
   var voiceTag  = c.isVoice ? '<span class="hist-voice-tag">🎤</span>' : '';
+  var hasCanvas = !!(c.messages && c.messages.some(function(m){ return m && m.canvas; }));
+  var canvasTag = hasCanvas ? '<span class="hist-voice-tag" title="Contains a Canvas document">📄 Canvas</span>' : '';
   var msgCount  = (c.messages ? c.messages.length : 0);
   var pinIcon   = c.pinned ? '📌 ' : (c.isVoice ? '🎤 ' : '');
+
+  // Title source indicator — shows whether the title was set by the user
+  // via Rename, or generated automatically by the AI title generator.
+  var titleSrcTag = c.userRenamed
+    ? '<span class="hist-title-src custom" title="Renamed by you">Custom</span>'
+    : '<span class="hist-title-src ai" title="AI generated">AI</span>';
 
   // 3-dot menu button
   var dotBtn = '<button class="hist-3dot-btn" data-histdot="' + c.id + '" title="More options">⋯</button>';
@@ -12463,7 +12649,9 @@ function renderHistItemHTML(c, lq, allFolders) {
           '<span class="hist-meta-dot">·</span>' +
           '<span>' + msgCount + ' msg' + (msgCount !== 1 ? 's' : '') + '</span>' +
           (voiceTag  ? '<span class="hist-meta-dot">·</span>' + voiceTag  : '') +
+          (canvasTag ? '<span class="hist-meta-dot">·</span>' + canvasTag : '') +
           (folderTag ? '<span class="hist-meta-dot">·</span>' + folderTag : '') +
+          '<span class="hist-meta-dot">·</span>' + titleSrcTag +
         '</div>' +
       '</div>' +
       '<div class="hist-actions">' + dotBtn + '</div>' +
@@ -12671,6 +12859,9 @@ function loadConv(id) {
   S.messages = c.messages.slice();
   goPage('chat');
   setTimeout(restoreMsgFeedbackUI, 50);
+  if (typeof window.restoreCanvasChips === 'function') setTimeout(window.restoreCanvasChips, 50);
+  var _cvPanel = document.getElementById('aiCanvasPanel');
+  if (_cvPanel) _cvPanel.classList.remove('open');
   toast('📂 Conversation loaded');
 }
 
@@ -14554,6 +14745,7 @@ function showHistCtxMenu(anchor, cid) {
 
   var items = [
     { icon: c.pinned ? '📌' : '📍', label: c.pinned ? 'Unpin' : 'Pin', action: function(){ pinConv(cid); closeCtxMenu(); } },
+    { icon: '✏️', label: 'Rename', action: function(){ closeCtxMenu(); openRenameModal(cid); } },
     { icon: '📁', label: 'Move to folder', action: function(){ promptMoveToFolder(cid); closeCtxMenu(); } },
     { icon: c.archived ? '↩️' : '📦', label: c.archived ? 'Restore' : 'Archive',
       action: function(){ c.archived ? restoreConv(cid) : archiveConv(cid); closeCtxMenu(); } },
@@ -14584,7 +14776,7 @@ function showHistCtxMenu(anchor, cid) {
 
   // Position near the anchor button
   var rect = anchor.getBoundingClientRect();
-  var mw = 176, mh = 180;
+  var mw = 176, mh = 216;
   var left = Math.min(rect.right - mw, window.innerWidth - mw - 8);
   var top = rect.bottom + 4;
   if (top + mh > window.innerHeight - 8) top = rect.top - mh - 4;
@@ -14592,6 +14784,75 @@ function showHistCtxMenu(anchor, cid) {
   menu.style.left = left + 'px';
   menu.style.top  = top + 'px';
 }
+
+// ── RENAME CONVERSATION (glassmorphism modal) ────────────────────
+var _renameTargetId = null;
+
+function openRenameModal(cid) {
+  var c = S.history.find(function(x){ return x.id === cid; });
+  if (!c) return;
+  var overlay = document.getElementById('renamePopupOverlay');
+  var input   = document.getElementById('renameInput');
+  if (!overlay || !input) return;
+  _renameTargetId = cid;
+  input.value = c.title || '';
+  overlay.classList.add('show');
+  setTimeout(function(){ input.focus(); input.select(); }, 50);
+}
+
+function closeRenameModal() {
+  var overlay = document.getElementById('renamePopupOverlay');
+  if (overlay) overlay.classList.remove('show');
+  _renameTargetId = null;
+}
+
+function saveRenameModal() {
+  if (_renameTargetId === null) { closeRenameModal(); return; }
+  var c = S.history.find(function(x){ return x.id === _renameTargetId; });
+  var input = document.getElementById('renameInput');
+  if (!c || !input) { closeRenameModal(); return; }
+  var newTitle = input.value.trim().slice(0, 80);
+  if (!newTitle) { toast('⚠️ Title cannot be empty'); return; }
+  c.title = newTitle;
+  c.userRenamed = true;
+  persist();
+  renderHistory();
+  if (typeof window.csyncUpsertConv === 'function') window.csyncUpsertConv(c);
+  closeRenameModal();
+  toast('Conversation renamed');
+}
+
+(function() {
+  var overlay = document.getElementById('renamePopupOverlay');
+  var input   = document.getElementById('renameInput');
+  var closeBtn  = document.getElementById('renamePopupClose');
+  var cancelBtn = document.getElementById('renameCancelBtn');
+  var saveBtn   = document.getElementById('renameSaveBtn');
+
+  if (closeBtn)  closeBtn.addEventListener('click', closeRenameModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeRenameModal);
+  if (saveBtn)   saveBtn.addEventListener('click', saveRenameModal);
+
+  // Click outside the modal card (on the overlay backdrop) closes without saving.
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeRenameModal();
+    });
+  }
+
+  if (input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); saveRenameModal(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeRenameModal(); }
+    });
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var ov = document.getElementById('renamePopupOverlay');
+    if (ov && ov.classList.contains('show')) closeRenameModal();
+  });
+})();
 
 // ── Swipe-to-delete / Swipe-to-pin (mobile) ──────────────────────
 // Attaches touch handlers to each .hist-item after renderHistory.
@@ -19239,6 +19500,506 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 })();
 </script>
 <!-- ── END ANALYTICS v1 ──────────────────────────────────────────── -->
+
+<!-- ── AI CANVAS PANEL ──────────────────────────────────────────── -->
+<div id="aiCanvasPanel" aria-hidden="true">
+  <div class="cv-header">
+    <span class="cv-header-icon">📄</span>
+    <div class="cv-header-info">
+      <input id="cvTitle" class="cv-title" value="Document" spellcheck="false">
+      <span class="cv-lang-badge" id="cvLangBadge">TEXT</span>
+    </div>
+    <div class="cv-header-actions">
+      <button class="cv-icon-btn" id="cvCopyBtn" title="Copy">📋</button>
+      <button class="cv-icon-btn" id="cvDownloadBtn" title="Download">⬇️</button>
+      <button class="cv-icon-btn cv-close" id="cvCloseBtn" title="Close">✕</button>
+    </div>
+  </div>
+  <div class="cv-toolbar">
+    <button class="cv-chip" id="cvUndoBtn" title="Undo">↶ Undo</button>
+    <button class="cv-chip" id="cvRedoBtn" title="Redo">↷ Redo</button>
+    <button class="cv-chip" id="cvEditToggleBtn" title="Toggle edit mode">✏️ Edit</button>
+    <div class="cv-toolbar-spacer"></div>
+    <button class="cv-chip" id="cvDlTxt">.txt</button>
+    <button class="cv-chip" id="cvDlMd">.md</button>
+    <button class="cv-chip" id="cvDlHtml">.html</button>
+  </div>
+  <div class="cv-body" id="cvBody"></div>
+  <div class="cv-edit-suggest" id="cvEditSuggest">
+    <button class="cv-chip" data-ins="Improve this">Improve this</button>
+    <button class="cv-chip" data-ins="Make it shorter">Make shorter</button>
+    <button class="cv-chip" data-ins="Translate to Hindi">Translate to Hindi</button>
+    <button class="cv-chip" data-ins="Convert this to Python">Convert to Python</button>
+    <button class="cv-chip" data-ins="Explain this line by line">Explain line by line</button>
+  </div>
+  <div class="cv-edit-bar">
+    <input id="cvEditInput" type="text" placeholder="Ask AI to edit this canvas…" autocomplete="off">
+    <button class="cv-edit-send" id="cvEditSendBtn" title="Send">➤</button>
+  </div>
+</div>
+
+<script>
+// ── [AI CANVAS] ───────────────────────────────────────────────────
+// Self-contained module: opens a ChatGPT-Canvas / Claude-Artifacts style
+// side panel for long-form AI output (code, articles, docs, etc).
+// Reuses: renderMarkdown(), toast(), NETLIFY_FN, S.messages, persist(),
+// autoSaveConversation(). Does not modify chat/history/sync internals.
+(function() {
+  var CV = {
+    open: false,
+    entry: null,     // reference into S.messages[i] this canvas is bound to
+    bubId: null,
+    editing: false,
+    history: [],
+    historyIdx: -1
+  };
+  window._aleemCanvas = CV; // debug/inspection only
+
+  // ── Tunable timing ──────────────────────────────────────────────
+  // Centralized here instead of inline magic numbers so these can be
+  // tuned per device/connection profile without hunting through the
+  // module. Exposed on window so they can be adjusted live (e.g. from
+  // devtools, or a future settings toggle) without editing code.
+  //   Fast devices / good connection: AUTOSAVE 800,  SYNC 1200
+  //   Slow devices / poor connection: AUTOSAVE 1500, SYNC 2500
+  window.CANVAS_AUTOSAVE_DELAY = window.CANVAS_AUTOSAVE_DELAY ?? 1200; // ms — local in-place autosave debounce
+  window.CANVAS_SYNC_DELAY     = window.CANVAS_SYNC_DELAY     ?? 1500; // ms — Firestore flush debounce (canvas-only path)
+
+  function $(id) { return document.getElementById(id); }
+
+  // ── Detection ──────────────────────────────────────────────────
+  var CANVAS_KEYWORDS = /\b(open canvas|edit in canvas|write (an? )?article|build (a )?website|generate code|write (an? )?(blog|essay|report|documentation|email)|create (a )?document)\b/i;
+
+  function detectCanvasMeta(text) {
+    if (!text) return null;
+    var codeBlocks = text.match(/```[\s\S]*?```/g) || [];
+    var maxCodeLen = codeBlocks.reduce(function(m,b){ return Math.max(m, b.length); }, 0);
+    var headings   = (text.match(/^#{1,3}\s+.+$/gm) || []).length;
+    var tableRows  = (text.match(/^\s*\|.+\|\s*$/gm) || []).length;
+    var hasHtmlDoc = /<\/?(html|div|table|ul|ol|h[1-6])[\s>]/i.test(text);
+    var hasJson    = /^\s*[\[{][\s\S]*[\]}]\s*$/.test(text.trim()) && (text.match(/[:,]\s*"/g) || []).length > 4;
+    var paragraphs = text.split(/\n{2,}/).filter(function(p){ return p.trim().length > 40; }).length;
+
+    var hasBigCode    = maxCodeLen > 400;
+    var manyHeadings  = headings >= 3;
+    var hasTable      = tableRows >= 3;
+    var manyParas     = paragraphs >= 4;
+
+    // Document-type signals only — raw character length alone is NOT a
+    // trigger (avoids false positives on long but plain conversational replies).
+    if (!(hasBigCode || manyHeadings || hasTable || hasHtmlDoc || hasJson || manyParas)) return null;
+
+    var lang = 'markdown';
+    var fenceMatch = text.match(/```(\w+)?/);
+    if (fenceMatch && fenceMatch[1]) lang = fenceMatch[1].toLowerCase();
+    else if (hasJson) lang = 'json';
+    else if (hasHtmlDoc) lang = 'html';
+    else if (hasBigCode) lang = 'text';
+
+    var title = '';
+    var hMatch = text.match(/^#{1,3}\s+(.+)$/m);
+    if (hMatch) title = hMatch[1].trim();
+    else {
+      var firstLine = (text.split('\n')[0] || '').replace(/[#*`_>]/g, '').trim();
+      if (firstLine) title = firstLine.slice(0, 60);
+    }
+    return { lang: lang, title: title || 'Document' };
+  }
+
+  // Called from typeMessage() once an AI bubble's final text is known.
+  window.maybeAutoCanvas = function(bubId, rawText) {
+    try {
+      var forced = !!S._forceCanvasNext;
+      S._forceCanvasNext = false;
+
+      var lastUserText = '';
+      for (var i = S.messages.length - 1; i >= 0; i--) {
+        if (S.messages[i].role === 'user') { lastUserText = S.messages[i].text || ''; break; }
+      }
+      var meta = detectCanvasMeta(rawText);
+      var explicit = forced || CANVAS_KEYWORDS.test(lastUserText || '');
+      if (!explicit && !meta) return;
+      if (!meta) meta = { lang: 'markdown', title: 'Document' };
+
+      var entry = S.messages[S.messages.length - 1];
+      if (!entry || entry.role !== 'ai') return;
+      entry.canvas = {
+        title: meta.title,
+        lang: meta.lang,
+        content: rawText,
+        history: [rawText],
+        historyIdx: 0
+      };
+      // Explicit user requests (keyword or 📄 button) open the panel right
+      // away — the user asked for it. Auto-detected long-form content
+      // instead surfaces a dismissible "Document Ready" card in the chat
+      // bubble itself, so opening Canvas is always the user's choice and
+      // never a surprise pop-up.
+      if (explicit) {
+        attachCanvasChip(bubId, entry);
+        openCanvasFromEntry(entry, bubId, true);
+      } else {
+        attachCanvasCard(bubId, entry);
+      }
+      try { if (typeof autoSaveConversation === 'function') autoSaveConversation(); } catch(e) {}
+    } catch (e) { console.error('[AI CANVAS] auto-detect error', e); }
+  };
+
+  function attachCanvasChip(bubId, entry) {
+    var bub = $(bubId);
+    if (!bub) return;
+    var body = bub.closest('.msg-body');
+    if (!body || body.querySelector('.cv-open-chip') || body.querySelector('.cv-doc-card')) return;
+    var chip = document.createElement('button');
+    chip.className = 'cv-open-chip';
+    chip.type = 'button';
+    chip.innerHTML = '📄 Open in Canvas';
+    chip.addEventListener('click', function() { openCanvasFromEntry(entry, bubId, false); });
+    body.appendChild(chip);
+  }
+
+  // "Document Ready" card — shown instead of auto-opening the panel, so
+  // the user explicitly chooses to enter Canvas mode.
+  function attachCanvasCard(bubId, entry) {
+    var bub = $(bubId);
+    if (!bub) return;
+    var body = bub.closest('.msg-body');
+    if (!body || body.querySelector('.cv-doc-card') || body.querySelector('.cv-open-chip')) return;
+    var card = document.createElement('div');
+    card.className = 'cv-doc-card';
+    card.innerHTML =
+      '<div class="cv-doc-card-top">📄 Document Ready</div>' +
+      '<div class="cv-doc-card-title">' + escHtml(entry.canvas.title || 'Document') + '</div>' +
+      '<div class="cv-doc-card-bottom">' +
+        '<span class="cv-lang-badge">' + (entry.canvas.lang || 'text').toUpperCase() + '</span>' +
+        '<span class="cv-doc-card-open">Open in Canvas →</span>' +
+      '</div>';
+    card.addEventListener('click', function() { openCanvasFromEntry(entry, bubId, false); });
+    body.appendChild(card);
+  }
+
+  // Re-attach chips/cards after a conversation reload (canvas data travels
+  // with the persisted message objects, but DOM elements must be rebuilt).
+  window.restoreCanvasChips = function() {
+    var area = $('chatMessages');
+    if (!area) return;
+    var msgEls = area.querySelectorAll('.msg.ai');
+    var aiIdx = 0;
+    for (var i = 0; i < S.messages.length; i++) {
+      var m = S.messages[i];
+      if (m.role !== 'ai') continue;
+      var el = msgEls[aiIdx]; aiIdx++;
+      if (m.canvas && el) {
+        var bub = el.querySelector('.msg-bubble');
+        if (bub) attachCanvasCard(bub.id, m);
+      }
+    }
+  };
+
+  // Reset Canvas state entirely when the user starts a brand-new
+  // conversation, so no content can ever leak from a previous chat.
+  window.resetCanvasForNewChat = function() {
+    closeCanvas();
+    CV.entry = null;
+    CV.bubId = null;
+    CV.history = [];
+    CV.historyIdx = -1;
+    CV.editing = false;
+  };
+
+  // ── Open / Close ───────────────────────────────────────────────
+  function openCanvasFromEntry(entry, bubId, autoOpened) {
+    if (!entry.canvas) {
+      entry.canvas = { title: 'Document', lang: 'markdown', content: entry.text || '', history: [entry.text || ''], historyIdx: 0 };
+    }
+    CV.entry  = entry;
+    CV.bubId  = bubId;
+    CV.history = (entry.canvas.history && entry.canvas.history.length) ? entry.canvas.history.slice() : [entry.canvas.content];
+    CV.historyIdx = (typeof entry.canvas.historyIdx === 'number') ? entry.canvas.historyIdx : CV.history.length - 1;
+    CV.editing = false;
+    $('cvTitle').value = entry.canvas.title || 'Document';
+    $('cvLangBadge').textContent = (entry.canvas.lang || 'text').toUpperCase();
+    renderCanvasBody();
+    updateUndoRedoUI();
+    openPanel();
+    if (!autoOpened) toast('📄 Canvas opened');
+  }
+
+  function openPanel() {
+    var panel = $('aiCanvasPanel');
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    CV.open = true;
+  }
+
+  function closeCanvas() {
+    var panel = $('aiCanvasPanel');
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
+    CV.open = false;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────
+  function renderCanvasBody() {
+    var body = $('cvBody');
+    var content = CV.history[CV.historyIdx] || '';
+    if (CV.editing) {
+      body.innerHTML = '<textarea id="cvEditArea" spellcheck="false"></textarea>';
+      $('cvEditArea').value = content;
+      $('cvEditArea').addEventListener('input', scheduleAutosave);
+    } else {
+      body.innerHTML = '<div class="md-body">' + renderMarkdown(content) + '</div>';
+    }
+  }
+
+  // Debounced (1.2s) in-place autosave while the user types in edit mode.
+  // This updates the CURRENT version's content and persists it, so a
+  // closed tab / app crash never loses in-progress edits. It does NOT
+  // create a new version snapshot on every keystroke — a discrete version
+  // is only pushed when the user leaves edit mode or AI edits the canvas
+  // (see toggleEdit() / aiEditCanvas()), keeping the 10-slot history clean.
+  var _autosaveTimer = null;
+  function scheduleAutosave() {
+    if (_autosaveTimer) clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(function() {
+      var ta = $('cvEditArea');
+      if (!ta || !CV.entry) return;
+      CV.history[CV.historyIdx] = ta.value;
+      syncToEntry();
+    }, window.CANVAS_AUTOSAVE_DELAY);
+  }
+
+  function currentContent() {
+    if (CV.editing) {
+      var ta = $('cvEditArea');
+      return ta ? ta.value : (CV.history[CV.historyIdx] || '');
+    }
+    return CV.history[CV.historyIdx] || '';
+  }
+
+  function toggleEdit() {
+    if (CV.editing) {
+      // Leaving edit mode → commit any manual changes as a new version
+      var edited = $('cvEditArea') ? $('cvEditArea').value : null;
+      if (edited !== null && edited !== CV.history[CV.historyIdx]) {
+        pushVersion(edited);
+      }
+    }
+    CV.editing = !CV.editing;
+    $('cvEditToggleBtn').classList.toggle('cv-chip-active', CV.editing);
+    $('cvEditToggleBtn').textContent = CV.editing ? '👁️ Preview' : '✏️ Edit';
+    renderCanvasBody();
+  }
+
+  // ── Version history (max 10) ──────────────────────────────────
+  function pushVersion(content) {
+    // Drop any "redo" branch beyond current index, then append.
+    CV.history = CV.history.slice(0, CV.historyIdx + 1);
+    CV.history.push(content);
+    if (CV.history.length > 10) CV.history.shift();
+    CV.historyIdx = CV.history.length - 1;
+    syncToEntry();
+    updateUndoRedoUI();
+  }
+
+  function undo() {
+    if (CV.historyIdx <= 0) return;
+    CV.historyIdx--;
+    syncToEntry();
+    renderCanvasBody();
+    updateUndoRedoUI();
+  }
+
+  function redo() {
+    if (CV.historyIdx >= CV.history.length - 1) return;
+    CV.historyIdx++;
+    syncToEntry();
+    renderCanvasBody();
+    updateUndoRedoUI();
+  }
+
+  function updateUndoRedoUI() {
+    $('cvUndoBtn').disabled = CV.historyIdx <= 0;
+    $('cvRedoBtn').disabled = CV.historyIdx >= CV.history.length - 1;
+  }
+
+  // Write the active version + metadata back onto the bound S.messages
+  // entry, then persist via the app's existing save pipeline so Canvas
+  // content travels with the conversation (localStorage + cloud sync).
+  function syncToEntry() {
+    if (!CV.entry) return;
+    CV.entry.canvas = {
+      title: $('cvTitle').value || 'Document',
+      lang: ($('cvLangBadge').textContent || 'text').toLowerCase(),
+      content: CV.history[CV.historyIdx],
+      history: CV.history.slice(),
+      historyIdx: CV.historyIdx
+    };
+    try { if (typeof autoSaveConversation === 'function') autoSaveConversation(); } catch(e) {}
+    try { if (typeof persist === 'function') persist(); } catch(e) {}
+    // [CLOUD SYNC FIX] persist()'s cloud-sync patch deliberately skips the
+    // CURRENT conversation while it's still "_live" (i.e. the user hasn't
+    // started a new chat yet) — and csyncUpsertConv() itself ALSO bails on
+    // conv._live ("never sync live/in-progress sessions"), so even calling
+    // that wrapper directly would still be skipped. Canvas edits are
+    // deliberate, saved work the user could spend many minutes on without
+    // ever sending another chat message, so they should reach Firestore
+    // promptly rather than staying local-only until the conversation is
+    // later sealed. We therefore enqueue + schedule the flush directly via
+    // the lower-level primitives, bypassing only this specific _live guard
+    // for canvas saves — every other call path's _live skip is untouched.
+    try {
+      if (typeof window !== 'undefined' && typeof CSYNC !== 'undefined' && CSYNC.db && CSYNC.uid) {
+        var liveConv = (S.history || []).find(function(c){ return c._live; });
+        if (liveConv && typeof _csyncEnqueue === 'function' && typeof _csyncScheduleFlush === 'function') {
+          _csyncEnqueue('upsert', liveConv);
+          _csyncScheduleFlush(window.CANVAS_SYNC_DELAY);
+        }
+      }
+    } catch(e) {}
+  }
+
+  // ── Copy / Download ───────────────────────────────────────────
+  function copyCanvas() {
+    var text = currentContent();
+    navigator.clipboard.writeText(text).then(function() {
+      toast('📋 Canvas copied');
+    }).catch(function() {
+      toast('⚠️ Copy failed');
+    });
+  }
+
+  function downloadCanvas(ext) {
+    var text = currentContent();
+    var mime = ext === 'html' ? 'text/html' : ext === 'md' ? 'text/markdown' : 'text/plain';
+    var out  = text;
+    if (ext === 'html' && !/^\s*<!doctype|^\s*<html/i.test(text)) {
+      out = '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>' +
+        ($('cvTitle').value || 'Document') + '</title></head><body>' +
+        renderMarkdown(text) + '</body></html>';
+    }
+    var safeTitle = ($('cvTitle').value || 'canvas').replace(/[^\w\-]+/g, '_').slice(0, 50) || 'canvas';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([out], { type: mime }));
+    a.download = safeTitle + '.' + ext;
+    a.click();
+    toast('⬇️ Downloaded .' + ext);
+  }
+
+  // ── AI-assisted editing ────────────────────────────────────────
+  var CANVAS_NETLIFY_FN = (typeof NETLIFY_FN !== 'undefined') ? NETLIFY_FN : '/.netlify/functions/chat';
+
+  async function aiEditCanvas(instruction) {
+    if (!instruction || !instruction.trim()) return;
+    var content = currentContent();
+    var model = (typeof S !== 'undefined' && S.model) ? S.model : 'gemini-2.5-flash-lite';
+    var prompt =
+      'You are editing a document inside an AI canvas editor. ' +
+      'Apply the user\'s instruction to the FULL document below and return ONLY the ' +
+      'complete revised document — no preamble, no explanation, no markdown code fences ' +
+      'around the whole answer (only use fences for actual code if relevant).\n\n' +
+      'Instruction: ' + instruction + '\n\n' +
+      '--- DOCUMENT START ---\n' + content + '\n--- DOCUMENT END ---';
+
+    var sendBtn = $('cvEditSendBtn');
+    var input   = $('cvEditInput');
+    sendBtn.disabled = true;
+    input.disabled = true;
+    var prevPlaceholder = input.placeholder;
+    input.placeholder = 'AI is editing…';
+
+    try {
+      var res = await fetch(CANVAS_NETLIFY_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          geminiBody: {
+            system_instruction: { parts: [{ text: 'You are a precise document/code editor inside ALEEM AI Canvas.' }] },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 4096, temperature: 0.5 }
+          }
+        })
+      });
+      var data = await res.json();
+      var reply = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+      if (!reply) {
+        toast('⚠️ Canvas AI edit failed');
+        return;
+      }
+      reply = reply.trim();
+      pushVersion(reply);
+      CV.editing = false;
+      $('cvEditToggleBtn').classList.remove('cv-chip-active');
+      $('cvEditToggleBtn').textContent = '✏️ Edit';
+      renderCanvasBody();
+      // Keep the chat bubble's underlying text in sync too, but never
+      // touch the chat DOM/history array structure beyond the existing entry.
+      toast('✨ Canvas updated');
+    } catch (e) {
+      console.error('[AI CANVAS] edit error', e);
+      toast('⚠️ Canvas AI edit failed');
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      input.placeholder = prevPlaceholder;
+      input.value = '';
+    }
+  }
+
+  // ── Wire up UI ─────────────────────────────────────────────────
+  function init() {
+    $('cvCloseBtn').addEventListener('click', closeCanvas);
+    $('cvCopyBtn').addEventListener('click', copyCanvas);
+    $('cvDownloadBtn').addEventListener('click', function() { downloadCanvas('txt'); });
+    $('cvDlTxt').addEventListener('click', function() { downloadCanvas('txt'); });
+    $('cvDlMd').addEventListener('click', function() { downloadCanvas('md'); });
+    $('cvDlHtml').addEventListener('click', function() { downloadCanvas('html'); });
+    $('cvUndoBtn').addEventListener('click', undo);
+    $('cvRedoBtn').addEventListener('click', redo);
+    $('cvEditToggleBtn').addEventListener('click', toggleEdit);
+    $('cvTitle').addEventListener('change', syncToEntry);
+
+    $('cvEditSendBtn').addEventListener('click', function() {
+      var v = $('cvEditInput').value;
+      aiEditCanvas(v);
+    });
+    $('cvEditInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); aiEditCanvas($('cvEditInput').value); }
+    });
+    $('cvEditSuggest').addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-ins]');
+      if (!btn) return;
+      aiEditCanvas(btn.getAttribute('data-ins'));
+    });
+
+    // Explicit "📄 Canvas" trigger button next to image/mic buttons.
+    // Tapping it marks the NEXT AI reply to open in Canvas regardless of
+    // length heuristics — it does not send anything itself.
+    var canvasBtn = $('canvasBtn');
+    if (canvasBtn) {
+      canvasBtn.addEventListener('click', function() {
+        S._forceCanvasNext = !S._forceCanvasNext;
+        canvasBtn.classList.toggle('active', !!S._forceCanvasNext);
+        toast(S._forceCanvasNext ? '📄 Next reply will open in Canvas' : '📄 Canvas mode off');
+      });
+    }
+
+    // Escape closes the canvas (mirrors other glassmorphism popups).
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && CV.open) closeCanvas();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+// ── [END AI CANVAS] ──────────────────────────────────────────────
+</script>
 
 </body>
 </html>
