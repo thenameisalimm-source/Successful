@@ -508,6 +508,8 @@
     letter-spacing: 0.2px;
     white-space: nowrap;
     transition: opacity 0.2s;
+    flex-wrap: wrap;
+    justify-content: center;
   }
   .agent-mode-badge .amb-label {
     font-size: 0.60rem;
@@ -516,6 +518,30 @@
     text-transform: uppercase;
     letter-spacing: 0.8px;
     margin-right: 2px;
+  }
+  .agent-mode-badge .amb-sep {
+    font-size: 0.6rem;
+    color: var(--text-3);
+    margin: 0 1px;
+  }
+  .agent-mode-badge .amb-topic-lbl,
+  .agent-mode-badge .amb-conf-lbl {
+    font-size: 0.60rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-right: 2px;
+  }
+  .agent-mode-badge .amb-topic {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--a3);
+  }
+  .agent-mode-badge .amb-conf {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--a2);
   }
 
   /* ================================================================
@@ -6468,10 +6494,10 @@ const AGENTS = [
     },
     tools: ['code', 'debug', 'analyze'],
     modes: [
-      { key: 'build',   name: 'Build',   weight: 1, detect: ['build','create','make','write','generate','develop','implement','scaffold','set up','website','app','component','script','function'], template: { requirements: true, code: true, explanation: true, improvements: true, security: true } },
-      { key: 'debug',   name: 'Debug',   weight: 3, detect: ['bug','fix','error','issue','broken','not working','crash','exception','fail','wrong output','debug','problem with','undefined','null','syntax','stack trace','traceback'], template: { requirements: true, code: true, explanation: true } },
-      { key: 'explain', name: 'Explain', weight: 2, detect: ['explain','how does','what does','what is','how do i understand','walk me through','clarify','describe','breakdown','what\'s happening'], template: { explanation: true, improvements: true } },
-      { key: 'review',  name: 'Review',  weight: 2, detect: ['review','optimize','improve','refactor','clean','performance','best practice','check','analyse','assess','audit'], template: { requirements: true, improvements: true, security: true } }
+      { key: 'build',   name: 'Build',   weight: 1, priority: 3, detect: ['build','create','make','write','generate','develop','implement','scaffold','set up','website','app','component','script','function'], intent: ['build','create'], template: { requirements: true, code: true, explanation: true, improvements: true, security: true } },
+      { key: 'debug',   name: 'Debug',   weight: 3, priority: 5, detect: ['bug','fix','error','issue','broken','not working','crash','exception','fail','wrong output','debug','problem with','undefined','null','syntax','stack trace','traceback'], intent: ['fix','diagnose'], template: { requirements: true, code: true, explanation: true } },
+      { key: 'explain', name: 'Explain', weight: 2, priority: 4, detect: ['explain','how does','what does','what is','how do i understand','walk me through','clarify','describe','breakdown','what\'s happening'], intent: ['explain','learn'], template: { explanation: true, improvements: true } },
+      { key: 'review',  name: 'Review',  weight: 2, priority: 4, detect: ['review','optimize','improve','refactor','clean','performance','best practice','check','analyse','assess','audit'], intent: ['review','compare'], template: { requirements: true, improvements: true, security: true } }
     ],
     header: { title: 'Coding Agent Active', badges: ['Complete Code', 'Debugging', 'Best Practices', 'Security'] }
   },
@@ -6515,11 +6541,11 @@ const AGENTS = [
     },
     tools: ['quiz', 'flashcard', 'roadmap'],
     modes: [
-      { key: 'lesson',   name: 'Lesson',      weight: 2, detect: ['teach','learn','course','roadmap','introduction','start','begin','how to','tutorial','guide me','lesson','study','become good at','get started','i want to','help me understand','take me through'], template: { roadmap: true, explanation: true, examples: true, exercise: true, quiz: true, nextStep: true } },
-      { key: 'quiz',     name: 'Quiz',         weight: 3, detect: ['quiz','question','mcq','multiple choice','test question','give me questions','challenge me','q&a','10 questions','5 questions'], template: { quiz: true } },
-      { key: 'explain',  name: 'Explanation',  weight: 2, detect: ['explain','what is','what are','define','definition','mean','clarify','describe','how does','how do','walk me through','what\'s'], template: { explanation: true, examples: true } },
-      { key: 'revision', name: 'Revision',     weight: 2, detect: ['revise','revision','recap','review','summarise','summarize','remind me','go over','overview','summary','refresh'], template: { explanation: true, examples: true, quiz: true } },
-      { key: 'exam',     name: 'Exam',         weight: 3, detect: ['exam','test me','test my','assess','assessment','exam mode','simulate exam','practice test','full test'], template: { quiz: true, nextStep: true } }
+      { key: 'lesson',   name: 'Lesson',      weight: 2, priority: 4, detect: ['teach','learn','course','roadmap','introduction','start','begin','how to','tutorial','guide me','lesson','study','become good at','get started','i want to','help me understand','take me through'], intent: ['learn','plan'], template: { roadmap: true, explanation: true, examples: true, exercise: true, quiz: true, nextStep: true } },
+      { key: 'quiz',     name: 'Quiz',         weight: 3, priority: 5, detect: ['quiz','question','mcq','multiple choice','test question','give me questions','challenge me','q&a','10 questions','5 questions'], intent: ['quiz','test'], template: { quiz: true } },
+      { key: 'explain',  name: 'Explanation',  weight: 2, priority: 4, detect: ['explain','what is','what are','define','definition','mean','clarify','describe','how does','how do','walk me through','what\'s'], intent: ['explain','learn'], template: { explanation: true, examples: true } },
+      { key: 'revision', name: 'Revision',     weight: 2, priority: 4, detect: ['revise','revision','recap','review','summarise','summarize','remind me','go over','overview','summary','refresh'], intent: ['summarize','review'], template: { explanation: true, examples: true, quiz: true } },
+      { key: 'exam',     name: 'Exam',         weight: 3, priority: 5, detect: ['exam','test me','test my','assess','assessment','exam mode','simulate exam','practice test','full test'], intent: ['test','quiz'], template: { quiz: true, nextStep: true } }
     ],
     header: { title: 'Study Agent Active', badges: ['Learning Roadmap', 'Exercises', 'Quiz', 'Progress Guidance'] }
   },
@@ -6562,9 +6588,9 @@ const AGENTS = [
     },
     tools: ['calories', 'bmi', 'macro'],
     modes: [
-      { key: 'plan',       name: 'Plan',       weight: 2, detect: ['plan','lose weight','gain muscle','get fit','build','training plan','workout plan','programme','schedule','routine','goal','start','help me','i want to'], template: { goal: true, workout: true, nutrition: true, recovery: true, mistakes: true, progress: true } },
-      { key: 'review',     name: 'Review',     weight: 2, detect: ['review','rate','assess','check my','evaluate','feedback','look at','opinion on','critique','is this good','what do you think'], template: { goal: true, workout: true, mistakes: true, progress: true } },
-      { key: 'calculator', name: 'Calculator', weight: 3, detect: ['calorie','caloric','calories','macro','protein','carb','fat','bmi','tdee','how many','calculate','intake','deficit','surplus'], template: { nutrition: true } }
+      { key: 'plan',       name: 'Plan',       weight: 2, priority: 4, detect: ['plan','lose weight','gain muscle','get fit','build','training plan','workout plan','programme','schedule','routine','goal','start','help me','i want to'], intent: ['plan','build'], template: { goal: true, workout: true, nutrition: true, recovery: true, mistakes: true, progress: true } },
+      { key: 'review',     name: 'Review',     weight: 2, priority: 3, detect: ['review','rate','assess','check my','evaluate','feedback','look at','opinion on','critique','is this good','what do you think'], intent: ['review'], template: { goal: true, workout: true, mistakes: true, progress: true } },
+      { key: 'calculator', name: 'Calculator', weight: 3, priority: 5, detect: ['calorie','caloric','calories','macro','protein','carb','fat','bmi','tdee','how many','calculate','intake','deficit','surplus'], intent: ['calculate'], template: { nutrition: true } }
     ],
     header: { title: 'Fitness Agent Active', badges: ['Workout Plans', 'Nutrition', 'Recovery', 'Progress Tips'] }
   },
@@ -6607,9 +6633,9 @@ const AGENTS = [
     },
     tools: ['budget', 'swot', 'roi'],
     modes: [
-      { key: 'brainstorm', name: 'Brainstorm', weight: 2, detect: ['idea','ideas','brainstorm','concept','startup idea','business idea','what if','could i','should i start','thinking of','want to start'], template: { brainstorm: true, opportunities: true, risks: true, nextSteps: true } },
-      { key: 'analysis',   name: 'Analysis',   weight: 3, detect: ['analyse','analyze','analysis','evaluate','assess','review my','look at my','swot','viability','feasibility','startup','potential','is this viable'], template: { objective: true, analysis: true, opportunities: true, risks: true, nextSteps: true } },
-      { key: 'strategy',   name: 'Strategy',   weight: 2, detect: ['strategy','strategic','plan','marketing','growth','scale','expand','increase','compete','market','customer','acquire','launch'], template: { objective: true, analysis: true, actionPlan: true, budget: true, nextSteps: true } }
+      { key: 'brainstorm', name: 'Brainstorm', weight: 2, priority: 3, detect: ['idea','ideas','brainstorm','concept','startup idea','business idea','what if','could i','should i start','thinking of','want to start'], intent: ['brainstorm','plan'], template: { brainstorm: true, opportunities: true, risks: true, nextSteps: true } },
+      { key: 'analysis',   name: 'Analysis',   weight: 3, priority: 5, detect: ['analyse','analyze','analysis','evaluate','assess','review my','look at my','swot','viability','feasibility','startup','potential','is this viable'], intent: ['compare','review'], template: { objective: true, analysis: true, opportunities: true, risks: true, nextSteps: true } },
+      { key: 'strategy',   name: 'Strategy',   weight: 2, priority: 4, detect: ['strategy','strategic','plan','marketing','growth','scale','expand','increase','compete','market','customer','acquire','launch'], intent: ['plan','build'], template: { objective: true, analysis: true, actionPlan: true, budget: true, nextSteps: true } }
     ],
     header: { title: 'Business Agent Active', badges: ['Strategy', 'Opportunities', 'Risk Analysis', 'Action Plan'] }
   },
@@ -6652,8 +6678,8 @@ const AGENTS = [
     },
     tools: ['currency', 'weather', 'flightSearch'],
     modes: [
-      { key: 'planning', name: 'Planning', weight: 2, detect: ['itinerary','plan','trip','visit','going to','travel to','holiday','vacation','days in','week in','tour','sightseeing','what to do','places to visit','things to do'], template: { itinerary: true, transport: true, localTips: true, timeline: true } },
-      { key: 'budget',   name: 'Budget',   weight: 3, detect: ['budget','cost','cheap','afford','how much','price','money','spend','expensive','backpack','save','on a budget','low cost'], template: { budget: true, transport: true, localTips: true } }
+      { key: 'planning', name: 'Planning', weight: 2, priority: 4, detect: ['itinerary','plan','trip','visit','going to','travel to','holiday','vacation','days in','week in','tour','sightseeing','what to do','places to visit','things to do'], intent: ['plan','travel'], template: { itinerary: true, transport: true, localTips: true, timeline: true } },
+      { key: 'budget',   name: 'Budget',   weight: 3, priority: 5, detect: ['budget','cost','cheap','afford','how much','price','money','spend','expensive','backpack','save','on a budget','low cost'], intent: ['calculate','plan'], template: { budget: true, transport: true, localTips: true } }
     ],
     header: { title: 'Travel Agent Active', badges: ['Itinerary', 'Budget', 'Local Tips', 'Packing Guide'] }
   },
@@ -6693,9 +6719,9 @@ const AGENTS = [
     },
     tools: ['nameGenerator', 'storyPlot', 'moodboard'],
     modes: [
-      { key: 'writing', name: 'Writing',  weight: 2, detect: ['story','write','fiction','poem','script','narrative','character','plot','scene','chapter','blog','article','essay','draft','write me'], template: { brainstorm: true, topIdea: true, storytelling: true } },
-      { key: 'design',  name: 'Design',   weight: 3, detect: ['logo','brand','name','slogan','tagline','design','visual','identity','colour','color','font','style','aesthetic','mood','branding'], template: { brainstorm: true, topIdea: true, alternatives: true } },
-      { key: 'ideas',   name: 'Ideation', weight: 1, detect: ['idea','concept','campaign','creative','brainstorm','angle','approach','unique','original','fresh','new'], template: { brainstorm: true, topIdea: true, alternatives: true } }
+      { key: 'writing', name: 'Writing',  weight: 2, priority: 4, detect: ['story','write','fiction','poem','script','narrative','character','plot','scene','chapter','blog','article','essay','draft','write me'], intent: ['create','build'], template: { brainstorm: true, topIdea: true, storytelling: true } },
+      { key: 'design',  name: 'Design',   weight: 3, priority: 5, detect: ['logo','brand','name','slogan','tagline','design','visual','identity','colour','color','font','style','aesthetic','mood','branding'], intent: ['create','brainstorm'], template: { brainstorm: true, topIdea: true, alternatives: true } },
+      { key: 'ideas',   name: 'Ideation', weight: 1, priority: 3, detect: ['idea','concept','campaign','creative','brainstorm','angle','approach','unique','original','fresh','new'], intent: ['brainstorm'], template: { brainstorm: true, topIdea: true, alternatives: true } }
     ],
     header: { title: 'Creative Agent Active', badges: ['Brainstorming', 'Storytelling', 'Original Ideas', 'Creative Drafts'] }
   },
@@ -6737,8 +6763,8 @@ const AGENTS = [
     },
     tools: ['factCheck', 'summarize', 'compare'],
     modes: [
-      { key: 'research', name: 'Research', weight: 2, detect: ['research','explore','deep dive','investigate','study','background','history','overview','what is the state of','explain in depth','comprehensive','tell me about'], template: { overview: true, facts: true, analysis: true, uncertainty: true, keyFindings: true, furtherReading: true } },
-      { key: 'summary',  name: 'Summary',  weight: 3, detect: ['summarise','summarize','summary','brief','tldr','main points','key points','short overview','in short','paper','article','abstract'], template: { overview: true, keyFindings: true } }
+      { key: 'research', name: 'Research', weight: 2, priority: 4, detect: ['research','explore','deep dive','investigate','study','background','history','overview','what is the state of','explain in depth','comprehensive','tell me about'], intent: ['learn','explain'], template: { overview: true, facts: true, analysis: true, uncertainty: true, keyFindings: true, furtherReading: true } },
+      { key: 'summary',  name: 'Summary',  weight: 3, priority: 5, detect: ['summarise','summarize','summary','brief','tldr','main points','key points','short overview','in short','paper','article','abstract'], intent: ['summarize'], template: { overview: true, keyFindings: true } }
     ],
     header: { title: 'Research Agent Active', badges: ['Fact Analysis', 'Multiple Sources', 'Balanced View', 'Deep Dive'] }
   },
@@ -6779,8 +6805,8 @@ const AGENTS = [
     },
     tools: ['scaleRecipe', 'nutritionCalc', 'substitution'],
     modes: [
-      { key: 'cooking',    name: 'Cooking',    weight: 2, detect: ['recipe','cook','make','how to cook','dish','meal','bake','grill','roast','fry','prepare','cuisine','dinner','lunch','breakfast','supper'], template: { ingredients: true, substitutions: true, steps: true, nutrition: true, serving: true } },
-      { key: 'ingredient', name: 'Ingredient', weight: 3, detect: ['only have','i have','got','fridge','pantry','left over','leftover','use up','ingredient','what can i make','what to make','in my kitchen','in the house'], template: { ingredients: true, steps: true, serving: true } }
+      { key: 'cooking',    name: 'Cooking',    weight: 2, priority: 4, detect: ['recipe','cook','make','how to cook','dish','meal','bake','grill','roast','fry','prepare','cuisine','dinner','lunch','breakfast','supper'], intent: ['create','learn'], template: { ingredients: true, substitutions: true, steps: true, nutrition: true, serving: true } },
+      { key: 'ingredient', name: 'Ingredient', weight: 3, priority: 5, detect: ['only have','i have','got','fridge','pantry','left over','leftover','use up','ingredient','what can i make','what to make','in my kitchen','in the house'], intent: ['create'], template: { ingredients: true, steps: true, serving: true } }
     ],
     header: { title: 'Chef Agent Active', badges: ['Recipes', 'Substitutions', 'Step-by-Step', 'Nutrition Notes'] }
   },
@@ -6821,8 +6847,8 @@ const AGENTS = [
     },
     tools: ['jurisdictionLookup', 'documentSummary', 'termGlossary'],
     modes: [
-      { key: 'review',   name: 'Review',   weight: 3, detect: ['contract','document','clause','agreement','terms','review','check','read','nda','lease','policy','analyse this','look at this'], template: { concept: true, howItWorks: true, caveats: true, referral: true } },
-      { key: 'guidance', name: 'Guidance', weight: 2, detect: ['rights','right','law','legal','liable','sue','court','dispute','what can i do','am i allowed','is it legal','tenant','employee','landlord','fired','dismissed'], template: { concept: true, howItWorks: true, jurisdiction: true, caveats: true, referral: true } }
+      { key: 'review',   name: 'Review',   weight: 3, priority: 5, detect: ['contract','document','clause','agreement','terms','review','check','read','nda','lease','policy','analyse this','look at this'], intent: ['review'], template: { concept: true, howItWorks: true, caveats: true, referral: true } },
+      { key: 'guidance', name: 'Guidance', weight: 2, priority: 4, detect: ['rights','right','law','legal','liable','sue','court','dispute','what can i do','am i allowed','is it legal','tenant','employee','landlord','fired','dismissed'], intent: ['explain','diagnose'], template: { concept: true, howItWorks: true, jurisdiction: true, caveats: true, referral: true } }
     ],
     header: { title: 'Legal Agent Active', badges: ['Plain Language', 'Jurisdiction Notes', 'Concepts Explained', 'Professional Referral'] }
   },
@@ -6863,8 +6889,8 @@ const AGENTS = [
     },
     tools: ['symptomInfo', 'medicationInfo', 'bodySystem'],
     modes: [
-      { key: 'assessment', name: 'Assessment', weight: 3, detect: ['symptom','feel','pain','ache','hurt','sick','ill','unwell','experiencing','having','sore','swollen','tired','fever','nausea','headache','dizzy','bleeding','rash'], template: { overview: true, explanations: true, watchFor: true, treatment: true, seeDoctor: true } },
-      { key: 'safety',     name: 'Safety',     weight: 3, detect: ['medicine','medication','drug','tablet','pill','dose','dosage','side effect','interaction','safe to take','can i take','prescription','supplement','overdose'], template: { overview: true, watchFor: true, seeDoctor: true } }
+      { key: 'assessment', name: 'Assessment', weight: 3, priority: 5, detect: ['symptom','feel','pain','ache','hurt','sick','ill','unwell','experiencing','having','sore','swollen','tired','fever','nausea','headache','dizzy','bleeding','rash'], intent: ['diagnose','explain'], template: { overview: true, explanations: true, watchFor: true, treatment: true, seeDoctor: true } },
+      { key: 'safety',     name: 'Safety',     weight: 3, priority: 5, detect: ['medicine','medication','drug','tablet','pill','dose','dosage','side effect','interaction','safe to take','can i take','prescription','supplement','overdose'], intent: ['explain','review'], template: { overview: true, watchFor: true, seeDoctor: true } }
     ],
     header: { title: 'Medical Agent Active', badges: ['Health Info', 'Safety First', 'Clear Explanations', 'Doctor Referral'] }
   }
@@ -6887,31 +6913,145 @@ const AGENTS = [
 //   model "when your response is substantive, include these sections where
 //   appropriate." Short clarification replies or follow-up answers are never
 //   forced into the full template shape. The word "when appropriate" is key.
+// ── Intent Detection Helper ───────────────────────────────────────────
+// Analyses the user's message and returns a short intent string.
+// Used by getAgentMode() to add an intent bonus on top of keyword scoring.
+function detectUserIntent(message) {
+  var m = (message || '').toLowerCase().trim();
+
+  // Continuity signals — handled upstream but mapped here for completeness
+  var continuityPhrases = ['continue','go on','next','yes','more','continue please','keep going','proceed','carry on'];
+  for (var ci = 0; ci < continuityPhrases.length; ci++) {
+    if (m === continuityPhrases[ci] || m.indexOf(continuityPhrases[ci]) === 0) return 'continue';
+  }
+
+  // Quiz / test
+  if (/\b(quiz|mcq|multiple choice|test question|q&a|\d+\s+question|give me questions|challenge me)\b/.test(m)) return 'quiz';
+  if (/\b(exam|test me|test my|simulate exam|practice test|full test|assessment)\b/.test(m)) return 'test';
+
+  // Fix / debug / diagnose
+  if (/\b(fix|debug|error|bug|broken|not working|crash|exception|issue|problem|diagnose|symptom|pain|ache|hurt|sick)\b/.test(m)) return 'fix';
+
+  // Learn / lesson
+  if (/\b(teach|course|tutorial|guide me|roadmap|get started|learn|lesson|how to|become good at)\b/.test(m)) return 'learn';
+
+  // Explain / define
+  if (/\b(explain|what is|what are|define|definition|clarify|describe|how does|how do|walk me through|what's|mean)\b/.test(m)) return 'explain';
+
+  // Review / assess
+  if (/\b(review|refactor|optimize|improve|audit|assess|check|evaluate|rate|look at|feedback|opinion)\b/.test(m)) return 'review';
+
+  // Summarize
+  if (/\b(summarise|summarize|summary|brief|tldr|main points|key points|overview|in short|recap|revision|revise|remind me)\b/.test(m)) return 'summarize';
+
+  // Build / create
+  if (/\b(build|create|make|generate|develop|implement|write|draft|design|scaffold)\b/.test(m)) return 'build';
+
+  // Compare
+  if (/\b(compare|versus|vs\b|difference between|which is better|pros and cons|contrast)\b/.test(m)) return 'compare';
+
+  // Plan
+  if (/\b(plan|schedule|roadmap|itinerary|strategy|outline|organise|organize)\b/.test(m)) return 'plan';
+
+  // Calculate
+  if (/\b(calculate|calorie|caloric|macro|bmi|tdee|how many|intake|deficit|surplus|budget|cost|price)\b/.test(m)) return 'calculate';
+
+  // Brainstorm
+  if (/\b(brainstorm|idea|concept|what if|thinking of|creative|original|fresh|angle)\b/.test(m)) return 'brainstorm';
+
+  // Travel
+  if (/\b(travel|trip|visit|holiday|vacation|itinerary|sightseeing|places to visit)\b/.test(m)) return 'travel';
+
+  // Diagnose (medical/legal specific)
+  if (/\b(diagnose|diagnosis|condition|disease|law|legal|rights|liable|sue)\b/.test(m)) return 'diagnose';
+
+  return 'general';
+}
+
+// ── Topic Extraction Helper ───────────────────────────────────────────
+// Extracts a short topic label from the user's message for display in the header.
+function extractTopic(message) {
+  var m = (message || '').trim();
+
+  // Patterns: "teach me X", "explain X", "learn X", "fix my X code", etc.
+  var patterns = [
+    /(?:teach|learn|study|understand|explain|about|regarding|for)\s+(?:me\s+)?(?:about\s+)?([A-Za-z0-9#\+\.\-\/\s]{2,28}?)(?:\s*(?:code|programming|language|topic|concepts?|basics?|fundamentals?|in detail|deeply|thoroughly|please|\?|$))/i,
+    /(?:fix|debug|review|improve|refactor|optimize)\s+(?:my\s+)?(?:the\s+)?([A-Za-z0-9#\+\.\-\/\s]{2,20}?)(?:\s*(?:code|script|function|class|app|project|issue|error|bug|problem|\?|$))/i,
+    /(?:give me|create|make|build|write|generate)\s+(?:a\s+)?(?:lesson|tutorial|guide|roadmap|quiz|plan|summary|overview)\s+(?:on|for|about)?\s*([A-Za-z0-9#\+\.\-\/\s]{2,28}?)(?:\s*$|\?)/i,
+    /(?:what is|what are|define|definition of|how does|how do)\s+([A-Za-z0-9#\+\.\-\/\s]{2,28}?)(?:\s*(?:work|\?|$))/i,
+    /^(?:teach|explain|learn|study)\s+([A-Za-z0-9#\+\.\-\/\s]{2,28}?)(?:\s*$|\?)/i
+  ];
+
+  for (var pi = 0; pi < patterns.length; pi++) {
+    var match = m.match(patterns[pi]);
+    if (match && match[1]) {
+      var topic = match[1].trim().replace(/\s+/g, ' ');
+      // Capitalise first letter
+      if (topic.length > 1) topic = topic.charAt(0).toUpperCase() + topic.slice(1);
+      // Trim noise words at the end
+      topic = topic.replace(/\s+(please|me|us|this|that|it)$/i, '').trim();
+      if (topic.length >= 2 && topic.length <= 30) return topic;
+    }
+  }
+  return '';
+}
+
 // ── Agent Mode Detection ──────────────────────────────────────────────
-// Scores every mode using weighted keyword matching against the user's
-// latest message. Each mode's `weight` multiplies every keyword hit
-// (defaults to 1 if omitted), so high-signal modes (e.g. Debug) can
-// outrank modes with more keywords but lower confidence.
-// Returns the highest-scoring mode; falls back to modes[0] on a tie/miss.
+// Multi-signal scoring pipeline:
+//   keyword score  — keyword hits × mode weight
+//   intent bonus   — +3 if detected intent matches any mode.intent tag
+//   priority bonus — +mode.priority (0-5) as a tiebreaker signal
+//   exact phrase   — +4 if entire detect phrase found verbatim (multi-word phrases)
+//   context bonus  — +5 if previous mode matches and message is short continuity
+// Returns { mode, score, intent, maxScore }
 function getAgentMode(agent, userMessage) {
   if (!agent || !agent.modes || !agent.modes.length) return null;
-  var msg = (userMessage || '').toLowerCase();
+  var msg = (userMessage || '').toLowerCase().trim();
+
+  // Detect user intent once for the whole call
+  var detectedIntent = detectUserIntent(msg);
+
   var best = null;
   var bestScore = -1;
+  var maxPossible = 0;
+
   for (var i = 0; i < agent.modes.length; i++) {
     var mode = agent.modes[i];
     var w = (typeof mode.weight === 'number' && mode.weight > 0) ? mode.weight : 1;
+    var priority = (typeof mode.priority === 'number') ? mode.priority : 0;
     var score = 0;
     var kw = mode.detect || [];
+
+    // 1. Keyword score
     for (var j = 0; j < kw.length; j++) {
-      if (msg.indexOf(kw[j].toLowerCase()) !== -1) score += w;
+      var kwd = kw[j].toLowerCase();
+      if (msg.indexOf(kwd) !== -1) {
+        score += w;
+        // Exact phrase bonus: only multi-word phrases earn it
+        if (kwd.indexOf(' ') !== -1) score += 4;
+      }
     }
+
+    // 2. Intent bonus
+    var modeIntents = mode.intent || [];
+    for (var ii = 0; ii < modeIntents.length; ii++) {
+      if (modeIntents[ii] === detectedIntent) { score += 3; break; }
+    }
+
+    // 3. Priority bonus (scaled to be a tiebreaker, not a dominator)
+    score += priority * 0.5;
+
+    // Track max for confidence calc
+    var modeMax = kw.length * w * 1.5 + 3 + priority * 0.5;
+    if (modeMax > maxPossible) maxPossible = modeMax;
+
     if (score > bestScore) { bestScore = score; best = mode; }
   }
-  // Fall back to first mode if nothing scored
+
+  // Fallback to first mode if nothing scored
   var chosen = best || agent.modes[0];
   var finalScore = (best && bestScore > 0) ? bestScore : 0;
-  return { mode: chosen, score: finalScore };
+  return { mode: chosen, score: finalScore, intent: detectedIntent, maxScore: maxPossible || 1 };
 }
 
 // Expose last detected mode name so the UI badge can read it.
@@ -6926,15 +7066,66 @@ function getAgentSys(userMessage) {
   }
   if (!ag || !ag.role) return '';
 
-  // Detect the mode for this request and store runtime state on S.
-  var _modeResult = getAgentMode(ag, userMessage || '');
+  var msg = (userMessage || '').trim();
+  var msgLower = msg.toLowerCase();
+
+  // ── Conversation continuity ───────────────────────────────────────
+  // If the user says "continue", "next", "more" etc. and a previous
+  // mode is stored, reuse it instead of re-detecting.
+  var continuityWords = ['continue','next','go on','yes','more','continue please','keep going','proceed','carry on','and then','go ahead'];
+  var isContinuity = false;
+  for (var cw = 0; cw < continuityWords.length; cw++) {
+    if (msgLower === continuityWords[cw] || msgLower.indexOf(continuityWords[cw]) === 0) {
+      isContinuity = true; break;
+    }
+  }
+
+  var _modeResult;
+  if (isContinuity && S.agentRuntime && S.agentRuntime.modeKey) {
+    // Reuse previous mode; rebuild a mock result
+    var prevMode = null;
+    for (var pm = 0; pm < ag.modes.length; pm++) {
+      if (ag.modes[pm].key === S.agentRuntime.modeKey) { prevMode = ag.modes[pm]; break; }
+    }
+    if (prevMode) {
+      _modeResult = {
+        mode:     prevMode,
+        score:    S.agentRuntime.score || 1,
+        intent:   S.agentRuntime.intent || 'continue',
+        maxScore: S.agentRuntime.maxScore || 1
+      };
+    }
+  }
+
+  if (!_modeResult) {
+    _modeResult = getAgentMode(ag, msg);
+  }
+
   var mode = _modeResult ? _modeResult.mode : null;
   _lastAgentModeName = mode ? mode.name : '';
-  // S.agentRuntime is available for analytics, tool routing, and future features.
+
+  // ── Topic extraction ──────────────────────────────────────────────
+  var topic = extractTopic(msg);
+  // Preserve previous topic if current message gives no topic (e.g. continuity)
+  if (!topic && S.agentRuntime && S.agentRuntime.topic) topic = S.agentRuntime.topic;
+
+  // ── Confidence calculation ─────────────────────────────────────────
+  var rawScore   = _modeResult ? _modeResult.score    : 0;
+  var maxScore   = _modeResult ? _modeResult.maxScore  : 1;
+  var confidence = Math.min(100, Math.round((rawScore / Math.max(maxScore, 1)) * 100));
+  // Floor at 30% when a mode is chosen (fallback is still a choice)
+  if (mode && confidence < 30) confidence = 30;
+
+  // ── S.agentRuntime — analytics-ready, runtime only ────────────────
   S.agentRuntime = {
-    modeKey:  mode ? mode.key  : '',
-    modeName: mode ? mode.name : '',
-    score:    _modeResult ? _modeResult.score : 0
+    modeKey:   mode ? mode.key   : '',
+    modeName:  mode ? mode.name  : '',
+    topic:     topic,
+    confidence:confidence,
+    score:     rawScore,
+    maxScore:  maxScore,
+    intent:    _modeResult ? _modeResult.intent : '',
+    timestamp: Date.now()
   };
 
   var parts = [];
@@ -7058,6 +7249,8 @@ function showAgentActivationHeader(agentKey) {
       '<div class="agent-mode-badge" id="agentModeBadge" style="display:none">' +
         '<span class="amb-label">Mode:</span>' +
         '<span class="amb-name"></span>' +
+        '<span class="amb-topic-wrap" style="display:none"><span class="amb-sep">·</span><span class="amb-topic-lbl">Topic:</span><span class="amb-topic"></span></span>' +
+        '<span class="amb-conf-wrap" style="display:none"><span class="amb-sep">·</span><span class="amb-conf-lbl">Confidence:</span><span class="amb-conf"></span></span>' +
       '</div>' +
     '</div>';
   area.appendChild(el);
@@ -7070,9 +7263,8 @@ function resetAgentHeaderState() {
   _agentHeaderShownFor = null;
 }
 
-// Updates the Mode badge inside the existing activation header (or the most
-// recent one if multiple are in the DOM). Called after each AI request so the
-// badge always reflects the mode chosen for that turn.
+// Updates the Mode/Topic/Confidence badge inside the existing activation header.
+// Called after each AI request so the badge always reflects the current turn.
 function updateAgentModeBadge(modeName) {
   // Find the most recently added badge (last in DOM order).
   var badges = document.querySelectorAll('#agentModeBadge');
@@ -7082,9 +7274,37 @@ function updateAgentModeBadge(modeName) {
     badge.style.display = 'none';
     return;
   }
+
+  // Mode name
   var nameEl = badge.querySelector('.amb-name');
   if (nameEl) nameEl.textContent = modeName;
   badge.style.display = '';
+
+  // Topic
+  var topicWrap = badge.querySelector('.amb-topic-wrap');
+  var topicEl   = badge.querySelector('.amb-topic');
+  var topic = (S.agentRuntime && S.agentRuntime.topic) ? S.agentRuntime.topic : '';
+  if (topicWrap && topicEl) {
+    if (topic) {
+      topicEl.textContent = topic;
+      topicWrap.style.display = '';
+    } else {
+      topicWrap.style.display = 'none';
+    }
+  }
+
+  // Confidence
+  var confWrap = badge.querySelector('.amb-conf-wrap');
+  var confEl   = badge.querySelector('.amb-conf');
+  var conf = (S.agentRuntime && typeof S.agentRuntime.confidence === 'number') ? S.agentRuntime.confidence : null;
+  if (confWrap && confEl) {
+    if (conf !== null) {
+      confEl.textContent = conf + '%';
+      confWrap.style.display = '';
+    } else {
+      confWrap.style.display = 'none';
+    }
+  }
 }
 // ── [END SPECIALIST AGENT FRAMEWORK] ─────────────────────────────────
 
