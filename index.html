@@ -493,6 +493,30 @@
     letter-spacing: 0.1px;
     white-space: nowrap;
   }
+  /* Mode badge — shown inside activation header, updated per request */
+  .agent-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--a1);
+    background: rgba(56,189,248,0.12);
+    border: 1px solid rgba(56,189,248,0.32);
+    border-radius: 99px;
+    padding: 3px 11px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+  }
+  .agent-mode-badge .amb-label {
+    font-size: 0.60rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-right: 2px;
+  }
 
   /* ================================================================
      FAST MODE TOGGLE
@@ -6401,6 +6425,7 @@ const AGENTS = [
     role: '', mission: '', workflow: [], priorities: [],
     outputStyle: '', bestPractices: [], followUp: '',
     template: {},
+    modes: [],
     tools: [],
     header: null
   },
@@ -6442,6 +6467,12 @@ const AGENTS = [
       security:      'Call out any security considerations or risks'
     },
     tools: ['code', 'debug', 'analyze'],
+    modes: [
+      { key: 'build',   name: 'Build',   weight: 1, detect: ['build','create','make','write','generate','develop','implement','scaffold','set up','website','app','component','script','function'], template: { requirements: true, code: true, explanation: true, improvements: true, security: true } },
+      { key: 'debug',   name: 'Debug',   weight: 3, detect: ['bug','fix','error','issue','broken','not working','crash','exception','fail','wrong output','debug','problem with','undefined','null','syntax','stack trace','traceback'], template: { requirements: true, code: true, explanation: true } },
+      { key: 'explain', name: 'Explain', weight: 2, detect: ['explain','how does','what does','what is','how do i understand','walk me through','clarify','describe','breakdown','what\'s happening'], template: { explanation: true, improvements: true } },
+      { key: 'review',  name: 'Review',  weight: 2, detect: ['review','optimize','improve','refactor','clean','performance','best practice','check','analyse','assess','audit'], template: { requirements: true, improvements: true, security: true } }
+    ],
     header: { title: 'Coding Agent Active', badges: ['Complete Code', 'Debugging', 'Best Practices', 'Security'] }
   },
   {
@@ -6483,6 +6514,13 @@ const AGENTS = [
       nextStep:   'Recommend the next logical learning step'
     },
     tools: ['quiz', 'flashcard', 'roadmap'],
+    modes: [
+      { key: 'lesson',   name: 'Lesson',      weight: 2, detect: ['teach','learn','course','roadmap','introduction','start','begin','how to','tutorial','guide me','lesson','study','become good at','get started','i want to','help me understand','take me through'], template: { roadmap: true, explanation: true, examples: true, exercise: true, quiz: true, nextStep: true } },
+      { key: 'quiz',     name: 'Quiz',         weight: 3, detect: ['quiz','question','mcq','multiple choice','test question','give me questions','challenge me','q&a','10 questions','5 questions'], template: { quiz: true } },
+      { key: 'explain',  name: 'Explanation',  weight: 2, detect: ['explain','what is','what are','define','definition','mean','clarify','describe','how does','how do','walk me through','what\'s'], template: { explanation: true, examples: true } },
+      { key: 'revision', name: 'Revision',     weight: 2, detect: ['revise','revision','recap','review','summarise','summarize','remind me','go over','overview','summary','refresh'], template: { explanation: true, examples: true, quiz: true } },
+      { key: 'exam',     name: 'Exam',         weight: 3, detect: ['exam','test me','test my','assess','assessment','exam mode','simulate exam','practice test','full test'], template: { quiz: true, nextStep: true } }
+    ],
     header: { title: 'Study Agent Active', badges: ['Learning Roadmap', 'Exercises', 'Quiz', 'Progress Guidance'] }
   },
   {
@@ -6523,6 +6561,11 @@ const AGENTS = [
       progress:   'Suggest how to track and measure progress'
     },
     tools: ['calories', 'bmi', 'macro'],
+    modes: [
+      { key: 'plan',       name: 'Plan',       weight: 2, detect: ['plan','lose weight','gain muscle','get fit','build','training plan','workout plan','programme','schedule','routine','goal','start','help me','i want to'], template: { goal: true, workout: true, nutrition: true, recovery: true, mistakes: true, progress: true } },
+      { key: 'review',     name: 'Review',     weight: 2, detect: ['review','rate','assess','check my','evaluate','feedback','look at','opinion on','critique','is this good','what do you think'], template: { goal: true, workout: true, mistakes: true, progress: true } },
+      { key: 'calculator', name: 'Calculator', weight: 3, detect: ['calorie','caloric','calories','macro','protein','carb','fat','bmi','tdee','how many','calculate','intake','deficit','surplus'], template: { nutrition: true } }
+    ],
     header: { title: 'Fitness Agent Active', badges: ['Workout Plans', 'Nutrition', 'Recovery', 'Progress Tips'] }
   },
   {
@@ -6563,6 +6606,11 @@ const AGENTS = [
       nextSteps:   'Close with immediate next steps the user can take'
     },
     tools: ['budget', 'swot', 'roi'],
+    modes: [
+      { key: 'brainstorm', name: 'Brainstorm', weight: 2, detect: ['idea','ideas','brainstorm','concept','startup idea','business idea','what if','could i','should i start','thinking of','want to start'], template: { brainstorm: true, opportunities: true, risks: true, nextSteps: true } },
+      { key: 'analysis',   name: 'Analysis',   weight: 3, detect: ['analyse','analyze','analysis','evaluate','assess','review my','look at my','swot','viability','feasibility','startup','potential','is this viable'], template: { objective: true, analysis: true, opportunities: true, risks: true, nextSteps: true } },
+      { key: 'strategy',   name: 'Strategy',   weight: 2, detect: ['strategy','strategic','plan','marketing','growth','scale','expand','increase','compete','market','customer','acquire','launch'], template: { objective: true, analysis: true, actionPlan: true, budget: true, nextSteps: true } }
+    ],
     header: { title: 'Business Agent Active', badges: ['Strategy', 'Opportunities', 'Risk Analysis', 'Action Plan'] }
   },
   {
@@ -6603,6 +6651,10 @@ const AGENTS = [
       timeline:     'Include a rough timeline so the user can pace the trip'
     },
     tools: ['currency', 'weather', 'flightSearch'],
+    modes: [
+      { key: 'planning', name: 'Planning', weight: 2, detect: ['itinerary','plan','trip','visit','going to','travel to','holiday','vacation','days in','week in','tour','sightseeing','what to do','places to visit','things to do'], template: { itinerary: true, transport: true, localTips: true, timeline: true } },
+      { key: 'budget',   name: 'Budget',   weight: 3, detect: ['budget','cost','cheap','afford','how much','price','money','spend','expensive','backpack','save','on a budget','low cost'], template: { budget: true, transport: true, localTips: true } }
+    ],
     header: { title: 'Travel Agent Active', badges: ['Itinerary', 'Budget', 'Local Tips', 'Packing Guide'] }
   },
   {
@@ -6640,6 +6692,11 @@ const AGENTS = [
       alternatives:  'Offer at least one unexpected or unconventional alternative angle'
     },
     tools: ['nameGenerator', 'storyPlot', 'moodboard'],
+    modes: [
+      { key: 'writing', name: 'Writing',  weight: 2, detect: ['story','write','fiction','poem','script','narrative','character','plot','scene','chapter','blog','article','essay','draft','write me'], template: { brainstorm: true, topIdea: true, storytelling: true } },
+      { key: 'design',  name: 'Design',   weight: 3, detect: ['logo','brand','name','slogan','tagline','design','visual','identity','colour','color','font','style','aesthetic','mood','branding'], template: { brainstorm: true, topIdea: true, alternatives: true } },
+      { key: 'ideas',   name: 'Ideation', weight: 1, detect: ['idea','concept','campaign','creative','brainstorm','angle','approach','unique','original','fresh','new'], template: { brainstorm: true, topIdea: true, alternatives: true } }
+    ],
     header: { title: 'Creative Agent Active', badges: ['Brainstorming', 'Storytelling', 'Original Ideas', 'Creative Drafts'] }
   },
   {
@@ -6679,6 +6736,10 @@ const AGENTS = [
       furtherReading:'Suggest directions for further research'
     },
     tools: ['factCheck', 'summarize', 'compare'],
+    modes: [
+      { key: 'research', name: 'Research', weight: 2, detect: ['research','explore','deep dive','investigate','study','background','history','overview','what is the state of','explain in depth','comprehensive','tell me about'], template: { overview: true, facts: true, analysis: true, uncertainty: true, keyFindings: true, furtherReading: true } },
+      { key: 'summary',  name: 'Summary',  weight: 3, detect: ['summarise','summarize','summary','brief','tldr','main points','key points','short overview','in short','paper','article','abstract'], template: { overview: true, keyFindings: true } }
+    ],
     header: { title: 'Research Agent Active', badges: ['Fact Analysis', 'Multiple Sources', 'Balanced View', 'Deep Dive'] }
   },
   {
@@ -6717,6 +6778,10 @@ const AGENTS = [
       serving:      'Add serving suggestions and presentation tips'
     },
     tools: ['scaleRecipe', 'nutritionCalc', 'substitution'],
+    modes: [
+      { key: 'cooking',    name: 'Cooking',    weight: 2, detect: ['recipe','cook','make','how to cook','dish','meal','bake','grill','roast','fry','prepare','cuisine','dinner','lunch','breakfast','supper'], template: { ingredients: true, substitutions: true, steps: true, nutrition: true, serving: true } },
+      { key: 'ingredient', name: 'Ingredient', weight: 3, detect: ['only have','i have','got','fridge','pantry','left over','leftover','use up','ingredient','what can i make','what to make','in my kitchen','in the house'], template: { ingredients: true, steps: true, serving: true } }
+    ],
     header: { title: 'Chef Agent Active', badges: ['Recipes', 'Substitutions', 'Step-by-Step', 'Nutrition Notes'] }
   },
   {
@@ -6755,6 +6820,10 @@ const AGENTS = [
       referral:     'Indicate when the user should consult a qualified attorney'
     },
     tools: ['jurisdictionLookup', 'documentSummary', 'termGlossary'],
+    modes: [
+      { key: 'review',   name: 'Review',   weight: 3, detect: ['contract','document','clause','agreement','terms','review','check','read','nda','lease','policy','analyse this','look at this'], template: { concept: true, howItWorks: true, caveats: true, referral: true } },
+      { key: 'guidance', name: 'Guidance', weight: 2, detect: ['rights','right','law','legal','liable','sue','court','dispute','what can i do','am i allowed','is it legal','tenant','employee','landlord','fired','dismissed'], template: { concept: true, howItWorks: true, jurisdiction: true, caveats: true, referral: true } }
+    ],
     header: { title: 'Legal Agent Active', badges: ['Plain Language', 'Jurisdiction Notes', 'Concepts Explained', 'Professional Referral'] }
   },
   {
@@ -6793,6 +6862,10 @@ const AGENTS = [
       seeDoctor:    'Clearly state when the user should consult a healthcare professional'
     },
     tools: ['symptomInfo', 'medicationInfo', 'bodySystem'],
+    modes: [
+      { key: 'assessment', name: 'Assessment', weight: 3, detect: ['symptom','feel','pain','ache','hurt','sick','ill','unwell','experiencing','having','sore','swollen','tired','fever','nausea','headache','dizzy','bleeding','rash'], template: { overview: true, explanations: true, watchFor: true, treatment: true, seeDoctor: true } },
+      { key: 'safety',     name: 'Safety',     weight: 3, detect: ['medicine','medication','drug','tablet','pill','dose','dosage','side effect','interaction','safe to take','can i take','prescription','supplement','overdose'], template: { overview: true, watchFor: true, seeDoctor: true } }
+    ],
     header: { title: 'Medical Agent Active', badges: ['Health Info', 'Safety First', 'Clear Explanations', 'Doctor Referral'] }
   }
 ];
@@ -6814,7 +6887,37 @@ const AGENTS = [
 //   model "when your response is substantive, include these sections where
 //   appropriate." Short clarification replies or follow-up answers are never
 //   forced into the full template shape. The word "when appropriate" is key.
-function getAgentSys() {
+// ── Agent Mode Detection ──────────────────────────────────────────────
+// Scores every mode using weighted keyword matching against the user's
+// latest message. Each mode's `weight` multiplies every keyword hit
+// (defaults to 1 if omitted), so high-signal modes (e.g. Debug) can
+// outrank modes with more keywords but lower confidence.
+// Returns the highest-scoring mode; falls back to modes[0] on a tie/miss.
+function getAgentMode(agent, userMessage) {
+  if (!agent || !agent.modes || !agent.modes.length) return null;
+  var msg = (userMessage || '').toLowerCase();
+  var best = null;
+  var bestScore = -1;
+  for (var i = 0; i < agent.modes.length; i++) {
+    var mode = agent.modes[i];
+    var w = (typeof mode.weight === 'number' && mode.weight > 0) ? mode.weight : 1;
+    var score = 0;
+    var kw = mode.detect || [];
+    for (var j = 0; j < kw.length; j++) {
+      if (msg.indexOf(kw[j].toLowerCase()) !== -1) score += w;
+    }
+    if (score > bestScore) { bestScore = score; best = mode; }
+  }
+  // Fall back to first mode if nothing scored
+  var chosen = best || agent.modes[0];
+  var finalScore = (best && bestScore > 0) ? bestScore : 0;
+  return { mode: chosen, score: finalScore };
+}
+
+// Expose last detected mode name so the UI badge can read it.
+var _lastAgentModeName = '';
+
+function getAgentSys(userMessage) {
   var key = S.agent || 'none';
   if (key === 'none') return '';
   var ag = null;
@@ -6822,6 +6925,17 @@ function getAgentSys() {
     if (AGENTS[i].key === key) { ag = AGENTS[i]; break; }
   }
   if (!ag || !ag.role) return '';
+
+  // Detect the mode for this request and store runtime state on S.
+  var _modeResult = getAgentMode(ag, userMessage || '');
+  var mode = _modeResult ? _modeResult.mode : null;
+  _lastAgentModeName = mode ? mode.name : '';
+  // S.agentRuntime is available for analytics, tool routing, and future features.
+  S.agentRuntime = {
+    modeKey:  mode ? mode.key  : '',
+    modeName: mode ? mode.name : '',
+    score:    _modeResult ? _modeResult.score : 0
+  };
 
   var parts = [];
   parts.push('\n\n=== AGENT SPECIALIZATION: ' + ag.name.toUpperCase() + ' ===');
@@ -6844,19 +6958,40 @@ function getAgentSys() {
       ag.bestPractices.map(function(s) { return '\u2022 ' + s; }).join('\n'));
   }
 
+  // ── Current Mode + Mode-Aware Template ───────────────────────────
+  // The mode is detected from the user's message. The template is taken
+  // from the mode (not the static agent template) so structure adapts
+  // to what the user is actually asking for.
+  var activeTemplate = ag.template; // default: static agent template
+  if (mode) {
+    parts.push('CURRENT MODE: ' + mode.name);
+    parts.push(
+      'MODE INSTRUCTIONS: You are operating in ' + mode.name + ' mode. ' +
+      'Adapt your response structure and depth to match what this mode requires. ' +
+      'Do not force sections that do not belong in this mode.'
+    );
+    // Use the mode\'s own template if it defines one; fall back to agent template
+    if (mode.template && Object.keys(mode.template).length) {
+      activeTemplate = mode.template;
+    }
+  }
+
   // ── Response Template Nudge ──────────────────────────────────────
-  // Convert the template object into a conditional section checklist.
-  // Only sections with a truthy value are included. This nudges the model
-  // toward consistent, high-quality response structure without forcing a
-  // rigid shape onto short answers or follow-up messages.
-  if (ag.template && Object.keys(ag.template).length) {
+  if (activeTemplate && Object.keys(activeTemplate).length) {
     var tLines = [];
-    var tKeys = Object.keys(ag.template);
+    var tKeys = Object.keys(activeTemplate);
     for (var ti = 0; ti < tKeys.length; ti++) {
-      var tVal = ag.template[tKeys[ti]];
+      var tKey = tKeys[ti];
+      var tVal = activeTemplate[tKey];
       if (tVal) {
-        // Use the descriptive string value as the instruction, or fall back to the key name.
-        tLines.push('\u2713 ' + (typeof tVal === 'string' ? tVal : tKeys[ti]));
+        // If the value is a descriptive string (from agent.template), use it.
+        // If it is simply `true` (from mode.template), use the agent.template
+        // description for that key if available, otherwise the key name.
+        var label = (typeof tVal === 'string') ? tVal
+          : (ag.template && ag.template[tKey] && typeof ag.template[tKey] === 'string')
+            ? ag.template[tKey]
+            : tKey;
+        tLines.push('\u2713 ' + label);
       }
     }
     if (tLines.length) {
@@ -6920,6 +7055,10 @@ function showAgentActivationHeader(agentKey) {
         '<span class="agent-hdr-title">' + ag.header.title + '</span>' +
       '</div>' +
       '<div class="agent-hdr-badges">' + badgesHTML + '</div>' +
+      '<div class="agent-mode-badge" id="agentModeBadge" style="display:none">' +
+        '<span class="amb-label">Mode:</span>' +
+        '<span class="amb-name"></span>' +
+      '</div>' +
     '</div>';
   area.appendChild(el);
   area.scrollTop = area.scrollHeight;
@@ -6929,6 +7068,23 @@ function showAgentActivationHeader(agentKey) {
 // Called from newConversation() and loadConversation() hooks below.
 function resetAgentHeaderState() {
   _agentHeaderShownFor = null;
+}
+
+// Updates the Mode badge inside the existing activation header (or the most
+// recent one if multiple are in the DOM). Called after each AI request so the
+// badge always reflects the mode chosen for that turn.
+function updateAgentModeBadge(modeName) {
+  // Find the most recently added badge (last in DOM order).
+  var badges = document.querySelectorAll('#agentModeBadge');
+  if (!badges || !badges.length) return;
+  var badge = badges[badges.length - 1];
+  if (!modeName) {
+    badge.style.display = 'none';
+    return;
+  }
+  var nameEl = badge.querySelector('.amb-name');
+  if (nameEl) nameEl.textContent = modeName;
+  badge.style.display = '';
 }
 // ── [END SPECIALIST AGENT FRAMEWORK] ─────────────────────────────────
 
@@ -10179,7 +10335,10 @@ function buildGeminiBody(imgsData) {
   // ⚡ FAST MODE: skip memory context, only use current message + personality system prompt.
   var isFast = S.fastMode;
   var memCtx = (!isFast && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtx;
+  var _lastUserMsg = (S.messages.length ? S.messages[S.messages.length - 1] : null);
+  var _lastUserText = (_lastUserMsg && _lastUserMsg.role === 'user') ? (_lastUserMsg.text || '') : '';
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) + memCtx;
+  if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
 
   // In Fast Mode, only send the last user message (not full history).
   var msgs = isFast ? S.messages.slice(-1) : S.messages.slice(-20);
@@ -10592,7 +10751,10 @@ async function callGroqDirect() {
   var msgs = S.messages.slice(-20);
   var groqMessages = [];
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtxGroq;
+  var _lastUserMsg = (S.messages.length ? S.messages[S.messages.length - 1] : null);
+  var _lastUserText = (_lastUserMsg && _lastUserMsg.role === 'user') ? (_lastUserMsg.text || '') : '';
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) + memCtxGroq;
+  if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
   if (sys) groqMessages.push({ role: 'system', content: sys });
   var histMsgs = S.fastMode ? S.messages.slice(-1) : msgs;
   histMsgs.forEach(function(m) {
@@ -10671,7 +10833,10 @@ async function callGroqVisionFallback(imgs) {
   var msgs = S.fastMode ? S.messages.slice(-1) : S.messages.slice(-20);
   var groqMessages = [];
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys() + memCtxGroq;
+  var _lastUserMsg2 = (S.messages.length ? S.messages[S.messages.length - 1] : null);
+  var _lastUserText2 = (_lastUserMsg2 && _lastUserMsg2.role === 'user') ? (_lastUserMsg2.text || '') : '';
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText2) + memCtxGroq;
+  if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
   if (sys) groqMessages.push({ role: 'system', content: sys });
 
   // Find the index of the last user message (the one that should carry images)
