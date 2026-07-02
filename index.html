@@ -1826,6 +1826,107 @@
   .cv-doc-card-open { font-size: 0.74rem; font-weight: 600; color: var(--a1); }
   /* ── [END AI CANVAS] ── */
 
+  /* ── [APP BUILDER] panel — mirrors AI Canvas panel structure, adds file tabs + preview ── */
+  #aiAppBuilderPanel {
+    position: fixed; top: 0; right: 0; height: 100%;
+    width: 92%; max-width: 720px;
+    background: var(--glass);
+    backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+    border-left: 1px solid var(--glass-border);
+    box-shadow: -8px 0 40px rgba(0,0,0,0.35);
+    z-index: 7500;
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.32s cubic-bezier(.2,.85,.3,1);
+    box-sizing: border-box;
+  }
+  #aiAppBuilderPanel.open { transform: translateX(0); }
+  @media (min-width: 980px) {
+    #aiAppBuilderPanel { width: 46%; min-width: 440px; max-width: 760px; }
+  }
+
+  .ab-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-bottom: 1px solid var(--glass-border);
+    flex-shrink: 0;
+  }
+  .ab-header-icon { font-size: 1.1rem; flex-shrink: 0; }
+  .ab-header-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ab-title {
+    font-family: var(--font-head); font-size: 0.92rem; font-weight: 700;
+    color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: none; border: none; outline: none; width: 100%; padding: 0;
+  }
+  .ab-subtitle { font-size: 0.65rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+  .ab-header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .ab-icon-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg-input); color: var(--text-2); font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: color var(--t), border-color var(--t), transform 0.15s ease;
+  }
+  .ab-icon-btn:hover { color: var(--text-1); border-color: var(--a1); transform: translateY(-1px); }
+  .ab-icon-btn:active { transform: translateY(0) scale(0.92); }
+  .ab-icon-btn.ab-close { color: #ef4444; }
+
+  .ab-tabs {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-bottom: 1px solid var(--glass-border); flex-shrink: 0; overflow-x: auto;
+  }
+  .ab-tab {
+    font-size: 0.72rem; font-weight: 600; color: var(--text-2); white-space: nowrap;
+    background: var(--bg-input); border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 99px; cursor: pointer;
+    transition: color var(--t), border-color var(--t);
+  }
+  .ab-tab:hover { color: var(--text-1); border-color: var(--a1); }
+  .ab-tab.ab-tab-active { color: #38bdf8; border-color: #38bdf8; }
+
+  .ab-toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-bottom: 1px solid var(--glass-border); flex-shrink: 0; flex-wrap: wrap;
+  }
+  .ab-toolbar-spacer { flex: 1; }
+
+  .ab-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0; }
+  #abEditArea {
+    width: 100%; height: 100%; min-height: 60vh; resize: none;
+    background: none; border: none; outline: none;
+    font-family: var(--font-mono, monospace); font-size: 0.84rem; line-height: 1.6;
+    color: var(--text-1); box-sizing: border-box; padding: 18px 20px 24px;
+  }
+  .ab-preview-frame {
+    width: 100%; height: 100%; min-height: 60vh; border: none;
+    background: #fff; display: block;
+  }
+
+  .ab-edit-bar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid var(--glass-border); flex-shrink: 0;
+    background: var(--bg-input);
+  }
+  #abEditInput {
+    flex: 1; min-width: 0; background: none; border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 8px 12px; font-size: 0.82rem;
+    color: var(--text-1); outline: none;
+  }
+  #abEditInput:focus { border-color: var(--a1); }
+  .ab-edit-send {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#38bdf8,#818cf8); color: #000;
+    display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+  }
+  .ab-edit-suggest { display: flex; gap: 6px; padding: 0 14px 10px; flex-wrap: wrap; }
+
+  .ab-open-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.72rem; font-weight: 600; color: var(--a1);
+    background: var(--bg-input); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 99px; cursor: pointer; margin-top: 6px;
+  }
+  .ab-open-chip:hover { border-color: var(--a1); }
+  /* ── [END APP BUILDER] ── */
+
   .send-btn {
     width: 38px; height: 38px; border-radius: 50%;
     background: linear-gradient(135deg,#38bdf8,#818cf8);
@@ -10536,7 +10637,8 @@ function typeMessage(bubId, rawText, onDone) {
     bub.innerHTML = fmtMsg(rawText);
     var area = document.getElementById('chatMessages');
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
-    if (typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+    var _abHandled = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
+    if (!_abHandled && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
     if (onDone) onDone();
     return;
   }
@@ -10575,7 +10677,8 @@ function typeMessage(bubId, rawText, onDone) {
       bub.classList.remove('typing-active');
       bub.innerHTML = fmtMsg(rawText);
       if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
-      if (typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+      var _abHandled2 = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
+      if (!_abHandled2 && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
       if (onDone) onDone();
       return;
     }
@@ -10733,7 +10836,8 @@ function buildGeminiBody(imgsData) {
   var memCtx = (!isFast && buildMemoryContext) ? buildMemoryContext() : '';
   var _lastUserMsg = (S.messages.length ? S.messages[S.messages.length - 1] : null);
   var _lastUserText = (_lastUserMsg && _lastUserMsg.role === 'user') ? (_lastUserMsg.text || '') : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) + memCtx;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) +
+    (typeof window.getAppBuilderSys === 'function' ? window.getAppBuilderSys(_lastUserText) : '') + memCtx;
   if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
 
   // In Fast Mode, only send the last user message (not full history).
@@ -11149,7 +11253,8 @@ async function callGroqDirect() {
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
   var _lastUserMsg = (S.messages.length ? S.messages[S.messages.length - 1] : null);
   var _lastUserText = (_lastUserMsg && _lastUserMsg.role === 'user') ? (_lastUserMsg.text || '') : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) + memCtxGroq;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText) +
+    (typeof window.getAppBuilderSys === 'function' ? window.getAppBuilderSys(_lastUserText) : '') + memCtxGroq;
   if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
   if (sys) groqMessages.push({ role: 'system', content: sys });
   var histMsgs = S.fastMode ? S.messages.slice(-1) : msgs;
@@ -11231,7 +11336,8 @@ async function callGroqVisionFallback(imgs) {
   var memCtxGroq = (!S.fastMode && buildMemoryContext) ? buildMemoryContext() : '';
   var _lastUserMsg2 = (S.messages.length ? S.messages[S.messages.length - 1] : null);
   var _lastUserText2 = (_lastUserMsg2 && _lastUserMsg2.role === 'user') ? (_lastUserMsg2.text || '') : '';
-  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText2) + memCtxGroq;
+  var sys = PERSONALITIES[S.personality].sys + getAgentSys(_lastUserText2) +
+    (typeof window.getAppBuilderSys === 'function' ? window.getAppBuilderSys(_lastUserText2) : '') + memCtxGroq;
   if (typeof updateAgentModeBadge === 'function') updateAgentModeBadge(_lastAgentModeName);
   if (sys) groqMessages.push({ role: 'system', content: sys });
 
@@ -11495,6 +11601,7 @@ function clearChat() {
   S._activeConvId = null;
   S.messages = [];
   if (typeof window.resetCanvasForNewChat === 'function') window.resetCanvasForNewChat();
+  if (typeof window.resetAppBuilderForNewChat === 'function') window.resetAppBuilderForNewChat();
   var area = document.getElementById('chatMessages');
   area.innerHTML =
     '<div class="chat-welcome" id="chatWelcome">' +
@@ -12860,8 +12967,11 @@ function loadConv(id) {
   goPage('chat');
   setTimeout(restoreMsgFeedbackUI, 50);
   if (typeof window.restoreCanvasChips === 'function') setTimeout(window.restoreCanvasChips, 50);
+  if (typeof window.restoreAppChips === 'function') setTimeout(window.restoreAppChips, 50);
   var _cvPanel = document.getElementById('aiCanvasPanel');
   if (_cvPanel) _cvPanel.classList.remove('open');
+  var _abPanel = document.getElementById('aiAppBuilderPanel');
+  if (_abPanel) _abPanel.classList.remove('open');
   toast('📂 Conversation loaded');
 }
 
@@ -19538,6 +19648,45 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
   </div>
 </div>
 
+<!-- ── APP BUILDER PANEL ─────────────────────────────────────────── -->
+<div id="aiAppBuilderPanel" aria-hidden="true">
+  <div class="ab-header">
+    <span class="ab-header-icon">🧱</span>
+    <div class="ab-header-info">
+      <input id="abTitle" class="ab-title" value="App Project" spellcheck="false">
+      <span class="ab-subtitle">App Builder</span>
+    </div>
+    <div class="ab-header-actions">
+      <button class="ab-icon-btn" id="abCopyBtn" title="Copy current file">📋</button>
+      <button class="ab-icon-btn" id="abDownloadBtn" title="Download current file">⬇️</button>
+      <button class="ab-icon-btn" id="abZipBtn" title="Download entire project as ZIP">📦</button>
+      <button class="ab-icon-btn ab-close" id="abCloseBtn" title="Close">✕</button>
+    </div>
+  </div>
+  <div class="ab-tabs" id="abTabs">
+    <button class="ab-tab ab-tab-active" type="button" data-tab="html">📄 index.html</button>
+    <button class="ab-tab" type="button" data-tab="css">🎨 style.css</button>
+    <button class="ab-tab" type="button" data-tab="js">⚡ script.js</button>
+    <button class="ab-tab" type="button" data-tab="preview">👁️ Preview</button>
+  </div>
+  <div class="ab-toolbar">
+    <button class="cv-chip" id="abUndoBtn" title="Undo">↶ Undo</button>
+    <button class="cv-chip" id="abRedoBtn" title="Redo">↷ Redo</button>
+    <div class="ab-toolbar-spacer"></div>
+  </div>
+  <div class="ab-body" id="abBody"></div>
+  <div class="ab-edit-suggest" id="abEditSuggest">
+    <button class="cv-chip" data-ins="Make the buttons blue">Make buttons blue</button>
+    <button class="cv-chip" data-ins="Add a dark mode toggle">Add dark mode</button>
+    <button class="cv-chip" data-ins="Improve the UI and spacing">Improve UI</button>
+    <button class="cv-chip" data-ins="Add smooth animations">Add animations</button>
+  </div>
+  <div class="ab-edit-bar">
+    <input id="abEditInput" type="text" placeholder="Ask AI to edit this project…" autocomplete="off">
+    <button class="ab-edit-send" id="abEditSendBtn" title="Send">➤</button>
+  </div>
+</div>
+
 <script>
 // ── [AI CANVAS] ───────────────────────────────────────────────────
 // Self-contained module: opens a ChatGPT-Canvas / Claude-Artifacts style
@@ -19999,6 +20148,611 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
   }
 })();
 // ── [END AI CANVAS] ──────────────────────────────────────────────
+</script>
+
+<script>
+// ── [APP BUILDER] ────────────────────────────────────────────────────
+// Self-contained module: detects "build me an app/website" style requests,
+// prompts the AI to return a 3-file mini project (index.html/style.css/
+// script.js), and opens a Canvas-style side panel with file tabs, a live
+// sandboxed preview, per-file copy/download, a dependency-free offline ZIP
+// export, AI-assisted editing (only regenerates changed files), and
+// version history — using the exact same persistence path as AI Canvas
+// (S.messages entries, autoSaveConversation(), persist(), CSYNC
+// live-conversation flush) so projects survive refresh, cloud sync, and
+// conversation switching.
+// Reuses: escHtml(), toast(), NETLIFY_FN, S.messages, persist(),
+// autoSaveConversation(), CSYNC/_csyncEnqueue/_csyncScheduleFlush.
+// Does not modify chat/history/sync internals — only reads from them.
+// Lazy: detection functions are cheap regex checks; the panel and ZIP
+// writer only run once a project is actually generated / exported.
+(function() {
+  var AB = {
+    open: false,
+    entry: null,      // reference into S.messages[i] this project is bound to
+    bubId: null,
+    tab: 'html',       // 'html' | 'css' | 'js' | 'preview'
+    history: [],        // array of {html,css,js} snapshots (max 10)
+    historyIdx: -1
+  };
+  window._aleemAppBuilder = AB; // debug/inspection only
+
+  function $(id) { return document.getElementById(id); }
+
+  // ── Detection ────────────────────────────────────────────────────
+  // Intent-based rather than plain keyword matching: requires either an
+  // action verb + a project-type noun ("build a todo app"), or a common
+  // bare compound ("calculator app") that unambiguously names a small
+  // buildable project. Explanatory/question phrasing is excluded so
+  // "how do I build an app" still goes to normal chat / coding agent.
+  var AB_ACTION = /\b(build|create|make|develop|generate|design|scaffold|set up|code up)\b/i;
+  var AB_TARGET = /\b(app|application|website|web ?page|landing page|portfolio|dashboard|game|clone|e-?commerce|calculator|to-?do( list)?|login (page|form|screen)|signup (page|form)|blog)\b/i;
+  var AB_BARE   = /\b(todo|to-do|calculator|weather|login|signup|portfolio|dashboard|e-?commerce)\s+(app|website|page|site|form|screen)\b/i;
+
+  window.detectAppBuilderIntent = function(text) {
+    if (!text) return null;
+    var t = text.trim();
+    if (!t || t.length > 400) return null; // long messages are unlikely one-line build requests
+    var tl = t.toLowerCase();
+    if (/^\s*(why|explain|what is|what's|how does|how do i)\b/.test(tl) && !/\b(build|create|make)\b/.test(tl)) return null;
+    var hit = (AB_ACTION.test(tl) && AB_TARGET.test(tl)) || AB_BARE.test(tl);
+    if (!hit) return null;
+    return { name: deriveProjectName(tl) };
+  };
+
+  function deriveProjectName(tl) {
+    var known = ['calculator', 'to-do list', 'todo', 'weather', 'login', 'signup', 'portfolio', 'landing page', 'dashboard', 'e-commerce', 'ecommerce', 'blog', 'game'];
+    for (var i = 0; i < known.length; i++) {
+      if (tl.indexOf(known[i]) !== -1) {
+        var base = known[i].replace('to-do list', 'Todo').replace('todo', 'Todo').replace('e-commerce', 'Ecommerce');
+        var title = base.split(' ').map(function(s) { return s.charAt(0).toUpperCase() + s.slice(1); }).join(' ');
+        return title + ' App';
+      }
+    }
+    if (/website/.test(tl)) return 'Website Project';
+    if (/\bapp\b/.test(tl)) return 'App Project';
+    return 'My Project';
+  }
+
+  // Called from the sys-prompt builders (buildGeminiBody / callGroqDirect /
+  // its vision variant) so the model is asked for structured file output
+  // ONLY when the user's message actually looks like a build request —
+  // normal chat, including the "coding" agent's own build mode, is
+  // untouched otherwise.
+  window.getAppBuilderSys = function(userText) {
+    var intent = window.detectAppBuilderIntent(userText);
+    if (!intent) return '';
+    return '\n\n=== APP BUILDER MODE (ACTIVE) ===\n' +
+      'The user is asking you to BUILD a small web app/website/page, not to have a conversation about it. ' +
+      'Respond with a COMPLETE, WORKING mini web project as exactly three files, using this EXACT plain-text ' +
+      'format and nothing else before or after it (no extra commentary, no markdown fences around the whole thing):\n\n' +
+      '===FILE: index.html===\n(full valid HTML5 document linking style.css and script.js)\n\n' +
+      '===FILE: style.css===\n(full CSS — mobile-first, modern, rounded corners, smooth transitions)\n\n' +
+      '===FILE: script.js===\n(full vanilla JS — no external libraries/CDNs, must run as-is)\n\n' +
+      'Keep it complete and runnable; do not truncate any file; do not add explanations outside the three files.';
+  };
+
+  // ── Parsing AI output into files ────────────────────────────────
+  function parseMarkerFiles(text) {
+    if (!text || text.indexOf('===FILE:') === -1) return null;
+    var re = /===FILE:\s*([^\n=]+?)\s*===\s*\n([\s\S]*?)(?=\n===FILE:|$)/g;
+    var files = {}, found = false, m;
+    while ((m = re.exec(text))) {
+      var fname = m[1].trim().toLowerCase();
+      var body = m[2].replace(/\s*$/, '');
+      body = body.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/, '').trim();
+      if (/html/.test(fname)) { files.html = body; found = true; }
+      else if (/css/.test(fname)) { files.css = body; found = true; }
+      else if (/js|script/.test(fname)) { files.js = body; found = true; }
+    }
+    return found ? files : null;
+  }
+
+  // Fallback for when the model ignores the marker format but still wraps
+  // a build reply in normal language-tagged fences.
+  function parseFencedFiles(text) {
+    var files = {};
+    var htmlM = text.match(/```html\s*\n([\s\S]*?)```/i);
+    var cssM  = text.match(/```css\s*\n([\s\S]*?)```/i);
+    var jsM   = text.match(/```(?:js|javascript)\s*\n([\s\S]*?)```/i);
+    if (htmlM) files.html = htmlM[1].trim();
+    if (cssM)  files.css  = cssM[1].trim();
+    if (jsM)   files.js   = jsM[1].trim();
+    return files.html ? files : null;
+  }
+
+  function fillDefaults(files, name) {
+    files.html = files.html || ('<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>' + (name || 'App') +
+      '</title><link rel="stylesheet" href="style.css"></head><body>\n<h1>' + (name || 'App') +
+      '</h1>\n<script src="script.js"><\/script>\n</body></html>');
+    files.css = files.css || '';
+    files.js  = files.js  || '';
+    return files;
+  }
+
+  // Called from typeMessage() once an AI bubble's final text is known.
+  // Returns true if this reply was handled as a generated project — the
+  // caller then skips the normal Canvas auto-detect for that bubble so a
+  // build reply never opens both panels.
+  window.maybeAutoAppBuilder = function(bubId, rawText) {
+    try {
+      var lastUserText = '';
+      for (var i = S.messages.length - 1; i >= 0; i--) {
+        if (S.messages[i].role === 'user') { lastUserText = S.messages[i].text || ''; break; }
+      }
+      var intent = window.detectAppBuilderIntent(lastUserText);
+      var wasMarked = rawText.indexOf('===FILE:') !== -1;
+      if (!intent && !wasMarked) return false;
+
+      var files = parseMarkerFiles(rawText);
+      if (!files && intent) files = parseFencedFiles(rawText);
+      if (!files) return false;
+
+      files = fillDefaults(files, intent ? intent.name : 'App Project');
+      var entry = S.messages[S.messages.length - 1];
+      if (!entry || entry.role !== 'ai') return false;
+
+      entry.project = {
+        name: (intent && intent.name) || 'App Project',
+        files: files,
+        history: [{ html: files.html, css: files.css, js: files.js }],
+        historyIdx: 0
+      };
+      attachAppChip(bubId, entry);
+      openAppFromEntry(entry, bubId, true); // explicit build request → open right away, like Canvas's explicit path
+      try { if (typeof autoSaveConversation === 'function') autoSaveConversation(); } catch (e) {}
+      return true;
+    } catch (e) { console.error('[APP BUILDER] auto-detect error', e); return false; }
+  };
+
+  function attachAppChip(bubId, entry) {
+    var bub = $(bubId);
+    if (!bub) return;
+    var body = bub.closest('.msg-body');
+    if (!body || body.querySelector('.ab-open-chip')) return;
+    var chip = document.createElement('button');
+    chip.className = 'ab-open-chip';
+    chip.type = 'button';
+    chip.innerHTML = '🧱 Open ' + escHtml(entry.project.name || 'Project');
+    chip.addEventListener('click', function() { openAppFromEntry(entry, bubId, false); });
+    body.appendChild(chip);
+  }
+
+  // Re-attach chips after a conversation reload (project data travels with
+  // the persisted message objects, but DOM elements must be rebuilt).
+  window.restoreAppChips = function() {
+    var area = $('chatMessages');
+    if (!area) return;
+    var msgEls = area.querySelectorAll('.msg.ai');
+    var aiIdx = 0;
+    for (var i = 0; i < S.messages.length; i++) {
+      var m = S.messages[i];
+      if (m.role !== 'ai') continue;
+      var el = msgEls[aiIdx]; aiIdx++;
+      if (m.project && el) {
+        var bub = el.querySelector('.msg-bubble');
+        if (bub) attachAppChip(bub.id, m);
+      }
+    }
+  };
+
+  // Reset App Builder state entirely when the user starts a brand-new
+  // conversation, so no project can ever leak from a previous chat.
+  window.resetAppBuilderForNewChat = function() {
+    closeApp();
+    AB.entry = null;
+    AB.bubId = null;
+    AB.history = [];
+    AB.historyIdx = -1;
+  };
+
+  // ── Open / Close ─────────────────────────────────────────────────
+  function openAppFromEntry(entry, bubId, autoOpened) {
+    if (!entry.project) return;
+    AB.entry = entry;
+    AB.bubId = bubId;
+    AB.history = (entry.project.history && entry.project.history.length)
+      ? entry.project.history.slice()
+      : [{ html: entry.project.files.html, css: entry.project.files.css, js: entry.project.files.js }];
+    AB.historyIdx = (typeof entry.project.historyIdx === 'number') ? entry.project.historyIdx : AB.history.length - 1;
+    AB.tab = 'html';
+    $('abTitle').value = entry.project.name || 'App Project';
+    renderTabs();
+    renderBody();
+    updateAbUndoRedoUI();
+    openPanel();
+    if (!autoOpened) toast('🧱 App Builder opened');
+  }
+
+  function openPanel() {
+    var panel = $('aiAppBuilderPanel');
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    AB.open = true;
+  }
+
+  function closeApp() {
+    var panel = $('aiAppBuilderPanel');
+    if (!panel) return;
+    panel.classList.remove('open');
+    panel.setAttribute('aria-hidden', 'true');
+    AB.open = false;
+  }
+
+  // ── Render ───────────────────────────────────────────────────────
+  function currentFiles() { return AB.history[AB.historyIdx] || { html: '', css: '', js: '' }; }
+  function shallowCopy(o) { return { html: o.html, css: o.css, js: o.js }; }
+
+  function renderTabs() {
+    var tabs = document.querySelectorAll('#abTabs .ab-tab');
+    tabs.forEach(function(t) { t.classList.toggle('ab-tab-active', t.getAttribute('data-tab') === AB.tab); });
+  }
+
+  function renderBody() {
+    var body = $('abBody');
+    var files = currentFiles();
+    if (AB.tab === 'preview') {
+      body.innerHTML = '<iframe id="abPreviewFrame" class="ab-preview-frame" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>';
+      $('abPreviewFrame').setAttribute('srcdoc', buildPreviewDoc(files));
+    } else {
+      var key = AB.tab; // html|css|js
+      body.innerHTML = '<textarea id="abEditArea" spellcheck="false"></textarea>';
+      var ta = $('abEditArea');
+      ta.value = files[key] || '';
+      ta.addEventListener('input', scheduleAbAutosave);
+    }
+  }
+
+  // Combines the three files into one sandboxed document for the Preview
+  // tab, updated live any time a file changes.
+  function buildPreviewDoc(files) {
+    var html = files.html || '';
+    var css  = files.css  || '';
+    var js   = files.js   || '';
+    if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, '<style>' + css + '</style></head>');
+    else html = '<style>' + css + '</style>' + html;
+    if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, '<script>' + js + '<\/script></body>');
+    else html += '<script>' + js + '<\/script>';
+    return html;
+  }
+
+  // Debounced in-place autosave while typing in a file tab — mirrors
+  // AI Canvas's scheduleAutosave(). Updates the CURRENT version's content
+  // without creating a new history snapshot on every keystroke.
+  var _abAutosaveTimer = null;
+  function scheduleAbAutosave() {
+    if (_abAutosaveTimer) clearTimeout(_abAutosaveTimer);
+    _abAutosaveTimer = setTimeout(function() {
+      var ta = $('abEditArea');
+      if (!ta || !AB.entry) return;
+      var files = currentFiles();
+      files[AB.tab] = ta.value;
+      AB.history[AB.historyIdx] = files;
+      syncProjectToEntry();
+    }, window.CANVAS_AUTOSAVE_DELAY || 1200);
+  }
+
+  // Leaving a file tab (or acting on undo/redo/download) commits any
+  // in-progress manual edit as a discrete version, same pattern as
+  // Canvas's toggleEdit()-driven pushVersion().
+  function commitManualEdit() {
+    var ta = $('abEditArea');
+    if (!ta || AB.tab === 'preview') return;
+    var files = shallowCopy(currentFiles());
+    if (files[AB.tab] === ta.value) return; // no change
+    files[AB.tab] = ta.value;
+    pushAbVersion(files);
+  }
+
+  // ── Version history (max 10) — same algorithm as AI Canvas's
+  // pushVersion/undo/redo, applied to whole-project {html,css,js} snapshots
+  // so manual edits and AI edits share one undo/redo stack per project.
+  function pushAbVersion(files) {
+    AB.history = AB.history.slice(0, AB.historyIdx + 1);
+    AB.history.push(files);
+    if (AB.history.length > 10) AB.history.shift();
+    AB.historyIdx = AB.history.length - 1;
+    syncProjectToEntry();
+    updateAbUndoRedoUI();
+  }
+
+  function abUndo() {
+    commitManualEdit();
+    if (AB.historyIdx <= 0) return;
+    AB.historyIdx--;
+    syncProjectToEntry();
+    renderBody();
+    updateAbUndoRedoUI();
+  }
+
+  function abRedo() {
+    if (AB.historyIdx >= AB.history.length - 1) return;
+    AB.historyIdx++;
+    syncProjectToEntry();
+    renderBody();
+    updateAbUndoRedoUI();
+  }
+
+  function updateAbUndoRedoUI() {
+    $('abUndoBtn').disabled = AB.historyIdx <= 0;
+    $('abRedoBtn').disabled = AB.historyIdx >= AB.history.length - 1;
+  }
+
+  // Write the active version + metadata back onto the bound S.messages
+  // entry, then persist via the app's existing save pipeline — identical
+  // path to Canvas's syncToEntry(), including the same deliberate bypass
+  // of the "_live conversation" cloud-sync skip so in-progress project
+  // edits reach Firestore promptly.
+  function syncProjectToEntry() {
+    if (!AB.entry) return;
+    var files = currentFiles();
+    AB.entry.project = {
+      name: $('abTitle').value || 'App Project',
+      files: { html: files.html, css: files.css, js: files.js },
+      history: AB.history.slice(),
+      historyIdx: AB.historyIdx
+    };
+    try { if (typeof autoSaveConversation === 'function') autoSaveConversation(); } catch (e) {}
+    try { if (typeof persist === 'function') persist(); } catch (e) {}
+    try {
+      if (typeof window !== 'undefined' && typeof CSYNC !== 'undefined' && CSYNC.db && CSYNC.uid) {
+        var liveConv = (S.history || []).find(function(c) { return c._live; });
+        if (liveConv && typeof _csyncEnqueue === 'function' && typeof _csyncScheduleFlush === 'function') {
+          _csyncEnqueue('upsert', liveConv);
+          _csyncScheduleFlush(window.CANVAS_SYNC_DELAY || 1500);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // ── Copy / Download / ZIP ───────────────────────────────────────
+  function fileLabel(key) { return key === 'html' ? 'index.html' : key === 'css' ? 'style.css' : key === 'js' ? 'script.js' : key; }
+
+  function copyFile() {
+    if (AB.tab === 'preview') { toast('⚠️ Nothing to copy on Preview'); return; }
+    var ta = $('abEditArea');
+    var text = ta ? ta.value : (currentFiles()[AB.tab] || '');
+    navigator.clipboard.writeText(text).then(function() {
+      toast('📋 Copied ' + fileLabel(AB.tab));
+    }).catch(function() { toast('⚠️ Copy failed'); });
+  }
+
+  function downloadFile() {
+    if (AB.tab === 'preview') { toast('⚠️ Nothing to download on Preview'); return; }
+    commitManualEdit();
+    var files = currentFiles();
+    var name = fileLabel(AB.tab);
+    var mime = AB.tab === 'html' ? 'text/html' : AB.tab === 'css' ? 'text/css' : 'text/javascript';
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([files[AB.tab] || ''], { type: mime }));
+    a.download = name;
+    a.click();
+    toast('⬇️ Downloaded ' + name);
+  }
+
+  // ── Minimal, dependency-free ZIP writer (STORE method, no compression) ──
+  // The app also works offline, so ZIP export can't rely on a CDN fetch
+  // (that would fail with no connection even though everything else keeps
+  // working). This builds a standard, spec-valid .zip entirely client-side
+  // from bytes already in memory — no network request, no new dependency,
+  // nothing for the service worker to precache or go stale.
+  var _crc32Table = null;
+  function crc32(bytes) {
+    if (!_crc32Table) {
+      _crc32Table = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        _crc32Table[n] = c >>> 0;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ _crc32Table[(crc ^ bytes[i]) & 0xFF];
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function buildZipBlob(fileEntries) {
+    // fileEntries: [{ name: 'index.html', text: '...' }, ...]
+    var enc = new TextEncoder();
+    var localChunks = [];
+    var centralChunks = [];
+    var offset = 0;
+
+    fileEntries.forEach(function(f) {
+      var nameBytes = enc.encode(f.name);
+      var data = enc.encode(f.text || '');
+      var crc = crc32(data);
+
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true);
+      lh.setUint16(4, 20, true);
+      lh.setUint16(6, 0, true);
+      lh.setUint16(8, 0, true);       // compression = store (none)
+      lh.setUint16(10, 0, true);
+      lh.setUint16(12, 0x21, true);
+      lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true);
+      lh.setUint32(22, data.length, true);
+      lh.setUint16(26, nameBytes.length, true);
+      lh.setUint16(28, 0, true);
+      var lhBytes = new Uint8Array(lh.buffer);
+      localChunks.push(lhBytes, nameBytes, data);
+      var entrySize = lhBytes.length + nameBytes.length + data.length;
+
+      var ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true);
+      ch.setUint16(4, 20, true);
+      ch.setUint16(6, 20, true);
+      ch.setUint16(8, 0, true);
+      ch.setUint16(10, 0, true);
+      ch.setUint16(12, 0, true);
+      ch.setUint16(14, 0x21, true);
+      ch.setUint32(16, crc, true);
+      ch.setUint32(20, data.length, true);
+      ch.setUint32(24, data.length, true);
+      ch.setUint16(28, nameBytes.length, true);
+      ch.setUint16(30, 0, true);
+      ch.setUint16(32, 0, true);
+      ch.setUint16(34, 0, true);
+      ch.setUint16(36, 0, true);
+      ch.setUint32(38, 0, true);
+      ch.setUint32(42, offset, true);
+      centralChunks.push(new Uint8Array(ch.buffer), nameBytes);
+
+      offset += entrySize;
+    });
+
+    var centralStart = offset;
+    var centralSize = centralChunks.reduce(function(sum, c) { return sum + c.length; }, 0);
+
+    var eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(4, 0, true);
+    eocd.setUint16(6, 0, true);
+    eocd.setUint16(8, fileEntries.length, true);
+    eocd.setUint16(10, fileEntries.length, true);
+    eocd.setUint32(12, centralSize, true);
+    eocd.setUint32(16, centralStart, true);
+    eocd.setUint16(20, 0, true);
+
+    return new Blob(localChunks.concat(centralChunks, [new Uint8Array(eocd.buffer)]), { type: 'application/zip' });
+  }
+
+  function downloadZip() {
+    commitManualEdit();
+    var files = currentFiles();
+    var name = ($('abTitle').value || 'project').replace(/[^\w\-]+/g, '_').slice(0, 50) || 'project';
+    try {
+      var blob = buildZipBlob([
+        { name: 'index.html', text: files.html || '' },
+        { name: 'style.css', text: files.css || '' },
+        { name: 'script.js', text: files.js || '' }
+      ]);
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name + '.zip';
+      a.click();
+      toast('⬇️ ZIP downloaded');
+    } catch (e) {
+      console.error('[APP BUILDER] zip error', e);
+      toast('⚠️ ZIP download failed');
+    }
+  }
+
+  // ── AI-assisted editing — only regenerates affected files ─────────
+  var AB_NETLIFY_FN = (typeof NETLIFY_FN !== 'undefined') ? NETLIFY_FN : '/.netlify/functions/chat';
+
+  async function aiEditApp(instruction) {
+    if (!instruction || !instruction.trim() || !AB.entry) return;
+    commitManualEdit();
+    var files = currentFiles();
+    var model = (typeof S !== 'undefined' && S.model) ? S.model : 'gemini-2.5-flash-lite';
+    var prompt =
+      'You are editing an existing 3-file mini web project (index.html, style.css, script.js) inside an AI app builder. ' +
+      'Apply the user\'s instruction. Only return the file(s) that actually need to change — leave files that do not ' +
+      'need changing out entirely. Use this EXACT format, one block per changed file, nothing else before or after:\n\n' +
+      '===FILE: index.html===\n(full replacement content, only if changed)\n\n' +
+      '===FILE: style.css===\n(full replacement content, only if changed)\n\n' +
+      '===FILE: script.js===\n(full replacement content, only if changed)\n\n' +
+      'Instruction: ' + instruction + '\n\n' +
+      '--- CURRENT index.html ---\n' + (files.html || '') + '\n' +
+      '--- CURRENT style.css ---\n' + (files.css || '') + '\n' +
+      '--- CURRENT script.js ---\n' + (files.js || '');
+
+    var sendBtn = $('abEditSendBtn');
+    var input = $('abEditInput');
+    sendBtn.disabled = true;
+    input.disabled = true;
+    var prevPlaceholder = input.placeholder;
+    input.placeholder = 'AI is editing…';
+
+    try {
+      var res = await fetch(AB_NETLIFY_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          geminiBody: {
+            system_instruction: { parts: [{ text: 'You are a precise front-end code editor inside ALEEM AI App Builder.' }] },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 4096, temperature: 0.4 }
+          }
+        })
+      });
+      var data = await res.json();
+      var reply = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+      if (!reply) { toast('⚠️ App AI edit failed'); return; }
+      var changed = parseMarkerFiles(reply.trim());
+      if (!changed) { toast('⚠️ App AI edit failed'); return; }
+      var next = shallowCopy(files);
+      if (changed.html !== undefined) next.html = changed.html;
+      if (changed.css !== undefined) next.css = changed.css;
+      if (changed.js !== undefined) next.js = changed.js;
+      pushAbVersion(next);
+      renderBody();
+      toast('✨ Project updated');
+    } catch (e) {
+      console.error('[APP BUILDER] edit error', e);
+      toast('⚠️ App AI edit failed');
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      input.placeholder = prevPlaceholder;
+      input.value = '';
+    }
+  }
+
+  // ── Wire up UI ─────────────────────────────────────────────────
+  function init() {
+    var closeBtn = $('abCloseBtn'); if (closeBtn) closeBtn.addEventListener('click', closeApp);
+    var copyBtn  = $('abCopyBtn');  if (copyBtn)  copyBtn.addEventListener('click', copyFile);
+    var dlBtn    = $('abDownloadBtn'); if (dlBtn) dlBtn.addEventListener('click', downloadFile);
+    var zipBtn   = $('abZipBtn');   if (zipBtn)   zipBtn.addEventListener('click', downloadZip);
+    var undoBtn  = $('abUndoBtn');  if (undoBtn)  undoBtn.addEventListener('click', abUndo);
+    var redoBtn  = $('abRedoBtn');  if (redoBtn)  redoBtn.addEventListener('click', abRedo);
+    var titleEl  = $('abTitle');    if (titleEl)  titleEl.addEventListener('change', syncProjectToEntry);
+
+    var tabsEl = $('abTabs');
+    if (tabsEl) {
+      tabsEl.addEventListener('click', function(e) {
+        var btn = e.target.closest('.ab-tab');
+        if (!btn) return;
+        commitManualEdit();
+        AB.tab = btn.getAttribute('data-tab');
+        renderTabs();
+        renderBody();
+      });
+    }
+
+    var sendBtn = $('abEditSendBtn');
+    if (sendBtn) sendBtn.addEventListener('click', function() { aiEditApp($('abEditInput').value); });
+    var editInput = $('abEditInput');
+    if (editInput) editInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); aiEditApp($('abEditInput').value); }
+    });
+    var suggestEl = $('abEditSuggest');
+    if (suggestEl) suggestEl.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-ins]');
+      if (!btn) return;
+      aiEditApp(btn.getAttribute('data-ins'));
+    });
+
+    // Escape closes the panel (mirrors Canvas + other glassmorphism popups).
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && AB.open) closeApp();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+// ── [END APP BUILDER] ───────────────────────────────────────────────
 </script>
 
 </body>
