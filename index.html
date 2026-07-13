@@ -1348,7 +1348,7 @@
   /* FIX: flex-shrink:0 guarantees the avatar keeps its full natural size and
      is never compressed by the flexbox algorithm, no matter how tight the
      available space in .topbar-right becomes on narrow mobile widths. */
-  .profile-menu-wrap { position: relative; margin-left: 4px; margin-right: -8px; flex-shrink: 0; }
+  .profile-menu-wrap { position: relative; margin-left: 4px; margin-right: 2px; flex-shrink: 0; }
   .tb-profile-btn {
     position: relative;
     padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: visible;
@@ -1382,6 +1382,50 @@
     cursor:pointer; transition: all var(--t);
   }
   .pd-item:hover { background: var(--bg-input); color: var(--text-1); }
+  .pd-item.danger { color: #ef4444; }
+  .pd-item.danger:hover { background: rgba(239,68,68,0.10); color: #ef4444; }
+  .pd-item:disabled,
+  .pd-item.disabled {
+    opacity: 0.4; cursor: not-allowed;
+  }
+  .pd-item:disabled:hover,
+  .pd-item.disabled:hover { background: none; color: var(--text-2); }
+  .pd-sep { height: 1px; background: var(--border); margin: 6px 2px; }
+
+  /* [ADDED] Overflow (⋮) menu — top-right of the topbar, right after the
+     profile avatar. Reuses the same glassmorphism dropdown shell (pd-item)
+     as the profile menu so both feel like one consistent design language. */
+  .overflow-menu-wrap { position: relative; margin-left: 4px; margin-right: -8px; flex-shrink: 0; }
+  .tb-icon-btn {
+    width: 32px; height: 32px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 1.1rem; line-height: 1;
+    background: var(--bg-input); border: 1px solid transparent;
+  }
+  .tb-icon-btn:hover { background: rgba(56,189,248,0.10); border-color: var(--border-hi); color: var(--text-1); }
+  .overflow-dropdown {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    min-width: 220px; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    padding: 8px; z-index: 200; backdrop-filter: blur(14px);
+    /* [ADDED] Fade + scale open/close — element stays in the DOM (it's
+       position:absolute so it never affects layout) and visibility is
+       driven entirely by the .open class, which lets the close transition
+       actually play instead of being cut off by display:none. */
+    transform-origin: top right;
+    opacity: 0;
+    transform: scale(0.92) translateY(-6px);
+    pointer-events: none;
+    transition: opacity 0.16s cubic-bezier(0.4,0,0.2,1), transform 0.16s cubic-bezier(0.4,0,0.2,1);
+  }
+  .overflow-dropdown.open {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+  }
+  @media (max-width: 480px) {
+    .overflow-dropdown { min-width: 200px; }
+  }
 
   /* ================================================================
      PAGES
@@ -2468,6 +2512,62 @@
   .rename-btn-save { background: linear-gradient(135deg, var(--a1), var(--a2)); color: #fff; border-color: transparent; }
   .rename-btn-save:hover { transform: translateY(-1px); }
   .rename-btn-save:active, .rename-btn-cancel:active { transform: scale(0.96); }
+
+  /* [ADDED] Share Conversation modal — clean transcript / share card */
+  .sc-body { padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .sc-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 16px;
+    max-height: 46vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sc-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .sc-card-logo {
+    font-family: var(--font-logo); font-weight: 700; font-size: 0.92rem;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sc-card-date { font-size: 0.72rem; color: var(--text-3); }
+  .sc-card-title {
+    font-family: var(--font-display); font-weight: 700; font-size: 0.98rem;
+    color: var(--text-1); margin-bottom: 12px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sc-card-transcript { display: flex; flex-direction: column; gap: 10px; }
+  .sc-msg { font-size: 0.82rem; line-height: 1.45; }
+  .sc-msg-who {
+    font-weight: 700; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.03em; margin-bottom: 2px; display: block;
+  }
+  .sc-msg.user .sc-msg-who { color: var(--a2); }
+  .sc-msg.ai   .sc-msg-who { color: var(--a1); }
+  .sc-msg-text { color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+  .sc-card-footer {
+    margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 0.7rem; color: var(--text-3); text-align: center;
+  }
+  .sc-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .sc-action-btn {
+    flex: 1 1 auto; min-width: 100px;
+    border-radius: var(--r-sm); padding: 9px 14px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); font-family: var(--font-body);
+    background: var(--bg-input); color: var(--text-2);
+    transition: border-color var(--t), transform 0.15s ease, color var(--t);
+  }
+  .sc-action-btn:hover { border-color: var(--border-hi); color: var(--text-1); }
+  .sc-action-btn:active { transform: scale(0.96); }
+  .sc-action-btn.primary { background: linear-gradient(135deg, var(--a1), var(--a2)); color: #fff; border-color: transparent; }
+  .sc-action-btn.primary:hover { transform: translateY(-1px); color: #fff; }
+  @media (max-width: 480px) {
+    .sc-card { max-height: 40vh; }
+    .sc-action-btn { min-width: 90px; font-size: 0.78rem; padding: 9px 10px; }
+  }
 
   /* Card grid — scrolls independently so long lists work on small screens */
   .pers-grid {
@@ -3912,7 +4012,7 @@
     }
     /* FIX 4 — Hamburger ↔ green online indicator gap, mobile.
        .topbar-left (and the hamburger inside it) must NOT move. We nudge the
-       Voice/Clear/Dark control group right by a small amount so the topbar
+       New Chat button group right by a small amount so the topbar
        still reads as visually centered. transform is used so this shift
        doesn't affect the flex layout/position of .topbar-left.
        NOTE: the avatar (profile-menu-wrap) is intentionally NOT shifted via
@@ -3926,14 +4026,14 @@
     }
   }
 
-  /* FIX 3 — Profile avatar right-edge breathing room on mobile.
-     The profile-menu-wrap has margin-left:4px but no right margin, so the
-     avatar sits flush against the screen edge on narrow viewports.             */
+  /* FIX 3 — Right-edge breathing room on mobile.
+     The overflow menu (rightmost element) has no right margin by default, so
+     it sits flush against the screen edge on narrow viewports.             */
   @media (max-width: 480px) {
-    .profile-menu-wrap {
-      margin-right: 6px;          /* lift avatar off the screen edge */
+    .overflow-menu-wrap {
+      margin-right: 6px;          /* lift the ⋮ button off the screen edge */
     }
-    /* Also ensure topbar-right doesn't run to edge when profile is hidden */
+    /* Also ensure topbar-right doesn't run to edge in any fallback case */
     .topbar-right {
       padding-right: 6px;
     }
@@ -5361,6 +5461,33 @@
   </div>
 </div>
 
+<!-- [ADDED] Share Conversation modal — clean transcript / share card
+     (glassmorphism, reuses the .pers-popup shell like Rename/Conversation Info). -->
+<div class="pers-popup-overlay" id="shareCardOverlay">
+  <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="shareCardTitle" style="max-width:480px;">
+    <div class="pers-popup-header">
+      <span class="pers-popup-title" id="shareCardTitle">🔗 Share Conversation</span>
+      <button type="button" class="pers-popup-close" id="shareCardClose" aria-label="Close">✕</button>
+    </div>
+    <div class="sc-body">
+      <div class="sc-card" id="shareCardPreview">
+        <div class="sc-card-header">
+          <span class="sc-card-logo">✨ ALEEM AI</span>
+          <span class="sc-card-date" id="shareCardDate"></span>
+        </div>
+        <div class="sc-card-title" id="shareCardConvTitle"></div>
+        <div class="sc-card-transcript" id="shareCardTranscript"></div>
+        <div class="sc-card-footer">Shared from ALEEM AI</div>
+      </div>
+      <div class="sc-actions">
+        <button type="button" class="sc-action-btn" id="scCopyBtn">📋 Copy Text</button>
+        <button type="button" class="sc-action-btn" id="scImageBtn">🖼️ Save as Image</button>
+        <button type="button" class="sc-action-btn primary" id="scShareBtn">🔗 Share</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="memory-saving-indicator" id="memSavingIndicator">
   <span>🧠</span><span>Saving memory…</span>
 </div>
@@ -5483,9 +5610,7 @@
     <span id="connLabel"></span>
         </div>
        <div class="tb-btn-group">
-         <button class="tb-btn" id="voiceBtn">🔊 Voice</button>
-         <button class="tb-btn" id="clearBtn">➕ New Chat</button>
-         <button class="tb-btn" id="themeBtn">🌙</button>
+         <button class="tb-btn" id="clearBtn">💬 New Chat</button>
        </div>
        <div class="profile-menu-wrap" id="profileMenuWrap" style="display:none;">
          <button class="tb-btn tb-profile-btn" id="profileBtn" aria-label="Account">
@@ -5505,6 +5630,23 @@
            <button class="pd-item" id="pdChangePhoto">🖼️ Change Profile Photo</button>
            <input type="file" id="pdPhotoInput" accept="image/*" style="display:none;">
            <button class="pd-item" id="pdLogout">🚪 Logout / Sign Out</button>
+         </div>
+       </div>
+       <!-- [ADDED] Overflow (⋮) menu — holds Share/Rename/Pin/Home-Screen/Theme/
+            Voice/Delete, moved out of the main topbar to keep it clean. -->
+       <div class="overflow-menu-wrap" id="overflowMenuWrap">
+         <button class="tb-btn tb-icon-btn" id="overflowBtn" aria-label="More options" aria-haspopup="true" aria-expanded="false">⋮</button>
+         <div class="overflow-dropdown" id="overflowDropdown">
+           <button class="pd-item" id="ovShareBtn">🔗 Share Conversation</button>
+           <button class="pd-item" id="ovRenameBtn">✏️ Rename Conversation</button>
+           <button class="pd-item" id="ovPinBtn"><span id="ovPinIcon">⭐</span> <span id="ovPinLabel">Pin Conversation</span></button>
+           <div class="pd-sep"></div>
+           <button class="pd-item" id="ovHomeBtn" style="display:none;">🏠 Add to Home Screen</button>
+           <button class="pd-item" id="themeBtn">🌙 Dark</button>
+           <button class="pd-item" id="voiceBtn">🔊 Voice</button>
+           <button class="pd-item" id="ovSettingsBtn">⚙️ Settings</button>
+           <div class="pd-sep"></div>
+           <button class="pd-item danger" id="ovDeleteBtn">🗑 Delete Conversation</button>
          </div>
        </div>
       </div>
@@ -8642,6 +8784,139 @@ function bindAllEvents() {
   if (clearBtn) clearBtn.addEventListener('click', function(e) {
     dbg('clearBtn click'); startNewChat();
   });
+
+  // ── [ADDED] Topbar overflow (⋮) menu ────────────────────────────
+  // Holds Share/Rename/Pin/Add-to-Home-Screen/Theme/Voice/Delete for
+  // whichever conversation is currently open, so the top bar itself only
+  // shows Sidebar, Connection, New Chat, Avatar, and this menu.
+  (function initOverflowMenu() {
+    var overflowBtn      = document.getElementById('overflowBtn');
+    var overflowDropdown = document.getElementById('overflowDropdown');
+    var ovShareBtn        = document.getElementById('ovShareBtn');
+    var ovRenameBtn       = document.getElementById('ovRenameBtn');
+    var ovPinBtn          = document.getElementById('ovPinBtn');
+    var ovPinIcon         = document.getElementById('ovPinIcon');
+    var ovPinLabel        = document.getElementById('ovPinLabel');
+    var ovHomeBtn         = document.getElementById('ovHomeBtn');
+    var ovSettingsBtn     = document.getElementById('ovSettingsBtn');
+    var ovDeleteBtn       = document.getElementById('ovDeleteBtn');
+    if (!overflowBtn || !overflowDropdown) return;
+
+    // Returns the S.history entry for the conversation currently open in the
+    // chat view (mirrors the S._activeConvId convention used everywhere else
+    // — see autoSaveConversation()/loadConv()), or null before the first
+    // message of a brand-new chat has been sent (no entry exists yet).
+    function getCurrentConv() {
+      if (!S._activeConvId) return null;
+      var id = Number(S._activeConvId);
+      return S.history.find(function(c) { return c.id === id; }) || null;
+    }
+
+    // Enables/disables the conversation-specific items and refreshes the
+    // Pin item's label — called every time the menu is opened.
+    function refreshOverflowMenu() {
+      var conv = getCurrentConv();
+      var has = !!conv;
+      [ovShareBtn, ovRenameBtn, ovPinBtn, ovDeleteBtn].forEach(function(btn) {
+        if (!btn) return;
+        btn.disabled = !has;
+        btn.classList.toggle('disabled', !has);
+      });
+      if (ovPinIcon && ovPinLabel) {
+        var pinned = has && !!conv.pinned;
+        ovPinIcon.textContent  = pinned ? '⭐' : '☆';
+        ovPinLabel.textContent = pinned ? 'Unpin Conversation' : 'Pin Conversation';
+      }
+    }
+
+    function openOverflowMenu() {
+      refreshOverflowMenu();
+      overflowDropdown.classList.add('open');
+      overflowBtn.setAttribute('aria-expanded', 'true');
+    }
+    function closeOverflowMenu() {
+      overflowDropdown.classList.remove('open');
+      overflowBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    overflowBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dbg('overflowBtn click');
+      if (overflowDropdown.classList.contains('open')) closeOverflowMenu();
+      else openOverflowMenu();
+    });
+    document.addEventListener('click', function(e) {
+      if (!overflowDropdown.classList.contains('open')) return;
+      if (overflowDropdown.contains(e.target) || overflowBtn.contains(e.target)) return;
+      closeOverflowMenu();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && overflowDropdown.classList.contains('open')) closeOverflowMenu();
+    });
+
+    if (ovShareBtn) ovShareBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      if (typeof openShareCardModal === 'function') openShareCardModal();
+    });
+
+    if (ovRenameBtn) ovRenameBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      var conv = getCurrentConv();
+      if (!conv) { toast('Start chatting first to rename this conversation'); return; }
+      openRenameModal(conv.id);
+    });
+
+    if (ovPinBtn) ovPinBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      var conv = getCurrentConv();
+      if (!conv) { toast('Start chatting first to pin this conversation'); return; }
+      pinConv(conv.id);
+    });
+
+    if (ovSettingsBtn) ovSettingsBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      if (typeof goPage === 'function') goPage('settings');
+    });
+
+    if (ovDeleteBtn) ovDeleteBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      var conv = getCurrentConv();
+      if (!conv) { toast('Start chatting first — nothing to delete yet'); return; }
+      if (!confirm('Permanently delete this conversation? This cannot be undone.')) return;
+      cleanupConversationImages(conv);
+      S.history = S.history.filter(function(x) { return x.id !== conv.id; });
+      S._activeConvId = null;
+      S._liveId = null;
+      persist();
+      renderHistory();
+      toast('🗑️ Conversation deleted');
+      if (typeof window.csyncDeleteConv === 'function') window.csyncDeleteConv(conv.id);
+      if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+      startNewChat();
+    });
+
+    // Add to Home Screen (optional) — only shown when the browser has
+    // actually offered an install prompt for this PWA.
+    var _deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      _deferredInstallPrompt = e;
+      if (ovHomeBtn) ovHomeBtn.style.display = 'block';
+    });
+    if (ovHomeBtn) ovHomeBtn.addEventListener('click', function() {
+      closeOverflowMenu();
+      if (!_deferredInstallPrompt) return;
+      _deferredInstallPrompt.prompt();
+      _deferredInstallPrompt.userChoice.finally(function() {
+        _deferredInstallPrompt = null;
+        if (ovHomeBtn) ovHomeBtn.style.display = 'none';
+      });
+    });
+    window.addEventListener('appinstalled', function() {
+      if (ovHomeBtn) ovHomeBtn.style.display = 'none';
+      toast('🏠 ALEEM AI added to your Home Screen');
+    });
+  })();
 
   // [ADDED] Sidebar New Chat button (item 2) — always pinned above History.
   var sidebarNewChatBtn = document.getElementById('sidebarNewChatBtn');
@@ -12386,7 +12661,7 @@ function showDraftDiscardModal(onConfirm) {
 // mode (item 9). Called once at startup and again from updateIncognitoUI().
 function updateNewChatButtonsForIncognito() {
   var on = !!S.incognito;
-  var label = on ? '🕶 New Incognito Chat' : '➕ New Chat';
+  var label = on ? '🕶 New Incognito Chat' : '💬 New Chat';
   var clearBtn = document.getElementById('clearBtn');
   if (clearBtn) clearBtn.textContent = label;
   var sideLbl = document.getElementById('sidebarNewChatLabel');
@@ -12567,6 +12842,186 @@ function shareMessage(bubId) {
   }
 }
 
+// [ADDED] How many images a message carries, checking both the current
+// `imgs` array format and the legacy single `img` field — same precedence
+// used everywhere else (see loadConv()/persist()/stripImagesFromConv()).
+function _msgImageCount(m) {
+  if (m && Array.isArray(m.imgs) && m.imgs.length) return m.imgs.length;
+  if (m && m.img) return 1;
+  return 0;
+}
+
+// [ADDED] Plain-text line for one message: its text, plus a "🖼 Image" /
+// "🖼 N Images" placeholder appended when the message carries images —
+// never the image data/URLs themselves. Shared by the transcript text
+// (Copy Text / native Share) and the Share Card preview below so an
+// image-only message never renders as a blank "You:" line.
+function _msgTranscriptLine(m) {
+  var text  = (m && m.text) || '';
+  var count = _msgImageCount(m);
+  if (!count) return text;
+  var tag = '🖼 ' + (count === 1 ? 'Image' : count + ' Images');
+  return text ? (text + '\n\n' + tag) : tag;
+}
+
+// [ADDED] Plain-text transcript of the current conversation, e.g.
+// "You: hello\n\nALEEM AI: hi there" — shared by the plain-text share
+// fallback and the Share Card modal's Copy/Share buttons below.
+function getConversationTranscriptText() {
+  return (S.messages || []).map(function(m) {
+    var who = m.role === 'user' ? 'You' : 'ALEEM AI';
+    return who + ': ' + _msgTranscriptLine(m);
+  }).join('\n\n');
+}
+
+// [ADDED] Share the whole current conversation (topbar overflow menu →
+// "Share Conversation") via the native Web Share API, falling back to
+// clipboard copy — same pattern as shareMessage() above, but for every
+// message in S.messages rather than a single bubble.
+function shareCurrentConversation() {
+  if (!S.messages || !S.messages.length) {
+    toast('Start chatting first to share this conversation');
+    return;
+  }
+  var text = getConversationTranscriptText();
+  if (navigator.share) {
+    navigator.share({ text: text, title: 'ALEEM AI Conversation' }).catch(function(){ /* user cancelled — no-op */ });
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function(){ toast('🔗 Conversation copied — paste it anywhere to share'); });
+  } else {
+    toast('⚠️ Sharing is not supported on this browser');
+  }
+}
+
+// [ADDED] Share Conversation modal — a clean, branded transcript "card"
+// instead of a raw text dump. Offers Copy Text, Save as Image (rendered
+// via html2canvas, loaded lazily on first use), and native Share.
+function openShareCardModal() {
+  if (!S.messages || !S.messages.length) {
+    toast('Start chatting first to share this conversation');
+    return;
+  }
+  var overlay = document.getElementById('shareCardOverlay');
+  var dateEl  = document.getElementById('shareCardDate');
+  var titleEl = document.getElementById('shareCardConvTitle');
+  var bodyEl  = document.getElementById('shareCardTranscript');
+  if (!overlay || !bodyEl) return;
+
+  var conv = (S._activeConvId && S.history.find(function(c){ return c.id === Number(S._activeConvId); })) || null;
+  if (dateEl)  dateEl.textContent  = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  if (titleEl) titleEl.textContent = (conv && conv.title) ? conv.title : 'Chat with ALEEM AI';
+
+  // Cap the preview to the most recent messages so the card stays a
+  // "card" rather than a full scroll-forever export.
+  var MAX_PREVIEW = 20;
+  var msgs = S.messages.slice(-MAX_PREVIEW);
+  bodyEl.innerHTML = msgs.map(function(m) {
+    var who = m.role === 'user' ? 'You' : 'ALEEM AI';
+    return '<div class="sc-msg ' + (m.role === 'user' ? 'user' : 'ai') + '">' +
+             '<span class="sc-msg-who">' + who + '</span>' +
+             '<span class="sc-msg-text">' + esc(_msgTranscriptLine(m)) + '</span>' +
+           '</div>';
+  }).join('');
+
+  overlay.classList.add('show');
+}
+
+function closeShareCardModal() {
+  var overlay = document.getElementById('shareCardOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// Lazily loads html2canvas (only needed for "Save as Image") so it never
+// costs anything on page load for users who never open the share card.
+var _html2canvasPromise = null;
+function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (_html2canvasPromise) return _html2canvasPromise;
+  _html2canvasPromise = new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = function() { resolve(window.html2canvas); };
+    s.onerror = function() { reject(new Error('Could not load html2canvas')); };
+    document.head.appendChild(s);
+  });
+  return _html2canvasPromise;
+}
+
+(function() {
+  var overlay   = document.getElementById('shareCardOverlay');
+  var closeBtn  = document.getElementById('shareCardClose');
+  var copyBtn   = document.getElementById('scCopyBtn');
+  var imageBtn  = document.getElementById('scImageBtn');
+  var shareBtn  = document.getElementById('scShareBtn');
+  var cardEl    = document.getElementById('shareCardPreview');
+
+  if (closeBtn) closeBtn.addEventListener('click', closeShareCardModal);
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeShareCardModal();
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var ov = document.getElementById('shareCardOverlay');
+    if (ov && ov.classList.contains('show')) closeShareCardModal();
+  });
+
+  if (copyBtn) copyBtn.addEventListener('click', function() {
+    var text = getConversationTranscriptText();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function(){ toast('📋 Transcript copied'); });
+    } else {
+      toast('⚠️ Clipboard is not supported on this browser');
+    }
+  });
+
+  if (shareBtn) shareBtn.addEventListener('click', function() {
+    var text = getConversationTranscriptText();
+    if (navigator.share) {
+      navigator.share({ text: text, title: 'ALEEM AI Conversation' }).catch(function(){ /* user cancelled — no-op */ });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function(){ toast('🔗 Copied — paste it anywhere to share'); });
+    } else {
+      toast('⚠️ Sharing is not supported on this browser');
+    }
+  });
+
+  if (imageBtn) imageBtn.addEventListener('click', function() {
+    if (!cardEl) return;
+    imageBtn.disabled = true;
+    var originalLabel = imageBtn.textContent;
+    imageBtn.textContent = '⏳ Rendering…';
+    loadHtml2Canvas().then(function(html2canvas) {
+      // Read the card's own resolved background so the exported PNG isn't
+      // transparent (canvas capture has no compositing context of its own).
+      var bg = getComputedStyle(cardEl).backgroundColor;
+      return html2canvas(cardEl, { backgroundColor: bg, scale: 2 });
+    }).then(function(canvas) {
+      canvas.toBlob(function(blob) {
+        if (!blob) { toast('⚠️ Could not generate image'); return; }
+        var file = new File([blob], 'aleem-ai-conversation.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: 'ALEEM AI Conversation' }).catch(function(){ /* user cancelled — no-op */ });
+        } else {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'aleem-ai-conversation.png';
+          a.click();
+          setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+          toast('🖼️ Image saved');
+        }
+      }, 'image/png');
+    }).catch(function(err) {
+      console.warn('[ALEEM] share-card image render failed:', err);
+      toast('⚠️ Could not render image — try Copy Text instead');
+    }).finally(function() {
+      imageBtn.disabled = false;
+      imageBtn.textContent = originalLabel;
+    });
+  });
+})();
+
 // ── MESSAGE FEEDBACK (Like / Dislike) ────────────────────────────
 // Stored in localStorage under key 'aleemMsgFeedback' as { "<convId>:<mid>": 'like'|'dislike' }.
 // Keys use the per-message UUID (mid) stored on S.messages objects rather than
@@ -12657,6 +13112,7 @@ function toggleMoreMenu(btn) {
   // Build menu items
   menu.innerHTML =
     '<button class="more-menu-item" data-mact="regen"   data-target="' + msgId + '"><span class="more-menu-ic">🔄</span>Regenerate</button>' +
+    '<button class="more-menu-item" data-mact="branch"  data-target="' + msgId + '"><span class="more-menu-ic">🌱</span>Branch from here</button>' +
     '<button class="more-menu-item" data-mact="savemem" data-target="' + bubId + '"><span class="more-menu-ic">📌</span>Save to Memory</button>' +
     '<button class="more-menu-item" data-mact="copymd"  data-target="' + msgId + '" data-bub="' + bubId + '"><span class="more-menu-ic">📄</span>Copy Markdown</button>' +
     '<button class="more-menu-item" data-mact="export"  data-target="' + msgId + '" data-bub="' + bubId + '"><span class="more-menu-ic">📤</span>Export Message</button>' +
@@ -12684,6 +13140,7 @@ function initMoreMenuDelegate() {
       var bub   = item.getAttribute('data-bub') || (_moreMenuEl && _moreMenuEl._bubId) || '';
       closeMoreMenu();
       if      (mact === 'regen')   regenLast(tgt);
+      else if (mact === 'branch')  branchFromMsg(tgt);
       else if (mact === 'savemem') saveToMemory(bub);
       else if (mact === 'copymd')  copyMarkdown(tgt, bub);
       else if (mact === 'export')  exportMsgAsTxt(tgt, bub);
@@ -12774,6 +13231,86 @@ function deleteMsg(msgId) {
   // Remove from DOM
   msgEl.parentNode && msgEl.parentNode.removeChild(msgEl);
   toast('🗑 Message deleted');
+}
+
+// [ADDED] Branch from here — forks the conversation at a given message
+// into a brand-new, independent conversation containing everything up to
+// and including that message, then switches to it so the user can
+// continue down a different path without touching the original chat.
+// Mirrors duplicateConv()'s ID-generation/eviction pattern, but only
+// copies the messages up to domIdx instead of the whole conversation.
+function branchFromMsg(msgId) {
+  if (S.busy) { toast('⏳ Please wait for the current response to finish'); return; }
+  // 🕵️ Same Incognito guard used by duplicateConv() — a branch has to live
+  // in History to be resumable, which Incognito never allows.
+  if (S.incognito) { toast("Branching isn't available during Incognito."); return; }
+
+  var msgEl = document.getElementById(msgId);
+  if (!msgEl) return;
+  var area = document.getElementById('chatMessages');
+  var allMsgEls = Array.prototype.slice.call(area.querySelectorAll('.msg'));
+  var domIdx = allMsgEls.indexOf(msgEl);
+  if (domIdx < 0 || !S.messages[domIdx]) return;
+
+  var branchMessages;
+  try {
+    branchMessages = JSON.parse(JSON.stringify(S.messages.slice(0, domIdx + 1)));
+  } catch (e) {
+    toast('⚠️ Could not branch this conversation');
+    return;
+  }
+  // Give every branched message a fresh mid (same formula addMsg() uses)
+  // so the branch shares no internal message ID with the original.
+  branchMessages.forEach(function(m) {
+    m.mid = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  });
+
+  var nowMs = Date.now();
+  var newId = nowMs;
+  while (S.history.some(function(h){ return h.id === newId; })) newId++; // guard rare same-ms collisions
+
+  var sourceConv  = S._activeConvId ? S.history.find(function(c){ return c.id === Number(S._activeConvId); }) : null;
+  var sourceTitle = (sourceConv && sourceConv.title) ? sourceConv.title : 'Chat';
+
+  // [MODIFIED] Start from a shallow copy of the source conversation instead
+  // of a blank object, so conversation-level metadata (folderId,
+  // workflowName/workflowIcon, isVoice, personality, etc. — see
+  // stripImagesFromConv()/persist() for the full field list) carries over
+  // to the branch, the same way duplicateConv() preserves it. Every field
+  // copied here is a primitive, so this is safe without a deep JSON clone;
+  // messages/_live are explicitly overwritten right below regardless.
+  var branch = sourceConv ? Object.assign({}, sourceConv) : {};
+  delete branch._live; // a branch is never the in-progress live session (see duplicateConv())
+
+  branch.id          = newId;
+  branch.createdAt   = nowMs;
+  branch.updatedAt   = nowMs;
+  branch.title       = '🌱 ' + sourceTitle;
+  branch.userRenamed = true; // keep the branch label — AI title-gen never overwrites it
+  branch.messages    = branchMessages;
+  branch.date        = new Date().toLocaleDateString();
+  branch.model       = S.model;
+  branch.pinned      = false;
+  branch.archived    = false;
+
+  S.history.unshift(branch);
+  // Same MAX_HISTORY eviction safeguard duplicateConv() applies.
+  if (S.history.length > MAX_HISTORY) {
+    var evictIdx = -1;
+    for (var ei = S.history.length - 1; ei >= 0; ei--) {
+      if (!S.history[ei].pinned) { evictIdx = ei; break; }
+    }
+    if (evictIdx === -1) evictIdx = S.history.length - 1;
+    S.history.splice(evictIdx, 1);
+  }
+
+  persist();
+  renderHistory();
+  if (typeof window.csyncUpsertConv === 'function') window.csyncUpsertConv(branch);
+  if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+
+  loadConv(newId); // switches the visible chat to the branch
+  toast('🌱 Branched into a new conversation');
 }
 
 // ── VOICE ─────────────────────────────────────────────────────────
