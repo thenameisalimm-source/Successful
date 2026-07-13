@@ -281,6 +281,24 @@
   @keyframes fadeInUp  { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
   @keyframes fadeInEl  { from { opacity:0; } to { opacity:1; } }
 
+  /* [ADDED] New Chat transition (item 4) — current chat fades + slides up,
+     then the fresh chat fades back in. Reuses the existing fadeInUp keyframe
+     for the "in" half so the motion matches the rest of the app. */
+  @keyframes newChatFadeOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-14px); } }
+  .chat-transition-out { animation: newChatFadeOut 0.22s cubic-bezier(0.4,0,0.2,1) forwards; }
+  .chat-transition-in  { animation: fadeInUp 0.26s cubic-bezier(0.4,0,0.2,1); }
+
+  /* [ADDED] Suggestion-cards heading shown above the empty-conversation
+     suggestion grid (item 5). */
+  .suggest-heading {
+    font-size: 0.95rem; font-weight: 600; color: var(--text-1);
+    margin: 18px 0 12px; opacity: 0.9;
+  }
+
+  /* [ADDED] Smooth entrance for History items when the list (re)renders,
+     e.g. right after a brand-new conversation is created (item 13). */
+  .hist-item { animation: fadeInUp 0.22s cubic-bezier(0.4,0,0.2,1); }
+
   /* ================================================================
      ANALYTICS PAGE
   ================================================================ */
@@ -658,6 +676,82 @@
   .mc-switch input:checked + .mc-slider {
     background: rgba(52,211,153,0.28); border-color: rgba(52,211,153,0.55);
   }
+
+  /* ================================================================
+     🕵️ INCOGNITO CHAT TOGGLE (sidebar) + BANNER (chat page)
+  ================================================================ */
+  .incognito-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; margin: 4px 10px 8px;
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    gap: 8px;
+    transition: background 0.2s;
+  }
+  .incognito-toggle-label {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.82rem; color: var(--text-2); font-weight: 600;
+    user-select: none; cursor: pointer;
+  }
+  .incognito-toggle-label .ig-icon { font-size: 1rem; }
+  .ig-badge {
+    display: none;
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5px;
+    color: #c084fc; background: rgba(168,85,247,0.16);
+    border: 1px solid rgba(168,85,247,0.4);
+    border-radius: 99px; padding: 1px 7px;
+    text-transform: uppercase;
+  }
+  /* Clear, distinct color change so it's obvious Incognito is active */
+  .incognito-toggle-row.incognito-active {
+    background: rgba(168,85,247,0.12);
+  }
+  .incognito-toggle-row.incognito-active .incognito-toggle-label {
+    color: #c084fc;
+  }
+  .incognito-toggle-row.incognito-active .ig-badge { display: inline-block; }
+
+  .ig-switch {
+    position: relative; display: inline-block;
+    width: 36px; height: 20px; flex-shrink: 0;
+  }
+  .ig-switch input { opacity: 0; width: 0; height: 0; }
+  .ig-slider {
+    position: absolute; inset: 0; cursor: pointer;
+    background: rgba(255,255,255,0.1); border: 1px solid var(--border);
+    border-radius: 99px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .ig-slider::before {
+    content: ''; position: absolute;
+    width: 14px; height: 14px;
+    left: 2px; top: 2px;
+    background: var(--text-3); border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .ig-switch input:checked + .ig-slider {
+    background: rgba(168,85,247,0.32); border-color: rgba(168,85,247,0.65);
+  }
+  .ig-switch input:checked + .ig-slider::before {
+    transform: translateX(16px); background: #c084fc;
+  }
+
+  /* Banner shown in the chat page while Incognito is active */
+  .incognito-banner {
+    display: none;
+    align-items: center; gap: 10px;
+    margin: 12px 14px 0; padding: 10px 14px;
+    border-radius: var(--r-md);
+    background: rgba(168,85,247,0.12);
+    border: 1px solid rgba(168,85,247,0.35);
+    color: var(--text-1);
+    font-size: 0.8rem; line-height: 1.35;
+  }
+  .incognito-banner.active { display: flex; }
+  .incognito-banner .ib-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .incognito-banner .ib-text strong {
+    display: block; color: #c084fc; font-size: 0.86rem; margin-bottom: 1px;
+  }
   .mc-switch input:checked + .mc-slider::before {
     transform: translateX(16px); background: #34d399;
   }
@@ -876,6 +970,74 @@
   /* ================================================================
      SIDEBAR OVERLAY (mobile backdrop)
   ================================================================ */
+  /* [ADDED] Floating New Chat button (item 3) — mobile only, appears once
+     the user has scrolled down while browsing History. */
+  .fab-newchat {
+    position: fixed; right: 18px; bottom: 22px; z-index: 500;
+    display: none; align-items: center; gap: 8px;
+    padding: 13px 18px;
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    color: #000; font-weight: 600; font-size: 0.85rem;
+    border: none; border-radius: 99px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(56,189,248,0.35);
+    opacity: 0; transform: translateY(16px) scale(0.94);
+    transition: opacity 0.25s cubic-bezier(0.4,0,0.2,1), transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    pointer-events: none;
+    touch-action: manipulation;
+  }
+  @media (max-width: 768px) {
+    .fab-newchat.show { display: flex; opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  }
+  .fab-newchat-icon { font-size: 1.05rem; }
+
+  /* [ADDED] Draft-discard confirmation modal (item 6) */
+  .draft-modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 9600;
+    background: rgba(4,8,18,0.72);
+    align-items: center; justify-content: center;
+    padding: 20px;
+    animation: fadeInEl 0.15s ease;
+  }
+  .draft-modal-overlay.open { display: flex; }
+  .draft-modal-card {
+    width: 100%; max-width: 340px;
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    padding: 26px 24px 22px;
+    text-align: center;
+    animation: fadeInUp 0.22s cubic-bezier(0.4,0,0.2,1);
+  }
+  .draft-modal-icon { font-size: 1.8rem; margin-bottom: 10px; }
+  .draft-modal-title { font-size: 1.05rem; font-weight: 700; color: var(--text-1); margin-bottom: 6px; }
+  .draft-modal-sub { font-size: 0.82rem; color: var(--text-2); line-height: 1.5; margin-bottom: 20px; }
+  .draft-modal-actions { display: flex; gap: 10px; }
+  .draft-modal-actions .btn-sec,
+  .draft-modal-actions .btn-pri { flex: 1; justify-content: center; }
+
+  /* [ADDED] Rich conversation hover-preview popover (item 11) */
+  .hist-preview-popover {
+    position: fixed; z-index: 600;
+    min-width: 220px; max-width: 280px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--r-md);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+    padding: 14px 16px;
+    opacity: 0; transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .hist-preview-popover.show { opacity: 1; transform: translateY(0); }
+  .hpp-title { font-weight: 700; font-size: 0.85rem; color: var(--text-1); margin-bottom: 8px; line-height: 1.35; }
+  .hpp-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.72rem; color: var(--text-2); padding: 3px 0; }
+  .hpp-row span:first-child { color: var(--text-3); }
+  .hpp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .hpp-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 99px; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.25); color: var(--a1); }
+  @media (max-width: 768px) { .hist-preview-popover { display: none !important; } }
+
   #sidebarOverlay {
     position: fixed;
     top: 0; bottom: 0; right: 0;
@@ -957,6 +1119,22 @@
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .brand-tag { position: relative; font-size: 0.68rem; color: var(--text-3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; font-weight: 500; }
+
+  /* [ADDED] Sidebar New Chat button (item 2) — sits outside the scrollable
+     .sidebar-nav so it always stays pinned above History, ChatGPT/Claude-style. */
+  .sidebar-newchat-wrap { padding: 12px 10px 4px; flex-shrink: 0; }
+  .sidebar-newchat-btn {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    color: #000; font-weight: 600; font-size: 0.875rem;
+    border: none; border-radius: var(--r-sm); cursor: pointer;
+    transition: transform var(--t), box-shadow var(--t);
+    touch-action: manipulation;
+  }
+  .sidebar-newchat-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--glow1); }
+  .sidebar-newchat-btn:active { transform: translateY(0) scale(0.98); }
+  .sidebar-newchat-icon { font-size: 1rem; }
 
   .sidebar-nav {
     flex: 1; overflow-y: auto;
@@ -2564,6 +2742,65 @@
   .hist-ctx-item.danger { color:#ef4444; }
   .hist-ctx-item .ctx-icon { font-size:1rem; width:18px; text-align:center; flex-shrink:0; }
 
+  /* [ADDED] Multi-select checkbox — replaces the 3-dot button in
+     .hist-actions while S.histSelectMode is active. */
+  .hist-select-checkbox {
+    width:22px; height:22px; border-radius:50%; flex-shrink:0;
+    border:2px solid var(--border-hi);
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.72rem; font-weight:700; color:#fff;
+    background:transparent; transform:scale(0.85);
+    transition:background var(--t), border-color var(--t), transform 0.15s ease;
+    animation:ciCheckIn 0.2s ease;
+  }
+  .hist-select-checkbox.checked {
+    background:linear-gradient(135deg, var(--a1), var(--a2));
+    border-color:transparent; transform:scale(1);
+  }
+  @keyframes ciCheckIn { from{opacity:0;transform:scale(0.6);} to{opacity:1;transform:scale(0.85);} }
+  .hist-item.is-selected { border-color:var(--a1); background:rgba(56,189,248,0.08); }
+  .hist-item.is-selecting { cursor:pointer; }
+
+  /* [ADDED] Selection toolbar — "X Selected" + bulk action buttons.
+     Fades in and slides down over 200ms via the max-height/opacity combo
+     (mirrors the .pers-popup-overlay glassmorphism treatment). */
+  .hist-select-toolbar {
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    flex-wrap:wrap;
+    background:rgba(8,14,30,0.55);
+    border:1px solid rgba(99,179,237,0.25); border-width:0;
+    border-radius:var(--r-sm);
+    backdrop-filter:blur(20px) saturate(1.5);
+    -webkit-backdrop-filter:blur(20px) saturate(1.5);
+    padding:0 14px; max-height:0; margin-bottom:0; overflow:hidden;
+    opacity:0; transform:translateY(-8px);
+    transition:opacity 0.2s ease, transform 0.2s ease, max-height 0.2s ease,
+               padding 0.2s ease, margin 0.2s ease, border-width 0.2s ease;
+  }
+  .hist-select-toolbar.show {
+    opacity:1; transform:translateY(0);
+    max-height:120px; padding:10px 14px; margin-bottom:12px; border-width:1px;
+  }
+  .hst-count { font-size:0.85rem; font-weight:600; color:var(--text-1); white-space:nowrap; }
+  .hst-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .hst-btn {
+    background:var(--bg-input); border:1px solid var(--border); color:var(--text-1);
+    border-radius:var(--r-sm); padding:7px 12px; font-size:0.8rem; font-weight:600;
+    cursor:pointer; font-family:var(--font-body);
+    transition:border-color var(--t), transform 0.15s ease; touch-action:manipulation;
+  }
+  .hst-btn:hover { border-color:var(--border-hi); }
+  .hst-btn:active { transform:scale(0.95); }
+  .hst-btn.danger { color:#ef4444; border-color:rgba(239,68,68,0.35); }
+  .hst-btn.cancel { color:var(--text-3); }
+
+  /* [ADDED] Conversation Info modal rows (reuses .pers-popup shell) */
+  .ci-body { padding:16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); max-height:70vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .ci-row { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .ci-row:last-child { border-bottom:none; }
+  .ci-label { font-size:0.78rem; color:var(--text-3); flex-shrink:0; padding-top:1px; }
+  .ci-value { font-size:0.82rem; color:var(--text-1); font-weight:600; text-align:right; word-break:break-word; }
+
   /* Search bar */
   .hist-search-row { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
   .hist-search-row .search-wrap { flex:1; min-width:0; }
@@ -2625,6 +2862,8 @@
 
   .hist-empty { text-align:center; padding:40px 20px; color:var(--text-3); font-size:0.875rem; }
   .hist-empty .he-icon { font-size:2.3rem; margin-bottom:10px; }
+  .hist-empty .he-sub { margin-top:4px; font-size:0.8rem; }
+  .hist-empty .he-newchat-btn { margin-top:16px; }
 
   .hist-section-label {
     font-size:0.68rem; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;
@@ -5088,12 +5327,48 @@
     </div>
   </div>
 </div>
+
+<!-- [ADDED] Conversation Info / Statistics modal (glassmorphism, reuses the
+     .pers-popup shell so it matches Rename Conversation's premium look). -->
+<div class="pers-popup-overlay" id="convInfoOverlay">
+  <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="convInfoTitle" style="max-width:460px;">
+    <div class="pers-popup-header">
+      <span class="pers-popup-title" id="convInfoTitle">📊 Conversation Info</span>
+      <button type="button" class="pers-popup-close" id="convInfoClose" aria-label="Close">✕</button>
+    </div>
+    <div class="ci-body" id="convInfoBody"></div>
+  </div>
+</div>
+
 <div class="memory-saving-indicator" id="memSavingIndicator">
   <span>🧠</span><span>Saving memory…</span>
 </div>
 
 <!-- SIDEBAR BACKDROP (mobile) -->
 <div id="sidebarOverlay"></div>
+
+<!-- [ADDED] Floating New Chat button — shown on mobile once the user scrolls
+     down while viewing History (item 3). -->
+<button class="fab-newchat" id="fabNewChat" aria-label="New Chat" title="New Chat">
+  <span class="fab-newchat-icon">➕</span>
+  <span class="fab-newchat-label">New Chat</span>
+</button>
+
+<!-- [ADDED] Draft-discard confirmation modal (item 6) -->
+<div class="draft-modal-overlay" id="draftDiscardModal">
+  <div class="draft-modal-card">
+    <div class="draft-modal-icon">✍️</div>
+    <div class="draft-modal-title">Discard this draft?</div>
+    <p class="draft-modal-sub">You have an unsent message. Starting a new chat will discard it.</p>
+    <div class="draft-modal-actions">
+      <button class="btn-sec" id="draftDiscardCancelBtn">Cancel</button>
+      <button class="btn-pri draft-modal-confirm" id="draftDiscardConfirmBtn">➕ New Chat</button>
+    </div>
+  </div>
+</div>
+
+<!-- [ADDED] Rich conversation hover-preview popover (item 11, desktop only) -->
+<div class="hist-preview-popover" id="histPreviewPopover"></div>
 
 <!-- APP -->
 <div id="app" style="display:none;">
@@ -5103,6 +5378,13 @@
     <div class="sidebar-brand">
       <div class="brand-name">ALEEM AI</div>
       <div class="brand-tag">Personal Knowledge Assistant</div>
+    </div>
+    <!-- [ADDED] Sidebar New Chat — pinned above the scrollable nav/History list -->
+    <div class="sidebar-newchat-wrap">
+      <button class="sidebar-newchat-btn" id="sidebarNewChatBtn">
+        <span class="sidebar-newchat-icon">➕</span>
+        <span class="sidebar-newchat-label" id="sidebarNewChatLabel">New Chat</span>
+      </button>
     </div>
     <div class="sidebar-nav">
       <div class="nav-label">Main</div>
@@ -5148,6 +5430,19 @@
         <span class="nav-icon">⚙️</span> Settings
       </button>
     </div>
+    <!-- 🕵️ Incognito Chat Toggle -->
+    <div class="incognito-toggle-row" id="incognitoToggleRow">
+      <label class="incognito-toggle-label" for="incognitoToggle"
+             title="Nothing in this conversation will be saved. Memory and cloud sync are disabled.">
+        <span class="ig-icon">🕵️</span>
+        <span class="ig-text">Incognito Chat</span>
+        <span class="ig-badge" id="incognitoBadge">Active</span>
+      </label>
+      <label class="ig-switch">
+        <input type="checkbox" id="incognitoToggle">
+        <span class="ig-slider"></span>
+      </label>
+    </div>
     <div class="sidebar-foot">
       © 2026 ALEEM AI<br>Founded by Aleem Sudamaniya
     </div>
@@ -5168,7 +5463,7 @@
         </div>
        <div class="tb-btn-group">
          <button class="tb-btn" id="voiceBtn">🔊 Voice</button>
-         <button class="tb-btn" id="clearBtn">🗑 Clear</button>
+         <button class="tb-btn" id="clearBtn">➕ New Chat</button>
          <button class="tb-btn" id="themeBtn">🌙</button>
        </div>
        <div class="profile-menu-wrap" id="profileMenuWrap" style="display:none;">
@@ -5196,6 +5491,14 @@
 
     <!-- PAGE: CHAT -->
     <section id="page-chat" class="page active">
+      <!-- 🕵️ Incognito Chat banner — shown only while S.incognito is true -->
+      <div class="incognito-banner" id="incognitoBanner">
+        <span class="ib-icon">🕵️</span>
+        <span class="ib-text">
+          <strong>Incognito Chat</strong>
+          Nothing in this conversation will be saved. Memory and cloud sync are disabled.
+        </span>
+      </div>
       <div class="chat-messages" id="chatMessages">
         <div class="chat-welcome" id="chatWelcome">
           <div class="av-wrap">
@@ -5210,6 +5513,7 @@
             <span class="hero-badge hero-badge--voice"><span class="hero-badge-icon">🎤</span>Voice Enabled</span>
           </div>
           <p>Powered by Gemini &amp; Groq • Voice, Vision &amp; Memory Enabled</p>
+          <p class="suggest-heading" id="suggestHeading">What can I help you with today?</p>
           <div class="suggest-grid" id="suggestGrid"></div>
         </div>
       </div>
@@ -5616,6 +5920,20 @@
     <section id="page-history" class="page">
       <div class="pg-body">
         <div class="pg-head"><h1>Conversation History</h1><p>Browse, search and organize past chats</p></div>
+
+        <!-- [ADDED] Multi-select bulk-action toolbar — hidden until
+             enterSelectionMode() adds .show (long-press or Ctrl/Cmd+Click
+             on a conversation). -->
+        <div class="hist-select-toolbar" id="histSelectToolbar">
+          <span class="hst-count" id="histSelectCount">0 Selected</span>
+          <div class="hst-actions">
+            <button type="button" class="hst-btn" id="histSelPinBtn">📌 Pin</button>
+            <button type="button" class="hst-btn" id="histSelArchiveBtn">📦 Archive</button>
+            <button type="button" class="hst-btn" id="histSelMoveBtn">📁 Move</button>
+            <button type="button" class="hst-btn danger" id="histSelDeleteBtn">🗑 Delete</button>
+            <button type="button" class="hst-btn cancel" id="histSelCancelBtn">❌ Cancel</button>
+          </div>
+        </div>
 
         <div class="hist-search-row">
           <div class="search-wrap">
@@ -7677,15 +7995,17 @@ function _injectCreatorAvatars() {
 }
 // ── END ALEEM AI LOGO AVATAR ──────────────────────────────────────
 
+// [MODIFIED] Action-oriented suggestion cards for the empty-conversation
+// state (item 5 of the chat redesign) — replaces the old trivia prompts.
 const SUGGESTIONS = [
-  { icon: '🏏', text: 'Who is the greatest cricket batsman of all time?' },
-  { icon: '🚀', text: 'How far is the Moon from Earth?' },
-  { icon: '🤔', text: 'What is quantum computing in simple terms?' },
-  { icon: '😄', text: 'Tell me a funny joke!' },
-  { icon: '📜', text: 'What caused World War I?' },
-  { icon: '🔬', text: 'How does photosynthesis work?' },
-  { icon: '🌍', text: 'What is the largest country by area?' },
-  { icon: '💡', text: 'Give me a motivational quote!' },
+  { icon: '💻', text: 'Build a website for my project' },
+  { icon: '📱', text: 'Help me create an app' },
+  { icon: '🎨', text: 'Generate an image of a futuristic city' },
+  { icon: '📝', text: 'Write an article about a topic I choose' },
+  { icon: '📊', text: 'Analyze some data for me' },
+  { icon: '🔄', text: 'Create a workflow to automate a task' },
+  { icon: '💡', text: 'Give me some business ideas' },
+  { icon: '🧠', text: 'Teach me something new today' },
 ];
 
 const KNOWLEDGE_CATS = [
@@ -7772,8 +8092,18 @@ const S = {
   histQuery:   '',      // current search text
   histFilter:  'all',   // 'all' | 'pinned' | 'voice' | 'recent' | 'archived'
   histFolder:  null,    // active folder id, or null for "no folder filter"
+  // [ADDED] Multi-select — runtime-only, never persisted. histSelectMode
+  // toggles the whole History list into checkbox mode; histSelectedIds
+  // holds the ids currently checked.
+  histSelectMode:   false,
+  histSelectedIds:  [],
   fastMode:    false,   // ⚡ Fast Mode — skips memory/history/profile context
   memCapture:  false,   // 🧠 Memory Capture — allows memory creation in Fast Mode
+  // 🕵️ Incognito Chat — runtime-only, NEVER persisted/loaded from storage.
+  // While true: no history/localStorage/Firestore/Cloud Sync writes happen
+  // for the active conversation, and no memories are read or created.
+  // Always resets to false on every fresh page load (see loadStorage()).
+  incognito:   false,
   // 🔄 AI Workflows — reusable, manually-run multi-step AI sequences.
   // [{ id, name, description, icon, color, favorite, createdAt, updatedAt,
   //    steps:[{id,title,prompt}] }]
@@ -7799,6 +8129,19 @@ const PAGE_TITLES = {
   settings:  'Settings',
 };
 
+// 🕵️ Incognito Chat — hard guarantee that a temporary session never
+// survives a refresh/close. Nothing Incognito-related is ever written to
+// localStorage/Firestore/Cloud Sync in the first place (see
+// autoSaveConversation(), persist(), buildMemoryContext(),
+// analyseAndSaveMemory(), csyncUpsertConv()), so this is a defensive
+// no-op safety net, not the primary guard.
+window.addEventListener('beforeunload', function() {
+  if (S.incognito) {
+    S.messages  = [];
+    S.incognito = false;
+  }
+});
+
 // ── BOOT ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
 
@@ -7817,6 +8160,7 @@ function init() {
   updateThemeBtn();
   updatePLabel();
   updateFastModeUI();
+  updateIncognitoUI(); // 🕵️ Incognito Chat always starts OFF on a fresh load
   initMoreMenuDelegate();
   restoreMsgFeedbackUI();
   // Inject ALEEM AI avatar into the static welcome screen
@@ -8002,6 +8346,28 @@ function persist() {
   // necessary. loadConv() already prefers `imgs` and only reads `img` as
   // a fallback when `imgs` is absent, so it's safe to omit the redundant
   // `img` copy at persistence time only (in-memory S.messages is untouched).
+  // 🕵️ Incognito Chat — persist() must never write the active conversation
+  // (or anything else in S.history) to localStorage while Incognito is on.
+  // Everything else persist() saves below (prefs, folders, workflows, etc.)
+  // is unrelated to the current chat and is unaffected.
+  function stripImagesFromConv(conv) {
+    return {
+      id: conv.id, title: conv.title, date: conv.date,
+      pinned: !!conv.pinned, archived: !!conv.archived,
+      folderId: conv.folderId || null, isVoice: !!conv.isVoice,
+      personality: conv.personality || '',
+      createdAt: conv.createdAt || conv.id || 0,
+      updatedAt: conv.updatedAt || conv.id || 0,
+      workflowName: conv.workflowName || null,
+      workflowIcon: conv.workflowIcon || null,
+      messages: conv.messages.map(function(m) {
+        if (!m.imgs || !m.imgs.length) return m;
+        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: [], img: null, canvas: m.canvas || undefined };
+      })
+    };
+  }
+
+  if (!S.incognito) {
   var histToStore = S.history.map(function(conv) {
     var c = { id: conv.id, title: conv.title, date: conv.date, messages: conv.messages.map(function(m) {
       if (m.imgs && m.imgs.length) {
@@ -8034,23 +8400,6 @@ function persist() {
     return c;
   });
   // [END ADDED]
-
-  function stripImagesFromConv(conv) {
-    return {
-      id: conv.id, title: conv.title, date: conv.date,
-      pinned: !!conv.pinned, archived: !!conv.archived,
-      folderId: conv.folderId || null, isVoice: !!conv.isVoice,
-      personality: conv.personality || '',
-      createdAt: conv.createdAt || conv.id || 0,
-      updatedAt: conv.updatedAt || conv.id || 0,
-      workflowName: conv.workflowName || null,
-      workflowIcon: conv.workflowIcon || null,
-      messages: conv.messages.map(function(m) {
-        if (!m.imgs || !m.imgs.length) return m;
-        return { role: m.role, text: m.text, time: m.time, ts: m.ts, mid: m.mid || '', imgs: [], img: null, canvas: m.canvas || undefined };
-      })
-    };
-  }
 
   try {
     lss('aleem_hist', JSON.stringify(histToStore));
@@ -8088,6 +8437,7 @@ function persist() {
       }
     }
   }
+  } // [END] if (!S.incognito) — history persistence block
   // [END MODIFIED]
   lss('aleem_typing_anim', S.typingAnim ? 'on' : 'off');
   lss('aleem_auto_scroll', S.autoScroll ? 'on' : 'off');
@@ -8269,8 +8619,71 @@ function bindAllEvents() {
     dbg('themeBtn click'); toggleTheme();
   });
   if (clearBtn) clearBtn.addEventListener('click', function(e) {
-    dbg('clearBtn click'); clearChat();
+    dbg('clearBtn click'); startNewChat();
   });
+
+  // [ADDED] Sidebar New Chat button (item 2) — always pinned above History.
+  var sidebarNewChatBtn = document.getElementById('sidebarNewChatBtn');
+  if (sidebarNewChatBtn) sidebarNewChatBtn.addEventListener('click', function(e) {
+    dbg('sidebarNewChatBtn click'); startNewChat();
+  });
+
+  // [ADDED] Mobile floating New Chat button (item 3).
+  var fabNewChat = document.getElementById('fabNewChat');
+  if (fabNewChat) fabNewChat.addEventListener('click', function(e) {
+    dbg('fabNewChat click'); startNewChat();
+  });
+
+  // [ADDED] Show/hide the History FAB once the user scrolls down (item 3).
+  // The .page elements scroll with the document (except #page-chat), so a
+  // window scroll listener covers it; we only ever show it on the History
+  // page and only on mobile widths (enforced in CSS via the 768px media
+  // query, matching the existing mobile breakpoint used across the app).
+  window.addEventListener('scroll', function() {
+    if (!fabNewChat) return;
+    var histPage = document.getElementById('page-history');
+    var onHistory = histPage && histPage.classList.contains('active');
+    var scrolled  = window.scrollY > 120;
+    fabNewChat.classList.toggle('show', !!(onHistory && scrolled));
+  }, { passive: true });
+
+  // [ADDED] Keyboard shortcuts (item 10) — Ctrl+N / Ctrl+Shift+O create a
+  // new chat. Desktop only; ignored on mobile widths.
+  document.addEventListener('keydown', function(e) {
+    if (window.innerWidth <= 768) return; // ignore on mobile
+    var isNewChatCombo =
+      (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) ||
+      (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'o' || e.key === 'O'));
+    if (!isNewChatCombo) return;
+    e.preventDefault();
+    startNewChat();
+  });
+
+  // [ADDED] Rich hover-preview popover for History items (item 11) —
+  // desktop only, delegated on the stable #histList container so it keeps
+  // working across every renderHistory() re-render.
+  var histListEl = document.getElementById('histList');
+  if (histListEl) {
+    histListEl.addEventListener('mouseover', function(e) {
+      if (window.innerWidth <= 768) return;
+      var item = e.target.closest('.hist-item');
+      if (!item || item.__hpActive) return;
+      item.__hpActive = true;
+      clearTimeout(_hpHoverTimer);
+      _hpHoverTimer = setTimeout(function() { showHistPreview(item); }, 350);
+    });
+    histListEl.addEventListener('mouseout', function(e) {
+      var item = e.target.closest('.hist-item');
+      if (!item) return;
+      var to = e.relatedTarget;
+      if (to && item.contains(to)) return;
+      item.__hpActive = false;
+      clearTimeout(_hpHoverTimer);
+      hideHistPreview();
+    });
+    histListEl.addEventListener('scroll', hideHistPreview, { passive: true });
+  }
+  window.addEventListener('scroll', hideHistPreview, { passive: true });
 
   // ── Chat input ────────────────────────────────────────────────────
   var sendBtn   = document.getElementById('sendBtn');
@@ -8302,6 +8715,17 @@ function bindAllEvents() {
     });
   }
 
+  // ── 🕵️ Incognito Chat toggle ─────────────────────────────────────
+  var incognitoToggle = document.getElementById('incognitoToggle');
+  if (incognitoToggle) {
+    incognitoToggle.addEventListener('change', function() {
+      setIncognito(incognitoToggle.checked);
+      toast(S.incognito
+        ? '🕵️ Incognito enabled. This conversation won\'t be saved.'
+        : '📝 Returned to normal chat.');
+    });
+  }
+
   // ── 🧠 Memory Capture toggle ─────────────────────────────────────
   // Only active while Fast Mode is ON. Controls ONLY memory creation;
   // never re-enables memory context, history context, or profile context
@@ -8309,7 +8733,7 @@ function bindAllEvents() {
   var memCaptureToggle = document.getElementById('memCaptureToggle');
   if (memCaptureToggle) {
     memCaptureToggle.addEventListener('change', function() {
-      if (!S.fastMode) return; // guard: toggle is disabled when Fast Mode is OFF
+      if (!S.fastMode || S.incognito) return; // guard: disabled when Fast Mode is OFF or Incognito is ON
       S.memCapture = memCaptureToggle.checked;
       updateFastModeUI();
       persist();
@@ -8644,7 +9068,20 @@ function bindAllEvents() {
     } else if (histItem) {
       var id = parseInt(histItem.getAttribute('data-id'), 10);
       dbg('delegate histItem: ' + id);
-      if (!isNaN(id)) loadConv(id);
+      if (!isNaN(id)) {
+        // [ADDED] Multi-select — already in selection mode: tap toggles
+        // this row's checkbox instead of opening the conversation.
+        if (S.histSelectMode) {
+          toggleConvSelection(id);
+        } else if (e.ctrlKey || e.metaKey) {
+          // [ADDED] Ctrl+Click (Cmd+Click on Mac) — desktop entry point
+          // into selection mode, mirrors the mobile long-press gesture.
+          if (S.incognito) { toast('Unavailable during Incognito.'); }
+          else { enterSelectionMode(id); }
+        } else {
+          loadConv(id);
+        }
+      }
     } else if (actionBtn) {
       var act2 = actionBtn.getAttribute('data-action');
       dbg('delegate action: ' + act2);
@@ -8699,6 +9136,11 @@ function goPage(name) {
   if (name === 'chat') { particleCtrl.resume(); } else { particleCtrl.pause(); }
 
   if (window.innerWidth <= 768) closeSidebar();
+
+  // [ADDED] Hide the mobile New Chat FAB immediately when leaving History
+  // (item 3) — the scroll listener otherwise only re-evaluates on scroll.
+  var fabNewChat = document.getElementById('fabNewChat');
+  if (fabNewChat && name !== 'history') fabNewChat.classList.remove('show');
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────
@@ -9660,6 +10102,14 @@ async function handleSend() {
   var effectiveText = text || (imgs.length ? 'Please analyse this image and describe what you see.' : '');
 
   addMsg('user', effectiveText, false, imgs);
+  // [ADDED] Create/refresh the History entry immediately after the first user
+  // message (ChatGPT-style) instead of waiting for the AI reply. Reuses the
+  // existing autoSaveConversation()/persist() pipeline unchanged — it already
+  // no-ops for Incognito and already computes a safe fallback title from a
+  // single user message. The AI-generated title still only fires once the
+  // first AI reply lands (see the async title-gen block inside
+  // autoSaveConversation()), so this is purely additive.
+  autoSaveConversation();
   // Show agent activation header once per conversation (or after agent change).
   if (typeof showAgentActivationHeader === 'function') {
     showAgentActivationHeader(S.agent || 'none');
@@ -9670,7 +10120,7 @@ async function handleSend() {
   // In Fast Mode: only run memory extraction if Memory Capture is ON.
   // Memory Capture ON = create new memories, but NEVER re-enables context (history/memory/profile).
   // AI request is always: System Prompt + Current Message + Attachments only (in Fast Mode).
-  var shouldCaptureMem = effectiveText && effectiveText.trim().length > 8 &&
+  var shouldCaptureMem = !S.incognito && effectiveText && effectiveText.trim().length > 8 &&
     (!S.fastMode || S.memCapture);
   if (shouldCaptureMem) {
     analyseAndSaveMemory(effectiveText);
@@ -9693,8 +10143,17 @@ async function handleSend() {
 }
 
 function sendSuggest(text) {
-  document.getElementById('chatInput').value = text;
-  handleSend();
+  // [MODIFIED] Suggestion cards now only insert the prompt into the input
+  // box (ChatGPT/Claude-style) instead of auto-sending — the user reviews
+  // and presses Send themselves. Reuses the existing autoResize() helper so
+  // the textarea grows to fit the inserted text just like manual typing.
+  var input = document.getElementById('chatInput');
+  if (!input) return;
+  input.value = text;
+  if (typeof autoResize === 'function') autoResize();
+  input.focus();
+  var len = input.value.length;
+  try { input.setSelectionRange(len, len); } catch(e) {}
 }
 
 function launchKnow(prompt, topic) {
@@ -9778,6 +10237,11 @@ function addMsg(role, text, noRender, imgDataArr, _existingMid, _existingTime, _
   // AND deleteMsg()/editMessage() operations that shift array indices.
   // For a brand-new session (no convId yet), generate one eagerly now and
   // pre-set S._liveId so autoSaveConversation() reuses the same ID.
+  // 🕵️ Note: this is only an in-memory feedback-key label (keeps 👍/👎 stable
+  // for this tab) — it is NOT a conversation object and is never written to
+  // S.history/localStorage/Firestore by itself. autoSaveConversation() is the
+  // only place a history entry gets created, and it no-ops entirely while
+  // S.incognito is true, so no temporary conversation object is ever created.
   if (!S._activeConvId) {
     S._liveId       = Date.now();
     S._activeConvId = String(S._liveId);
@@ -11087,6 +11551,37 @@ function formatRawGeminiError(httpStatus, data) {
   return '**Raw API response (HTTP ' + httpStatus + '):**\n```\n' + raw + '\n```';
 }
 
+// ── PROVIDER FAILOVER (Groq ⇄ Gemini) ────────────────────────────
+// [ADDED] Detects rate-limit/quota errors from either provider and, when
+// found, automatically switches the active provider (updating S.model /
+// #modelSelect exactly as a manual selection would) and retries the exact
+// same request ONCE. Shared by callGroqDirect() and callGemini() so this
+// detection + switch-over logic lives in exactly one place instead of
+// being duplicated in both provider implementations.
+var FAILOVER_QUOTA_RE = /rate limit reached|too many requests|resource_exhausted|quota exceeded|\bquota\b/i;
+
+function isQuotaOrRateLimitError(httpStatus, message) {
+  if (httpStatus === 429) return true;
+  var msg = message || '';
+  if (FAILOVER_QUOTA_RE.test(msg)) return true;
+  if (/\btpm\b/i.test(msg)) return true; // Groq "TPM" (tokens-per-minute) limit
+  return false;
+}
+
+// Switches S.model + #modelSelect to `targetModel` exactly as the manual
+// modelSelect 'change' handler does (same fields updated, same persistence),
+// shows the failover toast, then awaits `retryFn` — the other provider's
+// call function, re-invoked for a single retry of the identical request.
+async function failoverToProvider(targetModel, toastMsg, retryFn) {
+  S.model = targetModel;
+  var sel = document.getElementById('modelSelect');
+  if (sel) sel.value = targetModel;
+  if (typeof syncModelTrigger === 'function') syncModelTrigger();
+  if (typeof persistPrefsOnly === 'function') persistPrefsOnly();
+  toast(toastMsg);
+  await retryFn();
+}
+
 function setConnStatus(state, label) {
   var el  = document.getElementById('connStatus');
   var lbl = document.getElementById('connLabel');
@@ -11132,7 +11627,10 @@ async function fetchViaProxy(model, imgs) {
   return { res: res, data: data };
 }
 
-async function callGemini(imgsData) {
+// [MODIFIED] `isFailoverRetry` — set to true when this call is itself the
+// single automatic retry after a Groq quota/rate-limit failover. Guards
+// against bouncing back and forth between providers (requirement 5).
+async function callGemini(imgsData, isFailoverRetry) {
   // imgsData: array of { dataUrl, mimeType } or [] / undefined
   // Hydrate any URL-only images (Cloudinary) into base64 in memory first.
   var imgs = await hydrateImgsForVision(imgsData || []);
@@ -11311,8 +11809,27 @@ async function callGemini(imgsData) {
       var visionHandled = await callGroqVisionFallback(imgs);
       if (visionHandled) return;
     }
-    await callGroqDirect();
-    return;
+    // [ADDED] Guard against bouncing back and forth (requirement 5): if this
+    // call is already the single automatic retry after a Groq→Gemini
+    // failover, don't fail back over to Groq again — just fall through to
+    // the normal error display below.
+    if (!isFailoverRetry) {
+      // If every Gemini model failed specifically on a quota/rate-limit
+      // error (not e.g. overload/network), route the switch to Groq through
+      // the shared failover helper so the UI updates exactly like a manual
+      // selection and the dedicated quota-failover toast is shown.
+      var _geminiQuota = lastErr && (lastErr.type === 'quota' || lastErr.type === 'model_quota');
+      if (_geminiQuota) {
+        await failoverToProvider(
+          'groq',
+          '⚡ Gemini quota reached. Switched to Groq automatically.',
+          function() { return callGroqDirect(true); }
+        );
+        return;
+      }
+      await callGroqDirect();
+      return;
+    }
   }
 
   var finalMsg = lastErr
@@ -11325,7 +11842,10 @@ async function callGemini(imgsData) {
 }
 
 // ── GROQ DIRECT ───────────────────────────────────────────────────
-async function callGroqDirect() {
+// [MODIFIED] `isFailoverRetry` — set to true when this call is itself the
+// single automatic retry after a Gemini quota/rate-limit failover. Guards
+// against bouncing back and forth between providers (requirement 5).
+async function callGroqDirect(isFailoverRetry) {
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
   var typId = addTyping('ALEEM AI is thinking…');
@@ -11378,8 +11898,23 @@ async function callGroqDirect() {
         S.busy = false;
       });
     } else {
+      // [ADDED] Groq quota/rate-limit failover — if this is a rate-limit or
+      // quota error (HTTP 429, "Rate limit reached", "TPM", "quota", "Too
+      // Many Requests") and we're not already inside a failover retry,
+      // automatically switch to Gemini and retry this exact request once.
+      var groqErrMsg = (data.error && data.error.message) || '';
+      if (!isFailoverRetry && isQuotaOrRateLimitError(res.status, groqErrMsg)) {
+        rmEl(typId);
+        S.busy = false;
+        await failoverToProvider(
+          'gemini-2.5-flash-lite',
+          '⚡ Groq quota reached. Switched to Gemini automatically.',
+          function() { return callGemini(undefined, true); }
+        );
+        return;
+      }
       rmEl(typId);
-      addMsg('ai', '❌ **Groq Error:** ' + ((data.error && data.error.message) || 'Request failed.'));
+      addMsg('ai', '❌ **Groq Error:** ' + (groqErrMsg || 'Request failed.'));
       setConnStatus('error', 'Error');
       S.busy = false;
     }
@@ -11566,6 +12101,9 @@ async function generateConvTitle(convId, userText, aiText) {
 // ── END AI TITLE GENERATION ───────────────────────────────────────
 
 function autoSaveConversation() {
+  // 🕵️ Incognito Chat — never create/update a history entry and never
+  // persist. The conversation only ever lives in S.messages for this tab.
+  if (S.incognito) return;
   if (!S.messages.length) return;
   var first = S.messages.find(function(m){ return m.role === 'user'; });
   var title;
@@ -11710,12 +12248,179 @@ function clearChat() {
         '<span class="hero-badge hero-badge--voice"><span class="hero-badge-icon">🎤</span>Voice Enabled</span>' +
       '</div>' +
       '<p>Powered by Gemini &amp; Groq • Voice, Vision &amp; Memory Enabled</p>' +
+      '<p class="suggest-heading" id="suggestHeading">What can I help you with today?</p>' +
       '<div class="suggest-grid" id="suggestGrid"></div>' +
     '</div>';
   // Re-inject ALEEM AI avatar after clearing
   var wAvInner = document.getElementById('welcomeAvInner');
   if (wAvInner) wAvInner.innerHTML = getAleemAvatarHTML();
   buildSuggestions();
+}
+
+// ── [ADDED] NEW CHAT ─────────────────────────────────────────────
+// Central entry point for every "New Chat" affordance: header button,
+// sidebar button, mobile FAB, empty-History button, and the Ctrl+N /
+// Ctrl+Shift+O shortcuts (redesign items 1, 4, 6, 7, 8, 9, 10).
+// Internally this only orchestrates timing/animation/focus and always
+// defers the actual save-and-reset work to the existing clearChat()
+// (which itself reuses autoSaveConversation()/persist()) — no
+// conversation-saving logic is duplicated here.
+function startNewChat() {
+  var input = document.getElementById('chatInput');
+  var hasDraft = !!(input && input.value && input.value.trim().length) ||
+                 !!(S.pendingImages && S.pendingImages.length);
+
+  // [ADDED] Draft protection (item 6) — custom "Discard this draft? /
+  // Cancel / New Chat" dialog (not the native confirm(), so the buttons
+  // can carry the exact labels from the spec).
+  if (hasDraft) {
+    showDraftDiscardModal(proceedWithNewChat);
+    return;
+  }
+  proceedWithNewChat();
+}
+
+// [ADDED] Actually performs the New Chat switch once there is no draft to
+// protect (or the user confirmed discarding it).
+function proceedWithNewChat() {
+  // Focus the input SYNCHRONOUSLY, inside the click handler that triggered
+  // this (item 7) — mobile browsers only auto-open the on-screen keyboard
+  // when focus() is called directly within a trusted user-gesture handler,
+  // not from inside a later setTimeout/animation callback. clearChat()
+  // never touches #chatInput itself, so focus set here survives the whole
+  // transition below.
+  var input = document.getElementById('chatInput');
+  if (input) { try { input.focus({ preventScroll: true }); } catch(e) { input.focus(); } }
+
+  if (typeof goPage === 'function') goPage('chat');
+  runNewChatTransition();
+}
+
+// [ADDED] Plays the fade-out/fade-in transition (item 4) around the actual
+// reset, which stays 100% inside the existing clearChat().
+function runNewChatTransition() {
+  var area = document.getElementById('chatMessages');
+  if (!area) { clearChat(); focusAndScrollForNewChat(); return; }
+
+  area.classList.remove('chat-transition-in');
+  area.classList.add('chat-transition-out');
+
+  setTimeout(function() {
+    clearChat();
+    if (typeof clearPendingImages === 'function') clearPendingImages();
+    area.classList.remove('chat-transition-out');
+    void area.offsetWidth; // force reflow so the entrance animation replays
+    area.classList.add('chat-transition-in');
+    focusAndScrollForNewChat();
+  }, 220);
+}
+
+// [ADDED] Auto scroll (item 8) + reinforced auto focus (item 7). The real
+// keyboard-opening focus() call already happened synchronously in
+// proceedWithNewChat(); this just re-asserts focus/scroll once the DOM has
+// settled (e.g. in case a re-render elsewhere stole focus).
+function focusAndScrollForNewChat() {
+  var area  = document.getElementById('chatMessages');
+  var input = document.getElementById('chatInput');
+  if (area && typeof area.scrollTo === 'function') {
+    area.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  if (input && document.activeElement !== input) {
+    try { input.focus({ preventScroll: true }); } catch(e) { input.focus(); }
+  }
+}
+
+// [ADDED] Draft-discard confirmation modal (item 6). Reuses the app's
+// existing .btn-pri/.btn-sec button styling; listeners are attached fresh
+// on each open and removed on close, so nothing leaks or duplicates.
+function showDraftDiscardModal(onConfirm) {
+  var overlay = document.getElementById('draftDiscardModal');
+  if (!overlay) { if (confirm('Discard this draft?')) onConfirm(); return; }
+
+  var cancelBtn  = document.getElementById('draftDiscardCancelBtn');
+  var confirmBtn = document.getElementById('draftDiscardConfirmBtn');
+  if (!cancelBtn || !confirmBtn) { if (confirm('Discard this draft?')) onConfirm(); return; }
+
+  overlay.classList.add('open');
+
+  function cleanup() {
+    overlay.classList.remove('open');
+    cancelBtn.removeEventListener('click', onCancel);
+    confirmBtn.removeEventListener('click', onOk);
+    overlay.removeEventListener('mousedown', onBackdrop);
+    document.removeEventListener('keydown', onEsc);
+  }
+  function onCancel()  { cleanup(); }
+  function onOk()      { cleanup(); onConfirm(); }
+  function onBackdrop(e) { if (e.target === overlay) cleanup(); }
+  function onEsc(e)    { if (e.key === 'Escape') cleanup(); }
+
+  cancelBtn.addEventListener('click', onCancel);
+  confirmBtn.addEventListener('click', onOk);
+  overlay.addEventListener('mousedown', onBackdrop);
+  document.addEventListener('keydown', onEsc);
+}
+
+// [ADDED] Keeps every New Chat button's label/icon in sync with Incognito
+// mode (item 9). Called once at startup and again from updateIncognitoUI().
+function updateNewChatButtonsForIncognito() {
+  var on = !!S.incognito;
+  var label = on ? '🕶 New Incognito Chat' : '➕ New Chat';
+  var clearBtn = document.getElementById('clearBtn');
+  if (clearBtn) clearBtn.textContent = label;
+  var sideLbl = document.getElementById('sidebarNewChatLabel');
+  if (sideLbl) sideLbl.textContent = on ? 'New Incognito Chat' : 'New Chat';
+  var sideIcon = document.querySelector('#sidebarNewChatBtn .sidebar-newchat-icon');
+  if (sideIcon) sideIcon.textContent = on ? '🕶' : '➕';
+}
+
+// ── [ADDED] CONVERSATION HOVER PREVIEW (History, desktop) ──────────
+// Rich popup card — title, created/updated time, message count, and
+// workflow/pinned/voice/incognito badges plus the model used — shown near
+// a History item on hover, replacing a plain browser tooltip (item 11).
+var _hpHoverTimer = null;
+function showHistPreview(itemEl) {
+  var popover = document.getElementById('histPreviewPopover');
+  if (!popover || window.innerWidth <= 768) return;
+
+  var id = itemEl.getAttribute('data-id');
+  var c = S.history.find(function(x){ return String(x.id) === String(id); });
+  if (!c) return;
+
+  var msgCount = c.messages ? c.messages.length : 0;
+  var rows = [];
+  if (c.createdAt) rows.push(['Created', new Date(c.createdAt).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})]);
+  if (c.updatedAt) rows.push(['Updated', new Date(c.updatedAt).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'})]);
+  rows.push(['Messages', String(msgCount)]);
+  if (c.model) rows.push(['Model', esc(c.model)]);
+
+  var badges = [];
+  if (c.workflowName) badges.push((c.workflowIcon || '🔄') + ' ' + esc(c.workflowName));
+  if (c.pinned)        badges.push('📌 Pinned');
+  if (c.isVoice)        badges.push('🎤 Voice');
+  if (c.incognito)      badges.push('🕵️ Incognito');
+
+  popover.innerHTML =
+    '<div class="hpp-title">' + esc(c.title || 'Untitled chat') + '</div>' +
+    rows.map(function(r){ return '<div class="hpp-row"><span>' + esc(r[0]) + '</span><span>' + r[1] + '</span></div>'; }).join('') +
+    (badges.length ? '<div class="hpp-badges">' + badges.map(function(b){ return '<span class="hpp-badge">' + b + '</span>'; }).join('') + '</div>' : '');
+
+  // Position near the hovered item, clamped to stay inside the viewport.
+  var r = itemEl.getBoundingClientRect();
+  popover.style.left = '-9999px'; popover.style.top = '-9999px';
+  popover.classList.add('show');
+  var pw = popover.offsetWidth, ph = popover.offsetHeight;
+  var left = r.right + 12;
+  if (left + pw > window.innerWidth - 8) left = r.left - pw - 12;
+  if (left < 8) left = Math.min(r.left, window.innerWidth - pw - 8);
+  var top = Math.min(r.top, window.innerHeight - ph - 8);
+  if (top < 8) top = 8;
+  popover.style.left = left + 'px';
+  popover.style.top  = top + 'px';
+}
+function hideHistPreview() {
+  var popover = document.getElementById('histPreviewPopover');
+  if (popover) popover.classList.remove('show');
 }
 
 function copyBubble(id) {
@@ -12383,21 +13088,70 @@ function updateFastModeUI() {
   if (badge) badge.style.display = S.fastMode ? 'inline-block' : 'none';
   if (pill)  pill.classList.toggle('active', !!S.fastMode);
 
-  // Memory Capture row — enabled only when Fast Mode is ON
+  // Memory Capture row — enabled only when Fast Mode is ON, and always
+  // force-hidden/disabled while 🕵️ Incognito Chat is active. Incognito must
+  // never create new memories, regardless of Fast Mode/Memory Capture state.
   var mcRow    = document.getElementById('memCaptureRow');
   var mcToggle = document.getElementById('memCaptureToggle');
   var mcBadge  = document.getElementById('memCaptureBadge');
   var mcPill   = document.getElementById('memCapturePill');
+  var mcAllowed = S.fastMode && !S.incognito;
   if (mcRow) {
-    mcRow.classList.toggle('mc-disabled', !S.fastMode);
-    mcRow.classList.toggle('mem-capture-on', !!(S.fastMode && S.memCapture));
+    mcRow.classList.toggle('mc-disabled', !mcAllowed);
+    mcRow.classList.toggle('mem-capture-on', !!(mcAllowed && S.memCapture));
+    mcRow.style.display = S.incognito ? 'none' : '';
   }
   if (mcToggle) {
-    mcToggle.checked = !!S.memCapture;
-    mcToggle.disabled = !S.fastMode;
+    mcToggle.checked = !!S.memCapture && !S.incognito;
+    mcToggle.disabled = !mcAllowed;
   }
-  if (mcBadge) mcBadge.style.display = (S.fastMode && S.memCapture) ? 'inline-block' : 'none';
-  if (mcPill)  mcPill.classList.toggle('active', !!(S.fastMode && S.memCapture));
+  if (mcBadge) mcBadge.style.display = (mcAllowed && S.memCapture) ? 'inline-block' : 'none';
+  if (mcPill)  mcPill.classList.toggle('active', !!(mcAllowed && S.memCapture));
+}
+
+// ── 🕵️ INCOGNITO CHAT ────────────────────────────────────────────
+// Turns Incognito on/off. Isolated from the rest of the app: it only
+// flips S.incognito and reuses the existing session-reset path
+// (clearChat()) to destroy whatever session is active before switching —
+// autoSaveConversation()/persist()/buildMemoryContext()/
+// analyseAndSaveMemory()/csyncUpsertConv() all check S.incognito
+// themselves, so no other logic needs to be duplicated here.
+function setIncognito(on) {
+  on = !!on;
+  if (on === S.incognito) return;
+
+  // Seal (if leaving a normal chat) or discard (if leaving Incognito) the
+  // conversation that's currently active, THEN flip modes. Doing this before
+  // changing S.incognito means: turning Incognito ON still saves the normal
+  // chat you were just having; turning Incognito OFF discards the temporary
+  // Incognito chat instead of accidentally saving it.
+  clearChat();
+
+  S.incognito = on;
+  if (S.incognito) {
+    // Belt-and-suspenders on top of clearChat(): guarantee Incognito always
+    // starts from a completely clean session — no restored live conversation,
+    // no resumed unfinished chat, nothing left over in memory.
+    S.messages      = [];
+    S._liveId       = null;
+    S._activeConvId = null;
+    // Memory Capture must never run while Incognito is active.
+    S.memCapture = false;
+  }
+  updateIncognitoUI();
+  updateFastModeUI();
+}
+
+function updateIncognitoUI() {
+  var toggle = document.getElementById('incognitoToggle');
+  var row    = document.getElementById('incognitoToggleRow');
+  var banner = document.getElementById('incognitoBanner');
+  if (toggle) toggle.checked = !!S.incognito;
+  if (row)    row.classList.toggle('incognito-active', !!S.incognito);
+  if (banner) banner.classList.toggle('active', !!S.incognito);
+  document.body.classList.toggle('incognito-mode', !!S.incognito);
+  // [ADDED] Keep every New Chat button's label in sync (item 9).
+  if (typeof updateNewChatButtonsForIncognito === 'function') updateNewChatButtonsForIncognito();
 }
 
 function toggleMic() { S.micOn ? stopMic() : startMic(); }
@@ -12887,7 +13641,20 @@ function renderHistItemHTML(c, lq, allFolders) {
   // 3-dot menu button
   var dotBtn = '<button class="hist-3dot-btn" data-histdot="' + c.id + '" title="More options">⋯</button>';
 
-  return '<div class="hist-item' + (c.pinned ? ' is-pinned' : '') + (c.isVoice ? ' is-voice' : '') + '" data-id="' + c.id + '">' +
+  // [ADDED] Multi-select checkbox — while S.histSelectMode is active this
+  // replaces the 3-dot button in the same .hist-actions column (no new
+  // layout column needed). isSelected drives both the checkbox glyph and
+  // the .is-selected highlight on the whole row.
+  var isSelected = S.histSelectMode && S.histSelectedIds.indexOf(c.id) !== -1;
+  var actionsHtml = S.histSelectMode
+    ? '<span class="hist-select-checkbox' + (isSelected ? ' checked' : '') + '">' + (isSelected ? '✓' : '') + '</span>'
+    : dotBtn;
+
+  // [ADDED] Desktop hover preview (item 11) — a rich popover (built by
+  // showHistPreview()) replaces the plain browser tooltip; no data needs
+  // duplicating here, just the id it keys off of.
+  return '<div class="hist-item' + (c.pinned ? ' is-pinned' : '') + (c.isVoice ? ' is-voice' : '') +
+      (S.histSelectMode ? ' is-selecting' : '') + (isSelected ? ' is-selected' : '') + '" data-id="' + c.id + '">' +
     // Swipe delete background (right swipe → delete)
     '<div class="hist-swipe-bg" id="hsbDel' + c.id + '"><span class="hist-swipe-icon">🗑️</span></div>' +
     // Swipe pin background (left swipe → pin)
@@ -12907,7 +13674,7 @@ function renderHistItemHTML(c, lq, allFolders) {
           '<span class="hist-meta-dot">·</span>' + titleSrcTag +
         '</div>' +
       '</div>' +
-      '<div class="hist-actions">' + dotBtn + '</div>' +
+      '<div class="hist-actions">' + actionsHtml + '</div>' +
     '</div>' +
   '</div>';
 }
@@ -12939,7 +13706,19 @@ function renderHistory(q) {
        S.histFilter === 'voice'    ? 'No voice chats yet' :
        S.histFilter === 'recent'   ? 'No recent conversations' :
        S.history.length ? 'No conversations in this view' : 'No conversations yet. Start chatting!');
-    list.innerHTML = '<div class="hist-empty"><div class="he-icon">' + (lq ? '🔍' : '💬') + '</div><p>' + esc(emptyMsg) + '</p></div>';
+    // [ADDED] True "no conversations at all" state gets a friendlier prompt
+    // plus a large New Chat button (item 15), reusing the same startNewChat()
+    // flow as every other New Chat entry point.
+    var isTrulyEmpty = !lq && S.histFilter === 'all' && !S.history.length;
+    var emptyExtra = isTrulyEmpty
+      ? '<p class="he-sub">Create your first conversation with New Chat.</p>' +
+        '<button class="btn-pri he-newchat-btn" id="histEmptyNewChatBtn">➕ New Chat</button>'
+      : '';
+    list.innerHTML = '<div class="hist-empty"><div class="he-icon">' + (lq ? '🔍' : '💬') + '</div><p>' + esc(emptyMsg) + '</p>' + emptyExtra + '</div>';
+    if (isTrulyEmpty) {
+      var heBtn = document.getElementById('histEmptyNewChatBtn');
+      if (heBtn) heBtn.addEventListener('click', function() { startNewChat(); });
+    }
     return;
   }
 
@@ -13068,6 +13847,441 @@ function deleteFolder(id) {
   renderHistory();
   toast('🗑️ Folder deleted');
 }
+
+// ── DUPLICATE CONVERSATION ────────────────────────────────────────
+// [ADDED] "📄 Duplicate" — 3-dot menu item, placed directly below Rename.
+// Deep-clones an existing history entry (messages, images, Canvas data,
+// App Builder project, AI Workflow metadata, folder, badges, etc. all
+// travel with the message/conversation objects already, so a full
+// JSON clone captures everything without any format-specific handling),
+// gives it a fresh id/timestamps and a de-duplicated "(Copy)" title,
+// resets pinned/archived, then reuses the exact same persist() /
+// Cloud Sync / renderHistory() / loadConv() pipeline every other
+// history mutation already uses. The original entry is never touched.
+
+// Appends " (Copy)", or " (Copy 2)", " (Copy 3)", etc. if that title is
+// already taken — and re-bases off an existing "(Copy ...)" suffix so
+// duplicating a duplicate doesn't chain into "(Copy) (Copy)".
+function getUniqueDuplicateTitle(baseTitle) {
+  var base = (baseTitle || 'Untitled chat').replace(/\s*\(Copy(?:\s+\d+)?\)\s*$/, '').trim();
+  if (!base) base = 'Untitled chat';
+  var candidate = base + ' (Copy)';
+  var n = 2;
+  while (S.history.some(function(h){ return h.title === candidate; })) {
+    candidate = base + ' (Copy ' + n + ')';
+    n++;
+  }
+  return candidate;
+}
+
+function duplicateConv(id) {
+  // 🕵️ Incognito Chat never persists anything — duplicating into History
+  // while it's active would contradict that, so block it here too.
+  if (S.incognito) { toast("Duplicate isn't available during Incognito."); return; }
+
+  var c = S.history.find(function(x){ return x.id === id; });
+  if (!c) return;
+
+  var clone;
+  try {
+    // Deep-copy via JSON round-trip — the same serialization shape already
+    // used by persist()/Cloud Sync, so anything that survives a normal
+    // save/restore (messages, images, Canvas data, App Builder project,
+    // workflow metadata, folder, tags, badges, titles, renamed state, etc.)
+    // survives this clone too, with no per-field special-casing needed.
+    clone = JSON.parse(JSON.stringify(c));
+  } catch (e) {
+    toast('⚠️ Could not duplicate conversation');
+    return;
+  }
+
+  var nowMs = Date.now();
+  var newId = nowMs;
+  while (S.history.some(function(h){ return h.id === newId; })) newId++; // guard rare same-ms collisions
+
+  clone.id        = newId;
+  clone.createdAt = nowMs;
+  clone.updatedAt = nowMs;
+  clone.title     = getUniqueDuplicateTitle(c.title);
+  clone.pinned    = false;   // [per spec] reset — copy starts unpinned
+  clone.archived  = false;   // [per spec] reset — copy starts active
+  delete clone._live;        // the copy is not the in-progress live session
+
+  // [ADDED] Regenerate every message's mid (the per-message identifier used
+  // for feedback keys / DOM ids — see addMsg()) so the duplicate shares no
+  // internal ID with the original. Uses the exact same generation formula
+  // as addMsg() for consistency. Only the id changes — role/text/time/ts/
+  // images/canvas/project data on each message are left untouched.
+  // (Canvas and App Builder data have no id field of their own — they live
+  // directly on the message object, see attachCanvasCard()/attachAppChip()
+  // — so they need no separate regeneration. Image URLs and folderId are
+  // references to external/shared resources and must stay identical.)
+  if (clone.messages && clone.messages.length) {
+    clone.messages.forEach(function(m) {
+      m.mid = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    });
+  }
+
+  S.history.unshift(clone);
+
+  // Same MAX_HISTORY eviction safeguard autoSaveConversation() already
+  // applies when adding a new entry — kept here so duplicating can't
+  // silently push history over the existing cap.
+  if (S.history.length > MAX_HISTORY) {
+    var evictIdx = -1;
+    for (var ei = S.history.length - 1; ei >= 0; ei--) {
+      if (!S.history[ei].pinned) { evictIdx = ei; break; }
+    }
+    if (evictIdx === -1) evictIdx = S.history.length - 1;
+    S.history.splice(evictIdx, 1);
+  }
+
+  persist();       // existing persistence pipeline (localStorage + Cloud Sync loop)
+  renderHistory();  // existing render — new entry gets the same fadeInUp .hist-item animation as any other
+  if (typeof window.csyncUpsertConv === 'function') window.csyncUpsertConv(clone); // immediate sync, mirrors saveRenameModal()'s pattern
+  if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+
+  toast('📄 Conversation duplicated');
+  loadConv(newId); // existing open-conversation flow — switches straight into the copy
+}
+
+// ── CONVERSATION INFO / STATISTICS (glassmorphism modal) ───────────
+// [ADDED] "📊 Conversation Info" — 3-dot menu item, placed directly below
+// Duplicate. Everything shown is either read straight off the existing
+// conversation object (c.model, c.createdAt, c.folderId, c.pinned, etc.)
+// or derived with a single pass over c.messages — and only when the modal
+// is actually opened, never on every render. Nothing here is persisted;
+// it's a read-only report built from data renderHistory()/persist() already
+// maintain.
+
+// Small formatting helpers, generic enough to reuse anywhere a byte size
+// or a millisecond duration needs to be shown to a person.
+function formatBytes(bytes) {
+  if (!bytes || bytes < 0) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+function formatDuration(ms) {
+  if (ms == null || ms < 0) return '—';
+  var mins = Math.round(ms / 60000);
+  if (mins < 1) return '< 1 min';
+  if (mins < 60) return mins + ' min';
+  var hrs = Math.floor(mins / 60);
+  var remMins = mins % 60;
+  if (hrs < 24) return hrs + 'h ' + remMins + 'm';
+  var days = Math.floor(hrs / 24);
+  var remHrs = hrs % 24;
+  return days + 'd ' + remHrs + 'h';
+}
+
+// Builds the label/value rows shown in the modal. All counts are derived
+// here, once, from c.messages — never stored back onto the conversation
+// object and never computed anywhere else, so there's exactly one place
+// that defines what these numbers mean.
+function buildConvInfoRows(c) {
+  var messages = Array.isArray(c.messages) ? c.messages : [];
+  var userMsgs = 0, aiMsgs = 0, images = 0, canvasDocs = 0, appProjects = 0;
+  messages.forEach(function(m) {
+    if (!m) return;
+    if (m.role === 'user') userMsgs++;
+    else if (m.role === 'ai') aiMsgs++;
+    if (Array.isArray(m.imgs)) images += m.imgs.length;
+    else if (m.img) images += 1; // legacy single-image field
+    if (m.canvas) canvasDocs++;
+    if (m.project) appProjects++;
+  });
+
+  // Workflow Runs — this app only tags a conversation with the ONE
+  // workflow that produced it (c.workflowName), it doesn't log a run
+  // count, so "1" here means "this conversation was a workflow run" and
+  // "—" means it wasn't.
+  var workflowRuns = c.workflowName ? 1 : '—';
+
+  var folder = c.folderId ? getAllFolders().find(function(f){ return f.id === c.folderId; }) : null;
+
+  var duration = (c.createdAt && c.updatedAt)
+    ? formatDuration(c.updatedAt - c.createdAt)
+    : '—';
+
+  // Cloud Sync status — reuses the existing CSYNC queue/ready state rather
+  // than tracking a separate per-conversation sync flag.
+  var syncStatus = '—';
+  if (typeof CSYNC !== 'undefined') {
+    if (!CSYNC.db || !CSYNC.uid) {
+      syncStatus = 'Local only (not signed in)';
+    } else {
+      var pendingOp = CSYNC.queue.some(function(op) { return op.conv && op.conv.id === c.id; });
+      syncStatus = pendingOp ? '⏳ Pending sync' : (CSYNC.ready ? '☁️ Synced' : '—');
+    }
+  }
+
+  // Estimated storage size — a JSON round-trip of the same shape persist()
+  // already writes, so it reflects exactly what's saved for this chat.
+  var sizeBytes = 0;
+  try { sizeBytes = JSON.stringify(c).length; } catch (e) { sizeBytes = 0; }
+
+  var modelLabel = c.model ? ((typeof MODEL_LABELS !== 'undefined' && MODEL_LABELS[c.model]) || c.model) : '—';
+
+  return [
+    ['Title', c.title || 'Untitled chat'],
+    ['Model Used', modelLabel],
+    ['Conversation ID', String(c.id)],
+    ['Created', c.createdAt ? new Date(c.createdAt).toLocaleString() : '—'],
+    ['Last Updated', c.updatedAt ? new Date(c.updatedAt).toLocaleString() : '—'],
+    ['Total Messages', String(messages.length)],
+    ['User Messages', String(userMsgs)],
+    ['Assistant Messages', String(aiMsgs)],
+    ['Images', images ? String(images) : '—'],
+    ['Files', '—'], // no distinct file-attachment concept beyond images in this app
+    ['Canvas Documents', canvasDocs ? String(canvasDocs) : '—'],
+    ['App Builder Projects', appProjects ? String(appProjects) : '—'],
+    ['Workflow Runs', String(workflowRuns)],
+    ['Estimated Conversation Duration', duration],
+    ['Folder', folder ? (folder.icon + ' ' + folder.name) : '—'],
+    ['Pinned', c.pinned ? 'Yes' : 'No'],
+    ['Archived', c.archived ? 'Yes' : 'No'],
+    ['Title Source', c.userRenamed ? 'Custom Title' : 'AI Generated Title'],
+    ['Memory Captured Count', '—'], // memories aren't linked to a source conversation id
+    ['Cloud Sync Status', syncStatus],
+    ['Estimated Storage Size', formatBytes(sizeBytes)]
+  ];
+}
+
+function openConvInfoModal(cid) {
+  // 🕵️ Same Incognito guard used by duplicateConv() — Conversation Info is
+  // unavailable for the whole session while Incognito is on.
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+
+  var c = S.history.find(function(x){ return x.id === cid; });
+  if (!c) return;
+
+  var body = document.getElementById('convInfoBody');
+  var overlay = document.getElementById('convInfoOverlay');
+  if (!body || !overlay) return;
+
+  var rows = buildConvInfoRows(c);
+  body.innerHTML = rows.map(function(r) {
+    return '<div class="ci-row"><span class="ci-label">' + esc(r[0]) + '</span><span class="ci-value">' + esc(r[1]) + '</span></div>';
+  }).join('');
+
+  overlay.classList.add('show');
+}
+
+function closeConvInfoModal() {
+  var overlay = document.getElementById('convInfoOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+(function() {
+  var overlay   = document.getElementById('convInfoOverlay');
+  var closeBtn  = document.getElementById('convInfoClose');
+  if (closeBtn) closeBtn.addEventListener('click', closeConvInfoModal);
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeConvInfoModal();
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    var ov = document.getElementById('convInfoOverlay');
+    if (ov && ov.classList.contains('show')) closeConvInfoModal();
+  });
+})();
+
+// ── MULTI-SELECT CONVERSATIONS ──────────────────────────────────────
+// [ADDED] Long press (mobile, see attachSwipeHandlers) or Ctrl/Cmd+Click
+// (desktop, see the delegated histItem click branch) enters selection
+// mode. Every bulk action below calls straight into the same pin/archive/
+// delete/move primitives normal single-item actions use — persist() and
+// renderHistory() are each called once per bulk action, not once per
+// selected item, so selecting many conversations doesn't multiply writes
+// or re-renders.
+
+function enterSelectionMode(id) {
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+  S.histSelectMode = true;
+  S.histSelectedIds = (id != null) ? [id] : [];
+  renderHistory();      // one render — swaps every row's 3-dot button for a checkbox
+  updateSelectToolbar();
+}
+
+function exitSelectionMode() {
+  if (!S.histSelectMode) return;
+  S.histSelectMode = false;
+  S.histSelectedIds = [];
+  renderHistory();
+  updateSelectToolbar();
+}
+
+// Flips a single row's checkbox without a full renderHistory() pass —
+// selecting/deselecting rows one at a time should stay cheap even with a
+// long history list.
+function toggleConvSelection(id) {
+  var idx = S.histSelectedIds.indexOf(id);
+  var nowSelected = idx === -1;
+  if (nowSelected) S.histSelectedIds.push(id);
+  else S.histSelectedIds.splice(idx, 1);
+
+  var row = document.querySelector('.hist-item[data-id="' + id + '"]');
+  if (row) {
+    row.classList.toggle('is-selected', nowSelected);
+    var box = row.querySelector('.hist-select-checkbox');
+    if (box) {
+      box.classList.toggle('checked', nowSelected);
+      box.textContent = nowSelected ? '✓' : '';
+    }
+  }
+  updateSelectToolbar();
+}
+
+function updateSelectToolbar() {
+  var bar = document.getElementById('histSelectToolbar');
+  if (!bar) return;
+  bar.classList.toggle('show', !!S.histSelectMode);
+  var n = S.histSelectedIds.length;
+  var countEl = document.getElementById('histSelectCount');
+  if (countEl) countEl.textContent = n + ' Selected';
+}
+
+// Bulk Pin — reuses the same MAX_PINNED cap pinConv() enforces, applied
+// across the whole selection with a single persist()/renderHistory().
+function bulkPinConv(ids) {
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+  if (!ids || !ids.length) { toast('No conversations selected'); return; }
+
+  var pinnedCount = S.history.filter(function(x){ return x.pinned; }).length;
+  var pinned = 0, skipped = 0;
+  ids.forEach(function(id) {
+    var c = S.history.find(function(x){ return x.id === id; });
+    if (!c || c.pinned) return;
+    if (pinnedCount + pinned >= MAX_PINNED) { skipped++; return; }
+    c.pinned = true;
+    pinned++;
+  });
+
+  if (pinned) {
+    persist();
+    renderHistory();
+    if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+  }
+  if (skipped) toast('📌 Pinned ' + pinned + ' — up to ' + MAX_PINNED + ' allowed, ' + skipped + ' skipped');
+  else toast('📌 Pinned ' + pinned + ' chat' + (pinned === 1 ? '' : 's'));
+  exitSelectionMode();
+}
+
+// Bulk Archive — mirrors archiveConv()'s exact two-field mutation
+// (archived=true, pinned=false), applied once per selected id, then a
+// single persist()/renderHistory() for the whole batch.
+function bulkArchiveConv(ids) {
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+  if (!ids || !ids.length) { toast('No conversations selected'); return; }
+
+  var n = 0;
+  ids.forEach(function(id) {
+    var c = S.history.find(function(x){ return x.id === id; });
+    if (!c) return;
+    c.archived = true;
+    c.pinned = false;
+    n++;
+  });
+
+  persist();
+  renderHistory();
+  if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+  toast('📦 Archived ' + n + ' chat' + (n === 1 ? '' : 's'));
+  exitSelectionMode();
+}
+
+// Bulk Delete — mirrors the exact delete sequence used by the 3-dot menu
+// and swipe-to-delete (cleanupConversationImages + csyncDeleteConv), just
+// batched so S.history is filtered once instead of once per id.
+function bulkDeleteConv(ids) {
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+  if (!ids || !ids.length) { toast('No conversations selected'); return; }
+  if (!confirm('Permanently delete ' + ids.length + ' conversation' + (ids.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
+
+  var idSet = {};
+  ids.forEach(function(id) { idSet[id] = true; });
+  var toRemove = S.history.filter(function(x){ return idSet[x.id]; });
+  toRemove.forEach(function(c) { cleanupConversationImages(c); });
+  S.history = S.history.filter(function(x){ return !idSet[x.id]; });
+
+  persist();
+  renderHistory();
+  if (typeof window._anBustAndRender === 'function') window._anBustAndRender();
+  if (typeof window.csyncDeleteConv === 'function') {
+    toRemove.forEach(function(c) { window.csyncDeleteConv(c.id); });
+  }
+  toast('🗑️ Deleted ' + toRemove.length + ' conversation' + (toRemove.length === 1 ? '' : 's'));
+  exitSelectionMode();
+}
+
+// Bulk Move — opens the same folder-picker prompt() promptMoveToFolder()
+// uses, then applies the chosen folder to every selected id with a single
+// persist()/renderHistory() instead of moveConvToFolder()'s per-id one.
+function bulkMoveToFolder(ids) {
+  if (S.incognito) { toast('Unavailable during Incognito.'); return; }
+  if (!ids || !ids.length) { toast('No conversations selected'); return; }
+
+  var folders = getAllFolders();
+  if (!folders.length) { toast('No folders yet — create one first'); return; }
+  var listTxt = folders.map(function(f, i){ return (i + 1) + '. ' + f.name; }).join('\n');
+  var ans = prompt('Move ' + ids.length + ' conversation' + (ids.length === 1 ? '' : 's') + ' to which folder? Type a number, or 0 to remove from folder:\n' + listTxt);
+  if (ans === null) return;
+  var n = parseInt(ans, 10);
+  if (isNaN(n)) { toast('⚠️ Enter a number'); return; }
+
+  var folderId = null, folderLabel = null;
+  if (n !== 0) {
+    var chosen = folders[n - 1];
+    if (!chosen) { toast('⚠️ No such folder'); return; }
+    folderId = chosen.id;
+    folderLabel = chosen.name;
+  }
+
+  ids.forEach(function(id) {
+    var c = S.history.find(function(x){ return x.id === id; });
+    if (c) c.folderId = folderId;
+  });
+
+  persist();
+  renderHistory();
+  toast(folderLabel ? ('📁 Moved ' + ids.length + ' to ' + folderLabel) : ('📂 Removed ' + ids.length + ' from folder'));
+  exitSelectionMode();
+}
+
+// Wire up the selection toolbar's buttons once at load — the toolbar itself
+// is a static element (see the HTML near #histList), it's only shown/hidden
+// via updateSelectToolbar(), so it never needs re-binding after a render.
+(function() {
+  var pinBtn    = document.getElementById('histSelPinBtn');
+  var archBtn   = document.getElementById('histSelArchiveBtn');
+  var moveBtn   = document.getElementById('histSelMoveBtn');
+  var delBtn    = document.getElementById('histSelDeleteBtn');
+  var cancelBtn = document.getElementById('histSelCancelBtn');
+
+  if (pinBtn)    pinBtn.addEventListener('click', function(){ bulkPinConv(S.histSelectedIds.slice()); });
+  if (archBtn)   archBtn.addEventListener('click', function(){ bulkArchiveConv(S.histSelectedIds.slice()); });
+  if (moveBtn)   moveBtn.addEventListener('click', function(){ bulkMoveToFolder(S.histSelectedIds.slice()); });
+  if (delBtn)    delBtn.addEventListener('click', function(){ bulkDeleteConv(S.histSelectedIds.slice()); });
+  if (cancelBtn) cancelBtn.addEventListener('click', exitSelectionMode);
+})();
+
+// Escape key exits selection mode (separate listener from the ctx-menu/
+// rename-modal Escape handlers above, so each stays independent).
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && S.histSelectMode) exitSelectionMode();
+});
+
+// Tap empty space exits selection mode — any click that lands outside a
+// .hist-item, the selection toolbar, or an open context menu while in
+// selection mode is treated as "tap empty space".
+document.addEventListener('click', function(e) {
+  if (!S.histSelectMode) return;
+  if (e.target.closest('.hist-item') || e.target.closest('#histSelectToolbar') || e.target.closest('.hist-ctx-menu')) return;
+  exitSelectionMode();
+});
 
 function loadConv(id) {
   var c = S.history.find(function(x){ return x.id === id; });
@@ -13913,6 +15127,8 @@ async function saveCandidateMemories(memories) {
 }
 
 async function analyseAndSaveMemory(userMessage) {
+  // Gate 0: 🕵️ Incognito Chat — never create memories during Incognito.
+  if (S.incognito) return;
   // Gate 1: signed in and DB ready
   if (!MEM.db || !MEM.uid) return;
 
@@ -14135,6 +15351,8 @@ async function deleteMemoryFromFirestore(id) {
 
 // ── BUILD MEMORY CONTEXT (injected into AI system prompt) ─────────
 function buildMemoryContext() {
+  // 🕵️ Incognito Chat — the AI must not read saved memories during Incognito.
+  if (S.incognito) return '';
   if (!MEM.items.length) return '';
   var lines = MEM.items.slice(0, 30).map(function(m) {
     return '- [' + (MEM_CATEGORIES[m.category] ? MEM_CATEGORIES[m.category].label : m.category) + '] ' + m.text;
@@ -15002,6 +16220,8 @@ function showHistCtxMenu(anchor, cid) {
   var items = [
     { icon: c.pinned ? '📌' : '📍', label: c.pinned ? 'Unpin' : 'Pin', action: function(){ pinConv(cid); closeCtxMenu(); } },
     { icon: '✏️', label: 'Rename', action: function(){ closeCtxMenu(); openRenameModal(cid); } },
+    { icon: '📄', label: 'Duplicate', action: function(){ closeCtxMenu(); duplicateConv(cid); } },
+    { icon: '📊', label: 'Conversation Info', action: function(){ closeCtxMenu(); openConvInfoModal(cid); } },
     { icon: '📁', label: 'Move to folder', action: function(){ promptMoveToFolder(cid); closeCtxMenu(); } },
     { icon: c.archived ? '↩️' : '📦', label: c.archived ? 'Restore' : 'Archive',
       action: function(){ c.archived ? restoreConv(cid) : archiveConv(cid); closeCtxMenu(); } },
@@ -15032,7 +16252,7 @@ function showHistCtxMenu(anchor, cid) {
 
   // Position near the anchor button
   var rect = anchor.getBoundingClientRect();
-  var mw = 176, mh = 216;
+  var mw = 176, mh = 304; // [MODIFIED] +44px to fit the added Conversation Info row (7 items total)
   var left = Math.min(rect.right - mw, window.innerWidth - mw - 8);
   var top = rect.bottom + 4;
   if (top + mh > window.innerHeight - 8) top = rect.top - mh - 4;
@@ -15134,12 +16354,31 @@ function attachSwipeHandlers() {
 
     var startX = 0, startY = 0, curX = 0, active = false, axis = null;
     var THRESHOLD = 80, TRIGGER = 120;
+    // [ADDED] Long-press → enter multi-select mode (mobile). Lives beside
+    // the existing swipe tracking so it shares the same start/move/up
+    // lifecycle instead of adding a second set of listeners.
+    var longPressTimer = null;
+    var LONG_PRESS_MS = 550;
 
     function onPointerDown(e) {
       if (e.button !== undefined && e.button !== 0) return;
+      // [ADDED] While already in selection mode, taps are handled by the
+      // delegated click listener's toggleConvSelection() — swipe/long-press
+      // gestures are suspended so they can't fight with row-tap selection.
+      if (S.histSelectMode) return;
       startX = e.touches ? e.touches[0].clientX : e.clientX;
       startY = e.touches ? e.touches[0].clientY : e.clientY;
       curX = 0; active = true; axis = null;
+
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(function() {
+        longPressTimer = null;
+        if (!active || axis) return; // finger already lifted, or turned into a swipe/scroll
+        active = false; // cancel any in-flight swipe interpretation
+        var cid = parseInt(item.getAttribute('data-id'), 10);
+        if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
+        if (!isNaN(cid)) enterSelectionMode(cid);
+      }, LONG_PRESS_MS);
     }
     function onPointerMove(e) {
       if (!active) return;
@@ -15149,6 +16388,7 @@ function attachSwipeHandlers() {
       if (!axis) {
         if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
         axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        clearTimeout(longPressTimer); // real movement — this is a swipe/scroll, not a long-press
       }
       if (axis !== 'x') return;
       e.preventDefault();
@@ -15160,6 +16400,7 @@ function attachSwipeHandlers() {
       if (bgPin) bgPin.classList.toggle('show', dx > THRESHOLD);
     }
     function onPointerUp() {
+      clearTimeout(longPressTimer);
       if (!active) return;
       active = false;
       inner.style.transition = '';
@@ -16044,6 +17285,10 @@ function _csyncConvToDoc(conv) {
 
 // ── LOAD FROM CLOUD (called once on sign-in) ──────────────────────
 async function _csyncLoadFromCloud() {
+  // 🕵️ Incognito Chat — never download/merge cloud conversations while
+  // Incognito is active. A sync mid-session must not populate S.history
+  // or the current state.
+  if (typeof S !== 'undefined' && S.incognito) return;
   if (!CSYNC.db || !CSYNC.uid) return;
   try {
     var { collection, getDocs, orderBy, query } =
@@ -16189,6 +17434,8 @@ function _csyncQueueLocalNewer(cloudMap) {
 // ── PUBLIC: SYNC A SINGLE CONVERSATION (upsert) ───────────────────
 // Called by the patched persist() wrapper and other mutation points.
 window.csyncUpsertConv = function(conv) {
+  // 🕵️ Incognito Chat — never upload to Cloud Sync while active.
+  if (typeof S !== 'undefined' && S.incognito) return;
   if (!CSYNC.db || !CSYNC.uid) return;
   if (!conv || conv._live) return; // never sync live/in-progress sessions
   _csyncEnqueue('upsert', conv);
@@ -17073,6 +18320,13 @@ function _rsyncUpdateConvCard(conv) {
 
 // Flush the buffered conv changes in a single batch.
 function _rsyncFlushConvBatch() {
+  // 🕵️ Incognito Chat — never merge realtime cloud changes into S.history
+  // while Incognito is active; drop the batch and stay silent.
+  if (typeof S !== 'undefined' && S.incognito) {
+    RSYNC._pendingConvChanges = [];
+    RSYNC._convBatchTimer = null;
+    return;
+  }
   var changes = RSYNC._pendingConvChanges.slice();
   RSYNC._pendingConvChanges = [];
   RSYNC._convBatchTimer = null;
@@ -17087,6 +18341,15 @@ function _rsyncFlushConvBatch() {
       var _rsyncDelConv = S.history.find(function(c) { return c.id === ch.id; });
       if (_rsyncDelConv) cleanupConversationImages(_rsyncDelConv);
       S.history = S.history.filter(function(c) { return c.id !== ch.id; });
+      // [ADDED] Multi-select — a conversation removed by another device
+      // (or another tab) can be mid-selection here. renderHistory() below
+      // already drops its row/checkbox, but S.histSelectedIds and the
+      // toolbar's "X Selected" count are separate state and won't update
+      // on their own, so prune the stale id explicitly.
+      if (typeof S.histSelectedIds !== 'undefined' && Array.isArray(S.histSelectedIds)) {
+        var _selIdx = S.histSelectedIds.indexOf(ch.id);
+        if (_selIdx !== -1) S.histSelectedIds.splice(_selIdx, 1);
+      }
       needFullRender = true;
     } else {
       // 'added' or 'modified'
@@ -17158,6 +18421,11 @@ function _rsyncFlushConvBatch() {
     if (histPage && histPage.classList.contains('active')) {
       if (typeof renderHistory === 'function') renderHistory();
     }
+    // [ADDED] Multi-select — keep the "X Selected" toolbar in sync even
+    // when the History page isn't the active/visible one right now (the
+    // count is corrected before the user ever sees it, no full render
+    // needed just for this).
+    if (S.histSelectMode && typeof updateSelectToolbar === 'function') updateSelectToolbar();
   }
 }
 
