@@ -5741,6 +5741,9 @@
           <input type="file" id="wfImportFile" accept="application/json" style="display:none;">
         </div>
 
+        <!-- [ADDED] Workflow category filters — populated by renderCategoryChips() -->
+        <div class="wf-cat-toolbar" id="wfCatToolbar"></div>
+
         <div class="wf-grid" id="wfGrid"></div>
       </div>
     </section>
@@ -8601,6 +8604,19 @@ function bindAllEvents() {
       return;
     }
 
+    // [ADDED] 🔄 AI Workflows — "Open Workflow" button on the "Workflow
+    // Created" card injected into chat by an AI-generated workflow (see
+    // appendWorkflowCreatedCard() / __aleemTryWorkflowIntent() in the
+    // [AI WORKFLOWS] module).
+    var openWfBtn = t.closest('[data-openwf]');
+    if (openWfBtn) {
+      var openWfId = openWfBtn.getAttribute('data-openwf');
+      dbg('delegate: open AI-generated workflow ' + openWfId);
+      if (typeof goPage === 'function') goPage('workflows');
+      if (typeof window.__aleemOpenWorkflowEditor === 'function') window.__aleemOpenWorkflowEditor(openWfId);
+      return;
+    }
+
     var chip        = t.closest('.chip');
     var knowCard    = t.closest('.know-card');
     var searchCatEl = t.closest('.search-cat');
@@ -9654,6 +9670,16 @@ async function handleSend() {
     (!S.fastMode || S.memCapture);
   if (shouldCaptureMem) {
     analyseAndSaveMemory(effectiveText);
+  }
+  // [ADDED] 🔄 AI Workflows — natural-language workflow creation (feature 5).
+  // If this message clearly asks to create a workflow ("Create a workflow
+  // for learning JavaScript", "Build a productivity workflow", …), generate
+  // + save it automatically and show a "Workflow Created" card instead of
+  // sending this turn through the normal AI reply pipeline. Any failure
+  // here falls through to the normal reply below, unchanged.
+  if (effectiveText && typeof window.__aleemTryWorkflowIntent === 'function') {
+    var _wfIntentHandled = await window.__aleemTryWorkflowIntent(effectiveText);
+    if (_wfIntentHandled) return;
   }
   if (S.model === 'groq') {
     await callGroqDirect();
@@ -21039,6 +21065,61 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     padding:12px 14px; font-size:0.85rem; color:var(--text-1); line-height:1.6;
     max-height:40vh; overflow-y:auto; white-space:pre-wrap;
   }
+
+  /* [ADDED] Stop Workflow button — red glass, matches existing btn-pri sizing */
+  .wf-stop-btn {
+    background:rgba(248,113,113,0.14); border:1px solid rgba(248,113,113,0.5); color:#f87171;
+    border-radius:var(--r-sm); padding:9px 16px; font-family:var(--font-body); font-weight:700;
+    font-size:0.85rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:all var(--t);
+    touch-action:manipulation;
+  }
+  .wf-stop-btn:hover { background:rgba(248,113,113,0.24); border-color:#f87171; }
+
+  /* [ADDED] Live ETA line under the running-progress label */
+  .wf-eta-line { font-size:0.78rem; color:var(--text-3); margin:-8px 0 14px; display:flex; gap:14px; flex-wrap:wrap; }
+  .wf-eta-line b { color:var(--text-2); font-weight:600; }
+
+  /* [ADDED] Workflow category filter chips (toolbar, Workflows page) */
+  .wf-cat-toolbar { display:flex; align-items:center; gap:7px; margin:-6px 0 16px; flex-wrap:wrap; }
+  .wf-cat-chip {
+    background:var(--bg-input); border:1px solid var(--border); color:var(--text-2);
+    border-radius:999px; padding:6px 12px; font-size:0.76rem; font-weight:600; cursor:pointer;
+    display:inline-flex; align-items:center; gap:5px; transition:all var(--t); touch-action:manipulation;
+    white-space:nowrap;
+  }
+  .wf-cat-chip:hover { border-color:var(--border-hi); color:var(--text-1); }
+  .wf-cat-chip.active { background:rgba(56,189,248,0.16); border-color:var(--a1); color:var(--text-1); }
+
+  /* [ADDED] Category badge shown on each workflow card */
+  .wf-card-cat { font-size:0.68rem; color:var(--text-3); background:var(--bg-input);
+    border:1px solid var(--border); border-radius:999px; padding:2px 8px; display:inline-flex;
+    align-items:center; gap:4px; width:fit-content; }
+
+  /* [ADDED] Category select in the Workflow Editor */
+  .wf-select {
+    width:100%; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-sm);
+    color:var(--text-1); font-family:var(--font-body); font-size:0.86rem; padding:10px 12px;
+    transition:border-color var(--t);
+  }
+  .wf-select:focus { outline:none; border-color:var(--border-hi); }
+
+  /* [ADDED] Small hint under the Steps field label, explaining {{variables}} */
+  .wf-var-hint { font-size:0.7rem; color:var(--text-3); margin:-4px 0 10px; line-height:1.5; }
+  .wf-var-hint code { background:var(--bg-input); border:1px solid var(--border); border-radius:4px;
+    padding:1px 5px; color:var(--text-2); }
+
+  /* [ADDED] "Workflow Created" card injected into a chat bubble when an
+     AI-generated workflow is created automatically from a chat message. */
+  .wf-created-card {
+    margin-top:10px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-md);
+    padding:12px 14px; display:flex; flex-direction:column; gap:6px; max-width:320px;
+  }
+  .wf-created-top { display:flex; align-items:center; gap:8px; }
+  .wf-created-icon { font-size:1.15rem; }
+  .wf-created-name { font-family:var(--font-display); font-weight:700; font-size:0.88rem; color:var(--text-1); }
+  .wf-created-meta { font-size:0.72rem; color:var(--text-3); }
+  .wf-created-open-btn { align-self:flex-start; margin-top:2px; padding:7px 14px; font-size:0.78rem; }
 </style>
 
 <!-- New Workflow modal (template gallery + blank) -->
@@ -21077,7 +21158,13 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       <div class="wf-field-label">Description</div>
       <textarea class="wf-textarea" id="wfDescInput" rows="2" placeholder="What does this workflow do?" maxlength="200"></textarea>
 
+      <!-- [ADDED] Workflow category — populated by renderCategorySelect() -->
+      <div class="wf-field-label">Category</div>
+      <select class="wf-select" id="wfCategorySelect"></select>
+
       <div class="wf-field-label">Steps</div>
+      <!-- [ADDED] Variables hint — {{input}}/{{stepN}} are replaced automatically at run time -->
+      <div class="wf-var-hint">Tip: use <code>{{input}}</code> for the original input, or <code>{{step1}}</code>, <code>{{step2}}</code>… to reuse an earlier step's output. Works automatically — no setup needed.</div>
       <div class="wf-steps-list" id="wfStepsList"></div>
       <button class="btn-sec wf-add-step-btn" id="wfAddStepBtn">+ Add Step</button>
     </div>
@@ -21107,54 +21194,74 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 // ── [AI WORKFLOWS] ────────────────────────────────────────────────
 (function() {
 
+  // [ADDED] 🔄 AI Workflows — category filters (feature 4). Every template
+  // and every user-created workflow now carries a `category` id from this
+  // map. Purely additive metadata: existing workflows without a category
+  // simply fall back to 'automation' wherever it's read (see catOf()).
+  var WF_CATEGORY_META = {
+    study:        { emoji:'📚', label:'Study' },
+    coding:       { emoji:'💻', label:'Coding' },
+    travel:       { emoji:'✈️', label:'Travel' },
+    business:     { emoji:'💼', label:'Business' },
+    productivity: { emoji:'🧠', label:'Productivity' },
+    health:       { emoji:'❤️', label:'Health' },
+    creative:     { emoji:'🎨', label:'Creative' },
+    writing:      { emoji:'📝', label:'Writing' },
+    marketing:    { emoji:'📈', label:'Marketing' },
+    automation:   { emoji:'⚙️', label:'Automation' }
+  };
+  var WF_CATEGORY_ORDER = ['study','coding','travel','business','productivity','health','creative','writing','marketing','automation'];
+  function catOf(w) { return (w && w.category && WF_CATEGORY_META[w.category]) ? w.category : 'automation'; }
+  function catMeta(id) { return WF_CATEGORY_META[id] || WF_CATEGORY_META.automation; }
+
   // ── Built-in starter templates (10, per spec) ────────────────────
   var WF_TEMPLATES = [
-    { id:'tpl_study',    icon:'📚', name:'Study Planner', description:'Turn a topic or exam scope into a day-by-day study plan.',
+    { id:'tpl_study',    icon:'📚', name:'Study Planner', category:'study', description:'Turn a topic or exam scope into a day-by-day study plan.',
       steps:[ {title:'Summarize topic', prompt:'Summarize the key concepts and scope covered by this topic/request.'},
               {title:'Extract tasks', prompt:'Based on the summary above, list the concrete study tasks needed to cover it.'},
               {title:'Prioritize tasks', prompt:'Prioritize the tasks above by importance and difficulty, explaining the order briefly.'},
               {title:'Create daily plan', prompt:'Turn the prioritized tasks above into a day-by-day study schedule.'} ] },
-    { id:'tpl_daily',    icon:'🗓️', name:'Daily Planner', description:'Plan a focused, realistic day from your goals and to-dos.',
+    { id:'tpl_daily',    icon:'🗓️', name:'Daily Planner', category:'productivity', description:'Plan a focused, realistic day from your goals and to-dos.',
       steps:[ {title:'Summarize goals', prompt:'Summarize the goals and tasks mentioned above for the day.'},
               {title:'Extract action items', prompt:'List clear, actionable to-do items from the summary above.'},
               {title:'Prioritize', prompt:'Order the action items above by priority and estimated time.'},
               {title:'Build schedule', prompt:'Turn the prioritized items above into an hour-by-hour daily schedule.'} ] },
-    { id:'tpl_meeting',  icon:'🗒️', name:'Meeting Summary', description:'Condense notes/transcript into a clean summary + action items.',
+    { id:'tpl_meeting',  icon:'🗒️', name:'Meeting Summary', category:'business', description:'Condense notes/transcript into a clean summary + action items.',
       steps:[ {title:'Summarize discussion', prompt:'Summarize the key points of this meeting discussion.'},
               {title:'Extract decisions', prompt:'From the summary above, list the decisions that were made.'},
               {title:'Extract action items', prompt:'List action items from above, each with a likely owner if mentioned.'},
               {title:'Draft follow-up', prompt:'Write a short follow-up message summarizing decisions and action items above.'} ] },
-    { id:'tpl_trip',     icon:'✈️', name:'Trip Planner', description:'Go from a destination idea to a day-by-day itinerary.',
+    { id:'tpl_trip',     icon:'✈️', name:'Trip Planner', category:'travel', description:'Go from a destination idea to a day-by-day itinerary.',
       steps:[ {title:'Summarize trip idea', prompt:'Summarize the destination, dates, and preferences described above.'},
               {title:'Suggest highlights', prompt:'Based on the summary above, suggest key sights/activities worth including.'},
               {title:'Organize by day', prompt:'Group the highlights above into a logical day-by-day order.'},
               {title:'Create itinerary', prompt:'Turn the day-by-day grouping above into a detailed itinerary with rough timing.'} ] },
-    { id:'tpl_workout',  icon:'🏋️', name:'Workout Plan', description:'From a fitness goal to a structured weekly plan.',
+    { id:'tpl_workout',  icon:'🏋️', name:'Workout Plan', category:'health', description:'From a fitness goal to a structured weekly plan.',
       steps:[ {title:'Summarize goal', prompt:'Summarize the fitness goal, experience level, and constraints described above.'},
               {title:'Suggest exercise types', prompt:'Based on the summary above, suggest suitable exercise types/splits.'},
               {title:'Structure the week', prompt:'Organize the suggestions above into a weekly training structure.'},
               {title:'Create workout plan', prompt:'Turn the weekly structure above into a detailed workout plan with sets/reps guidance.'} ] },
-    { id:'tpl_coderev',  icon:'🧑‍💻', name:'Coding Review', description:'Review pasted code for issues, then get concrete fixes.',
+    { id:'tpl_coderev',  icon:'🧑‍💻', name:'Coding Review', category:'coding', description:'Review pasted code for issues, then get concrete fixes.',
       steps:[ {title:'Summarize code', prompt:'Summarize what the pasted code above does.'},
               {title:'Identify issues', prompt:'Identify bugs, risks, or code-smells in the code above.'},
               {title:'Prioritize fixes', prompt:'Prioritize the issues above by severity/impact.'},
               {title:'Suggest fixes', prompt:'Provide concrete fix suggestions for the prioritized issues above.'} ] },
-    { id:'tpl_research', icon:'🔬', name:'Research Assistant', description:'Explore a question from summary to structured findings.',
+    { id:'tpl_research', icon:'🔬', name:'Research Assistant', category:'study', description:'Explore a question from summary to structured findings.',
       steps:[ {title:'Summarize question', prompt:'Summarize the research question/topic described above.'},
               {title:'Identify key angles', prompt:'From the summary above, identify the key angles/subtopics worth exploring.'},
               {title:'Analyze angles', prompt:'Provide a concise analysis of each angle identified above.'},
               {title:'Summarize findings', prompt:'Summarize the overall findings from the analysis above into key takeaways.'} ] },
-    { id:'tpl_article',  icon:'✍️', name:'Article Writer', description:'From an idea to a structured, polished article draft.',
+    { id:'tpl_article',  icon:'✍️', name:'Article Writer', category:'writing', description:'From an idea to a structured, polished article draft.',
       steps:[ {title:'Outline article', prompt:'Create a clear outline for an article based on the idea/topic above.'},
               {title:'Draft sections', prompt:'Write a full draft following the outline above.'},
               {title:'Refine tone & flow', prompt:'Refine the draft above for tone, clarity, and flow.'},
               {title:'Write final version', prompt:'Produce the final, polished version of the article above.'} ] },
-    { id:'tpl_resume',   icon:'📄', name:'Resume Builder', description:'Turn raw experience notes into polished resume bullets.',
+    { id:'tpl_resume',   icon:'📄', name:'Resume Builder', category:'business', description:'Turn raw experience notes into polished resume bullets.',
       steps:[ {title:'Summarize experience', prompt:'Summarize the work experience and skills described above.'},
               {title:'Extract achievements', prompt:'From the summary above, extract concrete achievements/results.'},
               {title:'Write bullet points', prompt:'Turn the achievements above into strong, concise resume bullet points.'},
               {title:'Polish wording', prompt:'Polish the bullet points above for impact, using strong action verbs.'} ] },
-    { id:'tpl_swot',     icon:'📊', name:'Business SWOT', description:'Turn a business idea into a structured SWOT analysis.',
+    { id:'tpl_swot',     icon:'📊', name:'Business SWOT', category:'marketing', description:'Turn a business idea into a structured SWOT analysis.',
       steps:[ {title:'Summarize business', prompt:'Summarize the business/idea described above.'},
               {title:'Identify strengths & weaknesses', prompt:'Based on the summary above, identify internal strengths and weaknesses.'},
               {title:'Identify opportunities & threats', prompt:'Based on the summary above, identify external opportunities and threats.'},
@@ -21166,7 +21273,8 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
   var WF = {
     editing: null,      // draft workflow object being created/edited (deep copy)
     editingExistingId: null, // id of the original workflow if editing (null if new)
-    run: null           // { workflow, steps:[{status,output}], initialInput, startedAt }
+    run: null,          // { workflow, steps:[{status,output}], initialInput, startedAt, cancelled, stepDurations }
+    categoryFilter: 'all' // [ADDED] active category filter chip on the Workflows grid
   };
   window._aleemWorkflows = WF; // debug/inspection only
 
@@ -21182,12 +21290,32 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     _wfSchedulePush();
   }
 
+  // [ADDED] Category filter chips — rendered above the grid. Selecting one
+  // updates WF.categoryFilter and instantly re-renders the grid (no reload).
+  function renderCategoryChips() {
+    var bar = $('wfCatToolbar');
+    if (!bar) return;
+    var chips = '<button type="button" class="wf-cat-chip' + (WF.categoryFilter === 'all' ? ' active' : '') +
+      '" data-wfcat="all">All</button>';
+    chips += WF_CATEGORY_ORDER.map(function(id) {
+      var m = catMeta(id);
+      return '<button type="button" class="wf-cat-chip' + (WF.categoryFilter === id ? ' active' : '') +
+        '" data-wfcat="' + id + '">' + m.emoji + ' ' + m.label + '</button>';
+    }).join('');
+    bar.innerHTML = chips;
+  }
+
   // ── Rendering: workflow cards grid ────────────────────────────────
   window.renderWorkflows = function(q) {
     var grid = $('wfGrid');
     if (!grid) return;
+    renderCategoryChips(); // [ADDED] keep chip active-state in sync on every render
     var query = (typeof q === 'string' ? q : ($('wfSearchInput') ? $('wfSearchInput').value : '')).trim().toLowerCase();
     var list = (S.workflows || []).slice();
+    // [ADDED] Category filter (feature 4) — applied before the text search.
+    if (WF.categoryFilter && WF.categoryFilter !== 'all') {
+      list = list.filter(function(w) { return catOf(w) === WF.categoryFilter; });
+    }
     if (query) {
       list = list.filter(function(w) {
         return (w.name || '').toLowerCase().indexOf(query) !== -1 ||
@@ -21202,7 +21330,9 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 
     if (!list.length) {
       grid.innerHTML = '<div class="wf-empty"><div class="wfe-icon">🔄</div><p>' +
-        (query ? 'No workflows match your search' : 'No workflows yet. Tap “+ New Workflow” to create one, or start from a template.') +
+        (query ? 'No workflows match your search' :
+          (WF.categoryFilter !== 'all' ? 'No workflows in this category yet.' :
+          'No workflows yet. Tap “+ New Workflow” to create one, or start from a template.')) +
         '</p></div>';
       return;
     }
@@ -21211,6 +21341,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 
   function wfCardHTML(w) {
     var stepCount = (w.steps || []).length;
+    var cm = catMeta(catOf(w)); // [ADDED]
     return '<div class="wf-card" data-wfid="' + w.id + '">' +
       '<div class="wf-card-top">' +
         '<div class="wf-card-icon">' + (w.icon || '🔄') + '</div>' +
@@ -21218,6 +21349,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       '</div>' +
       '<div class="wf-card-name">' + esc2(w.name || 'Untitled Workflow') + '</div>' +
       (w.description ? '<div class="wf-card-desc">' + esc2(w.description) + '</div>' : '') +
+      '<span class="wf-card-cat">' + cm.emoji + ' ' + cm.label + '</span>' + /* [ADDED] */
       '<div class="wf-card-meta">' + stepCount + ' Step' + (stepCount !== 1 ? 's' : '') + '</div>' +
       '<div class="wf-card-actions">' +
         '<button class="btn-pri" data-wfrun="' + w.id + '">▶ Run</button>' +
@@ -21274,6 +21406,17 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     }).join('');
   }
 
+  // [ADDED] Populate + sync the Category <select> in the Workflow Editor.
+  function renderCategorySelect() {
+    var sel = $('wfCategorySelect');
+    if (!sel || !WF.editing) return;
+    sel.innerHTML = WF_CATEGORY_ORDER.map(function(id) {
+      var m = catMeta(id);
+      return '<option value="' + id + '">' + m.emoji + ' ' + m.label + '</option>';
+    }).join('');
+    sel.value = catOf(WF.editing);
+  }
+
   function renderEditorSteps() {
     var list = $('wfStepsList');
     if (!list || !WF.editing) return;
@@ -21314,6 +21457,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
         name: workflowId ? src.name : src.name, // template name used as starting point
         description: src.description || '',
         icon: src.icon || '🔄',
+        category: catOf(src), // [ADDED]
         color: src.color || '',
         favorite: !!src.favorite,
         createdAt: src.createdAt || now,
@@ -21323,7 +21467,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
         })
       };
     } else {
-      WF.editing = { id: wfUid(), name: '', description: '', icon: '🔄', color: '', favorite: false,
+      WF.editing = { id: wfUid(), name: '', description: '', icon: '🔄', category: 'automation', color: '', favorite: false,
         createdAt: now, updatedAt: now, steps: [] };
     }
 
@@ -21331,6 +21475,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     $('wfNameInput').value = WF.editing.name || '';
     $('wfDescInput').value = WF.editing.description || '';
     renderIconGrid();
+    renderCategorySelect(); // [ADDED]
     renderEditorSteps();
     closeOverlay('wfNewOverlay');
     openOverlay('wfEditorOverlay');
@@ -21369,6 +21514,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 
     WF.editing.name = name;
     WF.editing.description = ($('wfDescInput').value || '').trim();
+    WF.editing.category = ($('wfCategorySelect') && $('wfCategorySelect').value) || WF.editing.category || 'automation'; // [ADDED]
     WF.editing.steps = steps;
     WF.editing.updatedAt = Date.now();
 
@@ -21444,7 +21590,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
         var now = Date.now();
         var imported = {
           id: wfUid(), name: obj.name, description: obj.description || '',
-          icon: obj.icon || '🔄', color: obj.color || '', favorite: false,
+          icon: obj.icon || '🔄', category: catOf(obj), color: obj.color || '', favorite: false, /* [ADDED category] */
           createdAt: now, updatedAt: now,
           steps: obj.steps.map(function(s) { return { id: wfStepUid(), title: s.title || '', prompt: s.prompt || '' }; })
         };
@@ -21465,7 +21611,8 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     var w = (S.workflows || []).find(function(x) { return x.id === id; });
     if (!w) return;
     WF.run = { workflow: w, steps: (w.steps || []).map(function(s) { return { title: s.title, prompt: s.prompt, status: 'pending', output: '' }; }),
-      initialInput: '', startedAt: 0 };
+      initialInput: '', startedAt: 0,
+      cancelled: false, stepDurations: [] }; // [ADDED] Stop Workflow (1) + Live ETA (2)
 
     $('wfRunTitle').textContent = (w.icon || '🔄') + ' ' + (w.name || 'Run Workflow');
     $('wfRunSub').textContent = (w.steps || []).length + ' Steps';
@@ -21479,12 +21626,41 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     openOverlay('wfRunOverlay');
   }
 
+  // [ADDED] Format a millisecond duration as a short human string for the ETA line.
+  function wfFmtDuration(ms) {
+    if (ms == null || isNaN(ms) || ms < 0) ms = 0;
+    var totalS = Math.round(ms / 1000);
+    if (totalS < 60) return totalS + ' second' + (totalS === 1 ? '' : 's');
+    var m = Math.floor(totalS / 60), s = totalS % 60;
+    return m + 'm ' + s + 's';
+  }
+
   function renderRunProgress() {
     var body = $('wfRunBody');
     if (!body || !WF.run) return;
+    var total = WF.run.steps.length;
     var doneCount = WF.run.steps.filter(function(s) { return s.status === 'done'; }).length;
+    var runningIdx = WF.run.steps.findIndex(function(s) { return s.status === 'running'; });
+    var currentStepNum = runningIdx !== -1 ? (runningIdx + 1) : Math.min(doneCount + 1, total);
+
+    // [ADDED] Live ETA (feature 2) — average of completed step durations
+    // times the number of steps remaining, recalculated after every step.
+    var etaHTML = '';
+    var durations = WF.run.stepDurations || [];
+    if (durations.length) {
+      var avg = durations.reduce(function(a, b) { return a + b; }, 0) / durations.length;
+      var remainingSteps = Math.max(total - doneCount, 0);
+      var etaMs = avg * remainingSteps;
+      etaHTML = '<div class="wf-eta-line"><span><b>Step ' + Math.min(currentStepNum, total) + ' / ' + total + '</b></span>' +
+        (remainingSteps > 0 ? '<span>Estimated remaining: <b>' + wfFmtDuration(etaMs) + '</b></span>' : '') + '</div>';
+    } else {
+      etaHTML = '<div class="wf-eta-line"><span><b>Step ' + Math.min(currentStepNum, total) + ' / ' + total + '</b></span>' +
+        '<span>Estimating time remaining…</span></div>';
+    }
+
     body.innerHTML =
-      '<div class="wf-run-progress-label">⚙️ Running Workflow… (' + doneCount + '/' + WF.run.steps.length + ')</div>' +
+      '<div class="wf-run-progress-label">⚙️ Running Workflow… (' + doneCount + '/' + total + ')</div>' +
+      etaHTML +
       '<div class="wf-run-steps">' +
         WF.run.steps.map(function(s, i) {
           var icon = s.status === 'done' ? '✓' : (s.status === 'running' ? '⏳' : '·');
@@ -21494,7 +21670,8 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
             '<span>Step ' + (i + 1) + ': ' + esc2(s.title || ('Step ' + (i + 1))) + (s.status !== 'pending' ? '' : ' — ' + esc2(label)) + '</span></div>';
         }).join('') +
       '</div>';
-    $('wfRunFoot').innerHTML = '';
+    // [ADDED] Stop Workflow (feature 1) — visible for the whole duration of the run.
+    $('wfRunFoot').innerHTML = '<button class="wf-stop-btn" id="wfRunStopBtn">■ Stop Workflow</button>';
   }
 
   function showRunResult() {
@@ -21562,6 +21739,41 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     return '';
   }
 
+  // [ADDED] Stop Workflow (feature 1). Sets the cancellation flag the run
+  // loop checks between/after steps, clears the in-progress run state, and
+  // closes the modal cleanly so future runs start fresh with no leftover
+  // state. The in-flight AI call (if any) is simply left to finish in the
+  // background — its result is discarded because WF.run is nulled out —
+  // rather than reaching into callGemini()/callGroqDirect(), which we must
+  // not modify.
+  function stopRunning() {
+    if (!WF.run) return;
+    WF.run.cancelled = true;
+    S._activeWorkflow = null;
+    WF.run = null;
+    closeOverlay('wfRunOverlay');
+    toast('Workflow cancelled.');
+  }
+
+  // [ADDED] Workflow Variables (feature 3). Replaces {{input}} and
+  // {{step1}}, {{step2}}, … with the original input / prior step outputs.
+  // Steps that don't use variables are untouched here — startRunning()
+  // falls back to the original "previous step output" composition for them,
+  // so existing/imported workflows keep behaving exactly as before.
+  var WF_VAR_RE = /\{\{\s*(input|step(\d+))\s*\}\}/gi;
+  function wfHasVariables(promptText) {
+    WF_VAR_RE.lastIndex = 0;
+    return WF_VAR_RE.test(promptText || '');
+  }
+  function wfInterpolate(promptText, vars) {
+    WF_VAR_RE.lastIndex = 0;
+    return (promptText || '').replace(WF_VAR_RE, function(match, whole, stepNum) {
+      if (/^input$/i.test(whole)) return vars.input != null ? vars.input : '';
+      var key = 'step' + stepNum;
+      return vars[key] != null ? vars[key] : '';
+    });
+  }
+
   async function startRunning() {
     var input = ($('wfRunInitialInput') ? $('wfRunInitialInput').value : '').trim();
     if (!input) { toast('⚠️ Please describe what this workflow should work on'); return; }
@@ -21577,14 +21789,25 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     renderRunProgress();
 
     var context = input;
-    for (var i = 0; i < WF.run.steps.length; i++) {
-      var step = WF.run.steps[i];
+    var vars = { input: input }; // [ADDED] Workflow Variables (feature 3) — {{input}}, {{step1}}, {{step2}}, …
+    var runRef = WF.run; // local reference so a Stop mid-loop (which nulls WF.run) is detectable below
+    for (var i = 0; i < runRef.steps.length; i++) {
+      if (!WF.run || WF.run !== runRef || WF.run.cancelled) return; // [ADDED] Stop Workflow (feature 1)
+      var step = runRef.steps[i];
       step.status = 'running';
+      var stepStartedAt = Date.now(); // [ADDED] Live ETA (feature 2)
       renderRunProgress();
 
-      var composedPrompt = (i === 0)
-        ? input + '\n\n---\nInstruction: ' + (step.prompt || step.title)
-        : 'Previous step output:\n' + context + '\n\n---\nInstruction: ' + (step.prompt || step.title);
+      var composedPrompt;
+      if (wfHasVariables(step.prompt) || wfHasVariables(step.title)) {
+        // [ADDED] Explicit {{input}}/{{stepN}} references — use them as-is.
+        composedPrompt = wfInterpolate(step.prompt || step.title, vars);
+      } else {
+        // Original behavior, unchanged, for steps that don't use variables.
+        composedPrompt = (i === 0)
+          ? input + '\n\n---\nInstruction: ' + (step.prompt || step.title)
+          : 'Previous step output:\n' + context + '\n\n---\nInstruction: ' + (step.prompt || step.title);
+      }
 
       var input_el = document.getElementById('chatInput');
       if (input_el) input_el.value = composedPrompt;
@@ -21594,10 +21817,15 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       }
       await waitForAIIdle(120000); // generous timeout; pipeline already has its own retries/fallbacks
 
+      if (!WF.run || WF.run !== runRef || WF.run.cancelled) return; // [ADDED] Stop Workflow — re-check after the await
+
       var output = lastAIMessageText();
       step.output = output;
       step.status = 'done';
       context = output || context;
+      vars['step' + (i + 1)] = output; // [ADDED] Workflow Variables
+      runRef.stepDurations = runRef.stepDurations || [];
+      runRef.stepDurations.push(Date.now() - stepStartedAt); // [ADDED] Live ETA
       renderRunProgress();
     }
 
@@ -21654,6 +21882,187 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     };
   })();
 
+  // ── [ADDED] AI Generated Workflows (feature 5) ──────────────────────
+  // Natural-language "Create a workflow for X" detection + generation.
+  // Entry point is window.__aleemTryWorkflowIntent(text), called from
+  // handleSend() BEFORE the normal AI reply is sent — see the small
+  // addition inside handleSend(). Fully additive: if nothing matches, or
+  // anything here throws, it returns false and handleSend() proceeds with
+  // the normal reply exactly as before.
+
+  // Matches things like "Create a workflow for learning JavaScript",
+  // "Make me a research workflow", "Build a productivity workflow",
+  // "Create an SEO workflow", "Generate a travel planning workflow".
+  function detectWorkflowIntent(text) {
+    if (!text) return null;
+    var t = text.trim();
+    if (t.length > 300) return null; // long pasted text is never a one-line workflow request
+    // Form: "<verb> ... workflow for/to/about <topic>"
+    var m1 = t.match(/\b(?:create|make|build|generate)\b[^.!?\n]*?\bworkflow\b\s+(?:for|to|about)\s+(.+)/i);
+    if (m1 && m1[1] && m1[1].trim().length > 1) return m1[1].replace(/[.!?]+$/, '').trim().slice(0, 120);
+    // Form: "<verb> [me] [a/an] <topic> workflow"
+    var m2 = t.match(/\b(?:create|make|build|generate)\b(?:\s+me)?\s+(?:an?\s+)?([a-z0-9][a-z0-9 &\-]{1,60}?)\s+workflow\b/i);
+    if (m2 && m2[1] && m2[1].trim().length > 1) return m2[1].replace(/[.!?]+$/, '').trim().slice(0, 120);
+    return null;
+  }
+
+  var WF_CATEGORY_KEYWORDS = {
+    coding:       ['code','coding','program','developer','software','javascript','python','sql','api','app dev','web dev'],
+    study:        ['study','learn','exam','course','school','university','homework','research'],
+    travel:       ['travel','trip','vacation','itinerary','flight','destination'],
+    business:     ['business','startup','client','proposal','strategy','swot'],
+    health:       ['health','fitness','workout','diet','nutrition','wellness','gym'],
+    creative:     ['creative','art','design','story','music','poem','draw'],
+    writing:      ['writing','article','blog','content','essay','copywriting'],
+    marketing:    ['marketing','seo','social media','campaign','ads','branding'],
+    productivity: ['productivity','daily','planner','task','to-do','todo','schedule','habit']
+  };
+  // [ADDED] Infers a category id from free text (chat message + topic), for
+  // AI-generated workflows. Falls back to 'automation' — same fallback the
+  // rest of the category system already uses (see catOf()).
+  function inferCategoryFromText(text) {
+    var low = (text || '').toLowerCase();
+    for (var i = 0; i < WF_CATEGORY_ORDER.length; i++) {
+      var id = WF_CATEGORY_ORDER[i];
+      var kws = WF_CATEGORY_KEYWORDS[id];
+      if (!kws) continue;
+      for (var j = 0; j < kws.length; j++) {
+        if (low.indexOf(kws[j]) !== -1) return id;
+      }
+    }
+    return 'automation';
+  }
+
+  // [ADDED] Fully offline fallback: a generic 5-step scaffold parameterized
+  // by topic. Used whenever the AI-generation call below fails, times out,
+  // or is unavailable (offline) — so this feature still works, just with
+  // a simpler generic plan instead of a topic-tailored one.
+  function fallbackWorkflowSteps(topic) {
+    return [
+      { title: 'Clarify the goal', prompt: 'Clarify the goal and scope for: ' + topic + '. Summarize what a complete result should include.' },
+      { title: 'Research key information', prompt: 'Based on the clarified goal above, gather and summarize the key information needed for: ' + topic + '.' },
+      { title: 'Create a plan', prompt: 'Using the research above, create a clear, structured plan for: ' + topic + '.' },
+      { title: 'Execute the plan', prompt: 'Carry out the plan above and produce the core deliverable for: ' + topic + '.' },
+      { title: 'Review & refine', prompt: 'Review the output above for quality and completeness, and refine it into a polished final result.' }
+    ];
+  }
+
+  // [ADDED] Tries a short, silent AI call (same endpoint/pattern already
+  // used by analyseAndSaveMemory()) to generate a tailored name + 4-10
+  // logical steps for the topic. Never throws — always resolves to a valid
+  // {name, steps} shape, falling back to fallbackWorkflowSteps() on any
+  // network error, timeout, or malformed response.
+  async function generateWorkflowSteps(topic) {
+    try {
+      var sysPrompt = 'You are a workflow-design engine. Given a topic, output ONLY raw JSON (no markdown fences, no explanation) of the form ' +
+        '{"name":"Short Workflow Name","steps":[{"title":"Step title","prompt":"Instruction for the AI to follow at this step"}]}. ' +
+        'Produce between 4 and 10 steps, ordered so each step logically builds on the previous step\'s output.';
+      var fetchPromise = fetch('/.netlify/functions/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gemini-2.5-flash-lite',
+          geminiBody: {
+            system_instruction: { parts: [{ text: sysPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: 'Topic: ' + topic }] }],
+            generationConfig: { maxOutputTokens: 700, temperature: 0.4 }
+          }
+        })
+      });
+      var timeoutPromise = new Promise(function(res) { setTimeout(function() { res(null); }, 15000); });
+      var response = await Promise.race([fetchPromise, timeoutPromise]);
+      if (!response || !response.ok) throw new Error('workflow-gen: no response');
+      var data = await response.json();
+      var raw = (data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
+      raw = raw.replace(/```json|```/g, '').trim();
+      var parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.steps) || !parsed.steps.length) throw new Error('workflow-gen: bad shape');
+      var steps = parsed.steps.slice(0, 10).map(function(s) {
+        return { title: (s.title || '').toString().slice(0, 80), prompt: (s.prompt || s.title || '').toString().slice(0, 600) };
+      }).filter(function(s) { return s.title || s.prompt; });
+      if (steps.length < 4) throw new Error('workflow-gen: too few steps');
+      return { name: (parsed.name || '').toString().trim().slice(0, 60) || null, steps: steps };
+    } catch (e) {
+      return { name: null, steps: fallbackWorkflowSteps(topic) }; // offline-safe fallback
+    }
+  }
+
+  // [ADDED] Generates + saves a new workflow from a detected chat intent,
+  // reusing the exact same persistence/sync/rendering path as every other
+  // workflow (persistWorkflows() → persist()/Firestore, window.renderWorkflows()).
+  async function createWorkflowFromChatIntent(topic, rawText) {
+    var category = inferCategoryFromText(rawText + ' ' + topic);
+    var meta = catMeta(category);
+    var gen = await generateWorkflowSteps(topic);
+    var now = Date.now();
+    var niceTopic = topic.charAt(0).toUpperCase() + topic.slice(1);
+    var name = gen.name || (niceTopic + ' Workflow');
+    var wf = {
+      id: wfUid(), name: name,
+      description: 'Auto-generated from chat: “' + rawText.slice(0, 140) + '”',
+      icon: meta.emoji, category: category, color: '', favorite: false,
+      createdAt: now, updatedAt: now,
+      steps: gen.steps.map(function(s) { return { id: wfStepUid(), title: s.title || '', prompt: s.prompt || '' }; })
+    };
+    S.workflows = S.workflows || [];
+    S.workflows.push(wf);
+    persistWorkflows();
+    if ($('page-workflows') === null) { /* no-op guard, id lookup below is safe either way */ }
+    var wfPage = document.getElementById('page-workflows');
+    if (wfPage && wfPage.classList.contains('active')) window.renderWorkflows();
+    return wf;
+  }
+
+  // [ADDED] Injects a small "Workflow Created" action card into an existing
+  // chat bubble (identified by bubId, as returned by addMsg()). Kept as a
+  // DOM-only addition — not part of the persisted message text — so it
+  // can safely use a live Open Workflow button without touching fmtMsg()/
+  // renderMarkdown()'s HTML-escaping (which correctly sanitizes normal
+  // AI text output).
+  function appendWorkflowCreatedCard(bubId, wf) {
+    var bub = document.getElementById(bubId);
+    if (!bub || !bub.parentNode) return;
+    var cm = catMeta(catOf(wf));
+    var card = document.createElement('div');
+    card.className = 'wf-created-card';
+    card.innerHTML =
+      '<div class="wf-created-top"><span class="wf-created-icon">' + (wf.icon || '🔄') + '</span>' +
+        '<span class="wf-created-name">' + esc2(wf.name || 'Untitled Workflow') + '</span></div>' +
+      '<div class="wf-created-meta">' + (wf.steps ? wf.steps.length : 0) + ' Steps · ' + cm.emoji + ' ' + cm.label + '</div>' +
+      '<button class="btn-pri wf-created-open-btn" data-openwf="' + wf.id + '">Open Workflow</button>';
+    bub.parentNode.appendChild(card);
+  }
+
+  // [ADDED] Called from handleSend(). Returns true if a workflow was
+  // detected + created (in which case handleSend() skips the normal AI
+  // reply for this turn), false otherwise (normal reply proceeds).
+  window.__aleemTryWorkflowIntent = async function(rawText) {
+    var topic = detectWorkflowIntent(rawText);
+    if (!topic) return false;
+    var wf;
+    try {
+      wf = await createWorkflowFromChatIntent(topic, rawText);
+    } catch (e) {
+      console.warn('[WF] AI-generated workflow error:', e);
+      return false; // fall through to a normal chat reply on unexpected failure
+    }
+    if (!wf) return false;
+    var bubId = addMsg('ai',
+      '✅ **Workflow created:** ' + wf.name + '\n\n' +
+      'It has ' + (wf.steps ? wf.steps.length : 0) + ' steps and is saved in **AI Workflows**, ready to run any time.'
+    );
+    appendWorkflowCreatedCard(bubId, wf);
+    try { if (typeof autoSaveConversation === 'function') autoSaveConversation(); } catch (e) {}
+    return true;
+  };
+
+  // [ADDED] Opens the editor for a given workflow id — used by the "Open
+  // Workflow" button injected into chat via appendWorkflowCreatedCard().
+  window.__aleemOpenWorkflowEditor = function(id) {
+    openEditor(id);
+  };
+
   // ── Event wiring ───────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function() {
     var newBtn = $('wfNewBtn'); if (newBtn) newBtn.addEventListener('click', openNewWorkflowModal);
@@ -21669,6 +22078,15 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 
     var searchInput = $('wfSearchInput');
     if (searchInput) searchInput.addEventListener('input', function() { window.renderWorkflows(searchInput.value); });
+
+    // [ADDED] Category filter chips — instant re-render, no page reload.
+    var catToolbar = $('wfCatToolbar');
+    if (catToolbar) catToolbar.addEventListener('click', function(e) {
+      var chip = e.target.closest('[data-wfcat]');
+      if (!chip) return;
+      WF.categoryFilter = chip.getAttribute('data-wfcat');
+      window.renderWorkflows();
+    });
 
     var importBtn = $('wfImportBtn'), importFile = $('wfImportFile');
     if (importBtn && importFile) {
@@ -21762,6 +22180,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       runOverlay.addEventListener('click', function(e) {
         if (e.target.id === 'wfRunCancelBtn') closeOverlay('wfRunOverlay');
         if (e.target.id === 'wfRunStartBtn') startRunning();
+        if (e.target.id === 'wfRunStopBtn') stopRunning(); // [ADDED] Stop Workflow (feature 1)
       });
     }
 
