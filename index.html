@@ -1271,7 +1271,16 @@
     font-size: 1.05rem; font-weight: 700;
     color: var(--text-1); white-space: nowrap;
   }
-  .topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  /* FIX (parent-level): flex-shrink:0 here previously prevented .topbar-right
+     from ever compressing to fit .topbar's available width. A flex child can
+     only pass shrink pressure down to ITS children when its own box is being
+     compressed — so with flex-shrink:0 here, .tb-btn-group's min-width:0
+     never actually kicked in, .topbar-right rendered at full natural width,
+     and the overflow pushed the avatar past the viewport edge where
+     body{overflow-x:hidden} clipped it. min-width:0 (default flex-shrink:1)
+     lets .topbar-right shrink to fit, so the squeeze correctly reaches
+     .tb-btn-group while .profile-menu-wrap (flex-shrink:0) stays full size. */
+  .topbar-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
   .hamburger {
     display: none;
@@ -1303,6 +1312,13 @@
     padding: 3px;
     gap: 1px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    /* FIX: min-width:0 lets this group shrink below its content's natural
+       width when .topbar-right runs out of room on mobile, so it absorbs
+       the space pressure instead of forcing the avatar off the right edge.
+       overflow:hidden keeps any excess clipped within its own rounded pill
+       rather than spilling out and causing horizontal overflow. */
+    min-width: 0;
+    overflow: hidden;
   }
   .tb-btn {
     display: flex; align-items: center; gap: 4px;
@@ -1329,7 +1345,10 @@
   .tb-btn-group .tb-btn + .tb-btn { box-shadow: -1px 0 0 var(--border); }
 
   /* Profile button + dropdown */
-  .profile-menu-wrap { position: relative; margin-left: 4px; margin-right: -8px; }
+  /* FIX: flex-shrink:0 guarantees the avatar keeps its full natural size and
+     is never compressed by the flexbox algorithm, no matter how tight the
+     available space in .topbar-right becomes on narrow mobile widths. */
+  .profile-menu-wrap { position: relative; margin-left: 4px; margin-right: -8px; flex-shrink: 0; }
   .tb-profile-btn {
     position: relative;
     padding: 2px; width: 32px; height: 32px; justify-content: center; border-radius: 50%; overflow: visible;
@@ -3892,16 +3911,18 @@
       margin-right: 8px;          /* push controls group away from hamburger */
     }
     /* FIX 4 — Hamburger ↔ green online indicator gap, mobile.
-       .topbar-left (and the hamburger inside it) must NOT move. Instead we
-       shift the avatar (profile-menu-wrap) right by ~10px, and nudge the
-       Voice/Clear/Dark control group right with it by a smaller amount so
-       the topbar still reads as visually centered. transform is used so
-       neither shift affects the flex layout/position of .topbar-left. */
+       .topbar-left (and the hamburger inside it) must NOT move. We nudge the
+       Voice/Clear/Dark control group right by a small amount so the topbar
+       still reads as visually centered. transform is used so this shift
+       doesn't affect the flex layout/position of .topbar-left.
+       NOTE: the avatar (profile-menu-wrap) is intentionally NOT shifted via
+       transform here anymore — transform doesn't reserve layout space, so it
+       was pushing the avatar visually past its flex box and off the right
+       edge of the screen on narrow widths (~360–430px), clipping it. The
+       avatar's spacing is now handled entirely by real layout (margin +
+       flex-shrink:0 below) so it always stays fully on-screen. */
     .tb-btn-group {
       transform: translateX(5px);
-    }
-    .profile-menu-wrap {
-      transform: translateX(10px);
     }
   }
 
