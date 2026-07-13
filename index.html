@@ -7923,6 +7923,7 @@ function loadStorage() {
   // [ADDED] 🔄 AI Workflows — persisted the same way as folders (small JSON
   // blob, UID-scoped so switching accounts never leaks workflows between users).
   try { S.workflows = JSON.parse(ls('aleem_workflows') || '[]'); } catch(eW) { S.workflows = []; }
+  console.log('[WF] workflow loaded — boot (uid scope "' + _storageUid + '"):', (S.workflows || []).length, 'workflow(s)');
   S.typingAnim  = ls('aleem_typing_anim') !== 'off';
   S.autoScroll  = ls('aleem_auto_scroll') !== 'off';
 
@@ -8100,7 +8101,10 @@ function persist() {
   try { lss('aleem_folders', JSON.stringify(S.folders)); } catch(eFolderSave) {}
   // [ADDED] 🔄 AI Workflows — small JSON payload (no image data), same
   // no-quota-risk pattern as folders above.
-  try { lss('aleem_workflows', JSON.stringify(S.workflows || [])); } catch(eWfSave) {}
+  try {
+    lss('aleem_workflows', JSON.stringify(S.workflows || []));
+    console.log('[WF] workflow saved — uid scope "' + _storageUid + '":', (S.workflows || []).length, 'workflow(s)');
+  } catch(eWfSave) {}
 
   // [ADDED] Dashboard stats (Total Questions / Questions Today / Favorite
   // Topic / Topic Distribution) must always reflect the real saved
@@ -8148,7 +8152,7 @@ function persistPrefsOnly() {
 var _storageUid = '__guest'; // default = guest bucket until auth resolves
 function _setStorageUid(uid) { _storageUid = uid || '__guest'; }
 // Keys that must be UID-scoped (conversation data)
-var _UID_SCOPED_KEYS = { 'aleem_hist': 1, 'aleem_folders': 1, 'aleem_hist_recent_searches': 1, 'aleem_workflows': 1 };
+var _UID_SCOPED_KEYS = { 'aleem_hist': 1, 'aleem_folders': 1, 'aleem_hist_recent_searches': 1, 'aleem_workflows': 1, 'aleem_wf_sync_ts': 1 };
 function _scopedKey(k) {
   if (_UID_SCOPED_KEYS[k]) {
     // Always scope history/folder keys — either to the signed-in UID or
@@ -15898,9 +15902,21 @@ window.__aleemSetConvSyncDB = function(db, uid) {
       // Reload S.folders for this uid on every account switch.
       // ls() reads from aleem_folders_<uid> since _setStorageUid was called.
       try { S.folders = JSON.parse(ls('aleem_folders') || '[]'); } catch(eF) { S.folders = []; }
+      // [BUGFIX] S.workflows was never reloaded here, unlike S.history/S.folders
+      // above. loadStorage() runs at boot while _storageUid is still '__guest'
+      // (auth resolves async), so workflows got stuck on the guest-scoped copy
+      // forever once a real uid resolved. Mirror the S.folders reload so
+      // workflows follow the same UID-scoped bucket as everything else.
+      // ls() now reads from aleem_workflows_<uid> since _setStorageUid was called.
+      try { S.workflows = JSON.parse(ls('aleem_workflows') || '[]'); } catch(eWfReload) { S.workflows = []; }
+      console.log('[WF] workflow loaded — uid scope "' + uid + '":', (S.workflows || []).length, 'workflow(s)');
       // ── [END FIX] ──────────────────────────────────────────────────
     }
     if (typeof renderHistory === 'function') renderHistory();
+    if (typeof window.renderWorkflows === 'function') {
+      var _wfPageA = document.getElementById('page-workflows');
+      if (_wfPageA && _wfPageA.classList.contains('active')) window.renderWorkflows();
+    }
 
     // Restore any queue saved under this user's key from a previous session
     _csyncRestoreQueue(uid);
@@ -15932,9 +15948,18 @@ window.__aleemSetConvSyncDB = function(db, uid) {
         if (!c.updatedAt) c.updatedAt = c.id || 0;
       });
       try { S.folders = JSON.parse(ls('aleem_folders') || '[]'); } catch(eF) { S.folders = []; }
+      // [BUGFIX] Same reload missing for workflows on sign-out — without this,
+      // S.workflows keeps whatever the signed-in account had in memory instead
+      // of switching back to the guest-scoped bucket.
+      try { S.workflows = JSON.parse(ls('aleem_workflows') || '[]'); } catch(eWfReload2) { S.workflows = []; }
+      console.log('[WF] workflow loaded — guest scope:', (S.workflows || []).length, 'workflow(s)');
     }
     if (typeof clearChat === 'function') clearChat();
     if (typeof renderHistory === 'function') renderHistory();
+    if (typeof window.renderWorkflows === 'function') {
+      var _wfPageB = document.getElementById('page-workflows');
+      if (_wfPageB && _wfPageB.classList.contains('active')) window.renderWorkflows();
+    }
     // Clear queue (in-memory and persisted), reset status
     CSYNC.queue = [];
     _csyncClearQueue();
@@ -20986,7 +21011,14 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     .wf-overlay.wf-show .wf-panel { transform:translateY(0) scale(1) !important; }
   }
   .wf-panel-head { display:flex; align-items:center; justify-content:space-between;
-    padding:16px 18px 12px; border-bottom:1px solid var(--border); flex-shrink:0; gap:10px; }
+    padding:16px 18px 12px; border-bottom:1px solid var(--border); flex-shrink:0; gap:10px;
+    /* [ADDED] Solid background + sticky positioning so the header no longer looks
+       transparent over the scrolling body content beneath it. */
+    position:sticky; top:0; z-index:2; background:var(--bg-card); }
+
+  /* [ADDED] Template search bar inside the New Workflow modal (feature: template
+     category filters). Mirrors .wf-toolbar spacing on the AI Workflows page. */
+  .wf-tpl-search-wrap { margin-bottom:12px; }
   .wf-panel-title { font-family:var(--font-display); font-weight:700; font-size:1rem; color:var(--text-1); }
   .wf-panel-sub { font-size:0.72rem; color:var(--text-3); margin-top:2px; }
   .wf-panel-close {
@@ -21133,6 +21165,13 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       <button class="wf-panel-close" id="wfNewCloseBtn" aria-label="Close">✕</button>
     </div>
     <div class="wf-panel-body">
+      <!-- [ADDED] Template search — mirrors the AI Workflows page search bar -->
+      <div class="search-wrap wf-search-wrap wf-tpl-search-wrap">
+        <span>🔍</span>
+        <input type="text" id="wfTplSearchInput" placeholder="Search templates…" autocomplete="off" />
+      </div>
+      <!-- [ADDED] Template category filters — populated by renderTplCategoryChips() -->
+      <div class="wf-cat-toolbar" id="wfTplCatToolbar"></div>
       <div class="wf-tpl-grid" id="wfTplGrid"></div>
     </div>
   </div>
@@ -21274,7 +21313,8 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     editing: null,      // draft workflow object being created/edited (deep copy)
     editingExistingId: null, // id of the original workflow if editing (null if new)
     run: null,          // { workflow, steps:[{status,output}], initialInput, startedAt, cancelled, stepDurations }
-    categoryFilter: 'all' // [ADDED] active category filter chip on the Workflows grid
+    categoryFilter: 'all',   // [ADDED] active category filter chip on the Workflows grid
+    tplCategoryFilter: 'all' // [ADDED] active category filter chip inside the New Workflow (template) modal
   };
   window._aleemWorkflows = WF; // debug/inspection only
 
@@ -21290,19 +21330,36 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     _wfSchedulePush();
   }
 
+  // [ADDED] Shared category-chip markup builder — reused by both the AI
+  // Workflows grid toolbar (#wfCatToolbar) and the New Workflow / template
+  // picker modal toolbar (#wfTplCatToolbar), so the chip set/visuals only
+  // live in one place (WF_CATEGORY_META / WF_CATEGORY_ORDER).
+  function buildCatChipsHTML(activeId) {
+    var chips = '<button type="button" class="wf-cat-chip' + (activeId === 'all' ? ' active' : '') +
+      '" data-wfcat="all">All</button>';
+    chips += WF_CATEGORY_ORDER.map(function(id) {
+      var m = catMeta(id);
+      return '<button type="button" class="wf-cat-chip' + (activeId === id ? ' active' : '') +
+        '" data-wfcat="' + id + '">' + m.emoji + ' ' + m.label + '</button>';
+    }).join('');
+    return chips;
+  }
+
   // [ADDED] Category filter chips — rendered above the grid. Selecting one
   // updates WF.categoryFilter and instantly re-renders the grid (no reload).
   function renderCategoryChips() {
     var bar = $('wfCatToolbar');
     if (!bar) return;
-    var chips = '<button type="button" class="wf-cat-chip' + (WF.categoryFilter === 'all' ? ' active' : '') +
-      '" data-wfcat="all">All</button>';
-    chips += WF_CATEGORY_ORDER.map(function(id) {
-      var m = catMeta(id);
-      return '<button type="button" class="wf-cat-chip' + (WF.categoryFilter === id ? ' active' : '') +
-        '" data-wfcat="' + id + '">' + m.emoji + ' ' + m.label + '</button>';
-    }).join('');
-    bar.innerHTML = chips;
+    bar.innerHTML = buildCatChipsHTML(WF.categoryFilter);
+  }
+
+  // [ADDED] Same chips, scoped to the New Workflow modal's template gallery.
+  // Keeps its own filter state (WF.tplCategoryFilter) so browsing templates
+  // never affects the category filter on the main Workflows grid.
+  function renderTplCategoryChips() {
+    var bar = $('wfTplCatToolbar');
+    if (!bar) return;
+    bar.innerHTML = buildCatChipsHTML(WF.tplCategoryFilter);
   }
 
   // ── Rendering: workflow cards grid ────────────────────────────────
@@ -21310,18 +21367,10 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     var grid = $('wfGrid');
     if (!grid) return;
     renderCategoryChips(); // [ADDED] keep chip active-state in sync on every render
-    var query = (typeof q === 'string' ? q : ($('wfSearchInput') ? $('wfSearchInput').value : '')).trim().toLowerCase();
-    var list = (S.workflows || []).slice();
-    // [ADDED] Category filter (feature 4) — applied before the text search.
-    if (WF.categoryFilter && WF.categoryFilter !== 'all') {
-      list = list.filter(function(w) { return catOf(w) === WF.categoryFilter; });
-    }
-    if (query) {
-      list = list.filter(function(w) {
-        return (w.name || '').toLowerCase().indexOf(query) !== -1 ||
-               (w.description || '').toLowerCase().indexOf(query) !== -1;
-      });
-    }
+    var query = (typeof q === 'string' ? q : ($('wfSearchInput') ? $('wfSearchInput').value : ''));
+    // [ADDED] Category filter (feature 4) + text search — shared with the
+    // New Workflow modal's template gallery via filterByCategoryAndQuery().
+    var list = filterByCategoryAndQuery(S.workflows || [], WF.categoryFilter, query);
     // Favorites first, then most recently updated
     list.sort(function(a, b) {
       if (!!b.favorite !== !!a.favorite) return b.favorite ? 1 : -1;
@@ -21375,24 +21424,59 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     document.body.style.overflow = '';
   }
 
-  function renderTemplateGallery() {
+  // [ADDED] Shared category+search filter — same matching rules as
+  // window.renderWorkflows() below, applied to WF_TEMPLATES instead of
+  // S.workflows so the two lists always behave identically.
+  function filterByCategoryAndQuery(items, categoryId, query) {
+    var list = items.slice();
+    if (categoryId && categoryId !== 'all') {
+      list = list.filter(function(item) { return catOf(item) === categoryId; });
+    }
+    var q = (query || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter(function(item) {
+        return (item.name || '').toLowerCase().indexOf(q) !== -1 ||
+               (item.description || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    return list;
+  }
+
+  function renderTemplateGallery(q) {
     var grid = $('wfTplGrid');
     if (!grid) return;
+    renderTplCategoryChips(); // [ADDED] keep chip active-state in sync on every render
+    var query = typeof q === 'string' ? q : ($('wfTplSearchInput') ? $('wfTplSearchInput').value : '');
+    // [ADDED] Category filter + search (feature parity with the Workflows grid).
+    var list = filterByCategoryAndQuery(WF_TEMPLATES, WF.tplCategoryFilter, query);
+
+    // "Start Blank" isn't a template (no category/search text of its own),
+    // so it's excluded from filtering and always shown first.
     var html = '<div class="wf-tpl-card wf-blank-card" id="wfBlankCard">' +
       '<div class="wf-tpl-icon">✨</div><div class="wf-tpl-name">Start Blank</div>' +
       '<div class="wf-tpl-steps">Build your own steps</div></div>';
-    html += WF_TEMPLATES.map(function(t) {
-      return '<div class="wf-tpl-card" data-usetpl="' + t.id + '">' +
-        '<div class="wf-tpl-icon">' + t.icon + '</div>' +
-        '<div class="wf-tpl-name">' + esc2(t.name) + '</div>' +
-        '<div class="wf-tpl-steps">' + t.steps.length + ' Steps</div>' +
-      '</div>';
-    }).join('');
+
+    if (!list.length) {
+      html += '<div class="wf-empty"><div class="wfe-icon">🔍</div><p>No templates match.</p></div>';
+    } else {
+      html += list.map(function(t) {
+        return '<div class="wf-tpl-card" data-usetpl="' + t.id + '">' +
+          '<div class="wf-tpl-icon">' + t.icon + '</div>' +
+          '<div class="wf-tpl-name">' + esc2(t.name) + '</div>' +
+          '<div class="wf-tpl-steps">' + t.steps.length + ' Steps</div>' +
+        '</div>';
+      }).join('');
+    }
     grid.innerHTML = html;
   }
 
   function openNewWorkflowModal() {
-    renderTemplateGallery();
+    // [ADDED] Fresh filter state each time the modal is opened; preserved
+    // (not reset) while the modal stays open — see wiring below.
+    WF.tplCategoryFilter = 'all';
+    var tplSearchInput = $('wfTplSearchInput');
+    if (tplSearchInput) tplSearchInput.value = '';
+    renderTemplateGallery('');
     openOverlay('wfNewOverlay');
   }
 
@@ -21521,7 +21605,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     S.workflows = S.workflows || [];
     var idx = S.workflows.findIndex(function(w) { return w.id === WF.editing.id; });
     if (idx !== -1) S.workflows[idx] = WF.editing;
-    else S.workflows.push(WF.editing);
+    else { S.workflows.push(WF.editing); console.log('[WF] workflow created — editor:', WF.editing.id, WF.editing.name); }
 
     persistWorkflows();
     closeOverlay('wfEditorOverlay');
@@ -21844,8 +21928,23 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     if (typeof _psyncWriteDoc !== 'function') return;
     clearTimeout(_wfPushTimer);
     _wfPushTimer = setTimeout(function() {
+      console.log('[WF] workflow synced — pushing', (S.workflows || []).length, 'workflow(s) to cloud');
       _psyncWriteDoc(WF_DOC, { workflows: S.workflows || [], updatedAt: Date.now() });
     }, 1200);
+  }
+  // [BUGFIX] Previously this did `S.workflows = data.workflows;` — a straight
+  // overwrite that discarded any local workflow not present in the cloud copy
+  // (e.g. one created while offline, or before the first successful push).
+  // Merge by id instead, keeping whichever side has the newer updatedAt for
+  // ids that exist on both sides, and keeping ids that only exist on one side.
+  function _mergeWorkflows(local, cloud) {
+    var byId = {};
+    (local || []).forEach(function(w) { byId[w.id] = w; });
+    (cloud || []).forEach(function(w) {
+      var existing = byId[w.id];
+      if (!existing || (w.updatedAt || 0) > (existing.updatedAt || 0)) byId[w.id] = w;
+    });
+    return Object.keys(byId).map(function(k) { return byId[k]; });
   }
   async function _wfLoadFromCloud() {
     if (typeof CSYNC === 'undefined' || !CSYNC.db || !CSYNC.uid) return;
@@ -21856,12 +21955,17 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       var localTs = parseInt(ls('aleem_wf_sync_ts') || '0', 10);
       var cloudTs = data.updatedAt || 0;
       if (cloudTs > localTs) {
-        S.workflows = data.workflows;
+        var merged = _mergeWorkflows(S.workflows, data.workflows);
+        console.log('[WF] workflow merged — local:', (S.workflows || []).length, 'cloud:', data.workflows.length, 'merged:', merged.length);
+        S.workflows = merged;
         if (typeof persist === 'function') persist();
         lss('aleem_wf_sync_ts', String(cloudTs));
         if (document.getElementById('page-workflows') && document.getElementById('page-workflows').classList.contains('active')) {
           window.renderWorkflows();
         }
+        // Push the merged result back so the cloud copy also reflects any
+        // local-only workflows that the cloud didn't have.
+        _wfSchedulePush();
       } else if (localTs > cloudTs) {
         _wfSchedulePush();
       }
@@ -22007,6 +22111,7 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
     };
     S.workflows = S.workflows || [];
     S.workflows.push(wf);
+    console.log('[WF] workflow created — AI-generated from chat intent:', wf.id, wf.name);
     persistWorkflows();
     if ($('page-workflows') === null) { /* no-op guard, id lookup below is safe either way */ }
     var wfPage = document.getElementById('page-workflows');
@@ -22086,6 +22191,20 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
       if (!chip) return;
       WF.categoryFilter = chip.getAttribute('data-wfcat');
       window.renderWorkflows();
+    });
+
+    // [ADDED] Template search box + category chips inside the New Workflow modal.
+    // Both act on the same WF.tplCategoryFilter state so they compose together
+    // (e.g. category=Business + search="invoice" → only matching Business templates).
+    var tplSearchInput = $('wfTplSearchInput');
+    if (tplSearchInput) tplSearchInput.addEventListener('input', function() { renderTemplateGallery(tplSearchInput.value); });
+
+    var tplCatToolbar = $('wfTplCatToolbar');
+    if (tplCatToolbar) tplCatToolbar.addEventListener('click', function(e) {
+      var chip = e.target.closest('[data-wfcat]');
+      if (!chip) return;
+      WF.tplCategoryFilter = chip.getAttribute('data-wfcat');
+      renderTemplateGallery(tplSearchInput ? tplSearchInput.value : '');
     });
 
     var importBtn = $('wfImportBtn'), importFile = $('wfImportFile');
