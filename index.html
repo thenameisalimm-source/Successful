@@ -281,6 +281,322 @@
   @keyframes fadeInUp  { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
   @keyframes fadeInEl  { from { opacity:0; } to { opacity:1; } }
 
+  /* ================================================================
+     [POLISH] AUTH GATE — premium enter/exit cross-fade.
+     Kept as a refinement of the existing #authGate element — no layout
+     or branding changes, just smoother splash → auth → home transitions.
+  ================================================================ */
+  #authGate {
+    background: radial-gradient(ellipse at 50% 32%, #0c1530 0%, #050811 68%);
+    opacity: 0;
+    transform: scale(1.015);
+    transition: opacity 0.42s cubic-bezier(0.4,0,0.2,1), transform 0.42s cubic-bezier(0.4,0,0.2,1);
+  }
+  #authGate.show { opacity: 1; transform: scale(1); }
+  #authGate.hiding { opacity: 0; transform: scale(1.015); pointer-events: none; transition-duration: 0.3s; }
+
+  /* Subtle, non-intrusive success confirmation before the gate fades out */
+  @keyframes authCardSuccess {
+    0%   { box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06); }
+    45%  { box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 0 0 3px rgba(52,211,153,0.35), inset 0 1px 0 rgba(255,255,255,0.06); }
+    100% { box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06); }
+  }
+  .auth-card.success { animation: authCardSuccess 0.5s ease; }
+
+  /* ================================================================
+     [ADDED] Welcome-back overlay + app skeleton — shown only on the
+     persisted-session reveal path (returning user reloading the page),
+     briefly, before the real (already-rendered) app fades in. Purely
+     cosmetic; touches nothing about how/when auth or data actually load.
+  ================================================================ */
+  #welcomeBackOverlay {
+    position: fixed; inset: 0; z-index: 9998;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 10px;
+    background: radial-gradient(ellipse at 50% 32%, #0c1530 0%, #050811 68%);
+    opacity: 0; transition: opacity 0.35s ease;
+  }
+  #welcomeBackOverlay.show { display: flex; opacity: 1; }
+  #welcomeBackOverlay.hiding { opacity: 0; transition-duration: 0.3s; }
+  .wb-check {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; color: #fff; margin-bottom: 4px;
+    animation: fadeInUp 0.4s cubic-bezier(0.4,0,0.2,1);
+  }
+  .wb-title { font-size: 1.15rem; font-weight: 700; color: #fff; animation: fadeInUp 0.4s cubic-bezier(0.4,0,0.2,1) 0.05s backwards; }
+  .wb-sub { font-size: 0.82rem; color: var(--text-2); animation: fadeInUp 0.4s cubic-bezier(0.4,0,0.2,1) 0.1s backwards; }
+
+  #appSkeleton {
+    position: fixed; inset: 0; z-index: 40; display: none;
+    background: var(--bg-1, #050811); opacity: 1; transition: opacity 0.35s ease;
+  }
+  #appSkeleton.show { display: flex; }
+  #appSkeleton.hiding { opacity: 0; pointer-events: none; }
+  .skel-sidebar { width: 260px; height: 100%; flex-shrink: 0; padding: 20px 16px; box-sizing: border-box; border-right: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 10px; }
+  .skel-main { flex: 1; display: flex; flex-direction: column; padding: 18px 24px; box-sizing: border-box; gap: 14px; }
+  .skel-bar {
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--glass-border) 25%, rgba(255,255,255,0.10) 37%, var(--glass-border) 63%);
+    background-size: 400% 100%;
+    animation: skelShimmer 1.4s ease infinite;
+  }
+  @keyframes skelShimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+  .skel-row { display: flex; gap: 12px; align-items: flex-start; }
+  .skel-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
+  @media (max-width: 768px) { .skel-sidebar { display: none; } }
+
+  /* ================================================================
+     [ADDED] Sign-out overlay — "Signing you out…" then a success
+     checkmark, before the existing auth gate reveal underneath.
+  ================================================================ */
+  #signOutOverlay {
+    position: fixed; inset: 0; z-index: 10000;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 10px;
+    background: radial-gradient(ellipse at 50% 32%, #0c1530 0%, #050811 68%);
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  #signOutOverlay.show { display: flex; opacity: 1; }
+  #signOutOverlay.hiding { opacity: 0; }
+  .so-spinner {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid var(--glass-border); border-top-color: var(--a1);
+    animation: spin 0.8s linear infinite; margin-bottom: 4px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .so-check {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; color: #fff; margin-bottom: 4px;
+    animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1);
+  }
+  .so-title { font-size: 1.05rem; font-weight: 700; color: #fff; }
+
+  /* ================================================================
+     [ADDED] Offline state on the auth card — replaces the sign-in
+     buttons with a clear "you're offline" message + Retry, instead of
+     letting a sign-in attempt fail with a generic network error.
+  ================================================================ */
+  .auth-offline-box { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 2px; }
+  .auth-offline-box.show { display: flex; }
+  .auth-offline-icon { font-size: 1.6rem; }
+  .auth-offline-title { font-size: 0.95rem; font-weight: 600; color: #fff; }
+  .auth-offline-sub { font-size: 0.8rem; color: var(--text-2); line-height: 1.4; }
+  .auth-offline-retry {
+    margin-top: 4px; padding: 8px 20px; border-radius: 999px; border: 1px solid var(--glass-border);
+    background: var(--glass); color: #fff; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  }
+  .auth-offline-retry:active { transform: scale(0.97); }
+  .auth-card.offline .auth-google-btn,
+  .auth-card.offline .auth-divider,
+  .auth-card.offline .auth-email-form { display: none; }
+
+  /* ================================================================
+     [ADDED] First-time onboarding modal — shown once, only when the
+     Firebase sign-in result reports a brand-new account.
+  ================================================================ */
+  #onboardingOverlay.pers-popup-overlay .pers-popup { max-width: 380px; text-align: center; }
+  .ob-icon { font-size: 2rem; margin-bottom: 6px; }
+  .ob-title { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .ob-sub { font-size: 0.85rem; color: var(--text-2); line-height: 1.5; margin-bottom: 18px; }
+  .ob-notif-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 18px; text-align: left;
+  }
+  .ob-notif-label { font-size: 0.85rem; color: #fff; }
+  .ob-notif-sub { font-size: 0.72rem; color: var(--text-2); }
+
+  .auth-card {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-xl);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    padding: clamp(30px, 8vw, 42px) clamp(22px, 6vw, 32px) clamp(26px, 6vw, 34px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+    opacity: 0;
+    animation: fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.15s forwards;
+    box-sizing: border-box;
+    transition: box-shadow 0.3s ease;
+  }
+  .auth-logo-wrap { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 2px; }
+  .auth-logo-wrap::before {
+    content: '';
+    position: absolute;
+    width: clamp(180px, 55vw, 240px); height: clamp(80px, 24vw, 104px);
+    background: radial-gradient(ellipse, rgba(56,189,248,0.28) 0%, rgba(129,140,248,0.16) 45%, transparent 70%);
+    filter: blur(24px);
+    border-radius: 50%;
+    animation: haloPulse 3s ease infinite alternate;
+  }
+  .auth-logo {
+    font-family: var(--font-logo);
+    font-size: clamp(30px, 9vw, 42px);
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    background: linear-gradient(110deg, #38bdf8 0%, #67e8f9 30%, #818cf8 65%, #c084fc 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    background-size: 200% auto;
+    animation: logoShimmer 4s linear infinite;
+    position: relative; z-index: 1;
+    white-space: nowrap;
+  }
+  .auth-tagline {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    color: var(--text-2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 8px;
+    text-align: center;
+  }
+  .auth-welcome {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text-1);
+    margin-top: 22px;
+    text-align: center;
+  }
+  .auth-welcome-sub {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    color: var(--text-3);
+    margin-top: 4px;
+    text-align: center;
+    line-height: 1.45;
+    max-width: 300px;
+  }
+  .auth-google-btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%;
+    margin-top: 26px;
+    padding: 13px 20px;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #1f1f1f;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid rgba(0,0,0,0.06);
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.4);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+    touch-action: manipulation;
+  }
+  .auth-google-btn:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.32); transform: translateY(-1px); }
+  .auth-google-btn:active { transform: scale(0.97); background: #f4f4f4; }
+  .auth-google-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  .auth-divider {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; margin: 22px 0 18px;
+    color: var(--text-3); font-size: 0.68rem; letter-spacing: 1px; text-transform: uppercase;
+  }
+  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .auth-email-form { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+  .auth-email-input {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    color: var(--text-1);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    padding: 13px 16px;
+    outline: none;
+    transition: border-color var(--t);
+  }
+  .auth-email-input:focus { border-color: var(--border-hi); }
+  .auth-email-input::placeholder { color: var(--text-3); }
+  .auth-email-btn {
+    width: 100%;
+    padding: 13px 20px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    color: #fff;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    touch-action: manipulation;
+  }
+  .auth-email-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(56,189,248,0.28); }
+  .auth-email-btn:active { transform: scale(0.97); }
+
+  .auth-footnote {
+    margin-top: 20px;
+    font-size: 0.66rem;
+    color: var(--text-3);
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* [POLISH] Loading spinner shared by the Google + email buttons while a
+     sign-in request is in flight. Purely additive — buttons keep their
+     existing look, this just swaps the label for a spinner + status text. */
+  @keyframes authSpin { to { transform: rotate(360deg); } }
+  .auth-spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,0.15);
+    border-top-color: #1f1f1f;
+    animation: authSpin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  .auth-email-btn .auth-spinner { border-color: rgba(255,255,255,0.35); border-top-color: #fff; }
+  .auth-google-btn.loading, .auth-email-btn.loading { cursor: default; opacity: 0.88; }
+  .auth-google-btn:disabled, .auth-email-btn:disabled { cursor: default; }
+
+  /* [POLISH] Elegant inline error banner — used instead of (or alongside) a
+     toast so sign-in problems read as part of the card, not a generic alert. */
+  .auth-error {
+    width: 100%;
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    background: rgba(239,68,68,0.10);
+    border: 1px solid rgba(239,68,68,0.30);
+    color: #fca5a5;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    text-align: left;
+    box-sizing: border-box;
+    display: none;
+    opacity: 0;
+  }
+  .auth-error.show { display: block; opacity: 1; animation: fadeInUp 0.3s ease; }
+
+  /* [POLISH] Visible keyboard-focus rings for the auth screen's interactive
+     elements — accessibility only, invisible with mouse/touch input. */
+  .auth-google-btn:focus-visible,
+  .auth-email-input:focus-visible,
+  .auth-email-btn:focus-visible {
+    outline: 2px solid var(--a1);
+    outline-offset: 2px;
+  }
+
+  /* [POLISH] Screen-reader-only utility (visually hidden, still announced). */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+
   /* [ADDED] New Chat transition (item 4) — current chat fades + slides up,
      then the fresh chat fades back in. Reuses the existing fadeInUp keyframe
      for the "in" half so the motion matches the rest of the app. */
@@ -5487,20 +5803,115 @@
   </div>
 </div>
 
-<!-- AUTH GATE (Login Screen) -->
-<div id="authGate" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg-1, #050811);flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;">
-  <div class="splash-glow-ring">
-    <div class="splash-logo">ALEEM AI</div>
+<!-- AUTH GATE (Login Screen) — premium first-launch / sign-in screen.
+     Same element id + same #continueWithGoogleBtn id as before, so the
+     existing Firebase/Google sign-in wiring keeps working untouched. -->
+<div id="authGate" style="display:none;position:fixed;inset:0;z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;">
+  <div class="auth-card" role="dialog" aria-label="Sign in to ALEEM AI">
+    <div class="auth-logo-wrap">
+      <div class="auth-logo">ALEEM AI</div>
+    </div>
+    <div class="auth-tagline">Your Personal Knowledge Assistant</div>
+
+    <div class="auth-welcome">Welcome</div>
+    <div class="auth-welcome-sub">Sign in to sync your conversations, memories, and profile across every device.</div>
+
+    <button id="continueWithGoogleBtn" class="auth-google-btn" type="button">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12
+        c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24
+        c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657
+        C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36
+        c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571
+        c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+      <span class="auth-btn-label">Continue with Google</span>
+    </button>
+
+    <div id="authErrorMsg" class="auth-error" role="alert" aria-live="assertive"></div>
+
+    <!-- [ADDED] Offline state — hides the divider/email form below it via
+         authOfflineActive class on the card, shown instead of letting a
+         sign-in attempt fail with a generic network error. -->
+    <div class="auth-offline-box" id="authOfflineBox">
+      <div class="auth-offline-icon">📡</div>
+      <div class="auth-offline-title">You're offline</div>
+      <div class="auth-offline-sub">Reconnect to continue signing in.</div>
+      <button type="button" class="auth-offline-retry" id="authOfflineRetryBtn">Retry</button>
+    </div>
+
+    <div class="auth-divider">or</div>
+
+    <form class="auth-email-form" id="authEmailForm" autocomplete="on">
+      <label for="authEmailInput" class="sr-only">Email address</label>
+      <input type="email" id="authEmailInput" class="auth-email-input" placeholder="Email address" autocomplete="email" inputmode="email" aria-label="Email address" required>
+      <button type="submit" id="authEmailContinueBtn" class="auth-email-btn"><span class="auth-btn-label">Continue</span></button>
+    </form>
+
+    <div class="auth-footnote">By continuing you agree to ALEEM AI's Terms &amp; Privacy Policy.</div>
   </div>
-  <div class="splash-sub" style="margin-top:10px;">Your Personal Knowledge Assistant</div>
-  <button id="continueWithGoogleBtn" class="tb-btn" style="margin-top:32px;font-size:1rem;padding:12px 28px;">🔐 Continue with Google</button>
+</div>
+
+<!-- [ADDED] Welcome-back overlay — shown briefly for a returning (already
+     signed-in) user on page load, instead of jumping straight into the app. -->
+<div id="welcomeBackOverlay">
+  <div class="wb-check">✓</div>
+  <div class="wb-title" id="wbTitle">Welcome back</div>
+  <div class="wb-sub">Syncing your workspace…</div>
+</div>
+
+<!-- [ADDED] App skeleton — sits above the (already-rendered) real app for a
+     short moment during the welcome-back reveal, then fades out. -->
+<div id="appSkeleton" aria-hidden="true">
+  <div class="skel-sidebar">
+    <div class="skel-bar" style="width:70%;height:22px;margin-bottom:8px;"></div>
+    <div class="skel-bar" style="width:100%;height:36px;border-radius:10px;margin-bottom:10px;"></div>
+    <div class="skel-bar" style="width:90%;height:16px;"></div>
+    <div class="skel-bar" style="width:80%;height:16px;"></div>
+    <div class="skel-bar" style="width:85%;height:16px;"></div>
+    <div class="skel-bar" style="width:75%;height:16px;"></div>
+    <div class="skel-bar" style="width:80%;height:16px;"></div>
+  </div>
+  <div class="skel-main">
+    <div class="skel-bar" style="width:140px;height:28px;border-radius:20px;align-self:flex-end;"></div>
+    <div class="skel-row"><div class="skel-bar skel-avatar"></div><div class="skel-bar" style="flex:1;height:44px;"></div></div>
+    <div class="skel-row"><div class="skel-bar" style="flex:1;height:60px;"></div><div class="skel-bar skel-avatar"></div></div>
+    <div class="skel-row"><div class="skel-bar skel-avatar"></div><div class="skel-bar" style="flex:1;height:36px;"></div></div>
+  </div>
+</div>
+
+<!-- [ADDED] Sign-out overlay — "Signing you out…" then a success check,
+     shown while performSignOut() runs, before the auth gate reveal. -->
+<div id="signOutOverlay">
+  <div class="so-spinner" id="soSpinner"></div>
+  <div class="so-check" id="soCheck" style="display:none;">✓</div>
+  <div class="so-title" id="soTitle">Signing you out…</div>
+</div>
+
+<!-- [ADDED] First-time onboarding modal — shown once, only right after a
+     brand-new account's first sign-in (reuses the .pers-popup shell). -->
+<div class="pers-popup-overlay" id="onboardingOverlay">
+  <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div class="ob-icon">👋</div>
+    <div class="ob-title" id="onboardingTitle">Welcome to ALEEM AI</div>
+    <div class="ob-sub">Let's personalize your experience.</div>
+    <div class="ob-notif-row">
+      <div>
+        <div class="ob-notif-label">Enable notifications</div>
+        <div class="ob-notif-sub">Get notified about replies and reminders</div>
+      </div>
+      <label class="ig-switch">
+        <input type="checkbox" id="onboardingNotifToggle">
+        <span class="ig-slider"></span>
+      </label>
+    </div>
+    <button type="button" class="rename-btn-save" id="onboardingDoneBtn" style="width:100%;">Get Started</button>
+  </div>
 </div>
 
 <!-- PARTICLES -->
 <canvas id="particles"></canvas>
 
 <!-- TOAST -->
-<div id="toast"><span id="toastMsg"></span></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"><span id="toastMsg"></span></div>
 
 <!-- RENAME CONVERSATION MODAL (glassmorphism, mirrors .pers-popup style) -->
 <div class="pers-popup-overlay" id="renamePopupOverlay">
@@ -5553,6 +5964,24 @@
         <button type="button" class="sc-action-btn" id="scCopyBtn">📋 Copy Text</button>
         <button type="button" class="sc-action-btn" id="scImageBtn">🖼️ Save as Image</button>
         <button type="button" class="sc-action-btn primary" id="scShareBtn">🔗 Share</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- [ADDED] Logout confirmation modal (glassmorphism, reuses the
+     .pers-popup shell so it matches the rest of ALEEM AI's premium dialogs). -->
+<div class="pers-popup-overlay" id="logoutConfirmOverlay">
+  <div class="pers-popup" role="dialog" aria-modal="true" aria-labelledby="logoutConfirmTitle" style="max-width:380px;">
+    <div class="pers-popup-header">
+      <span class="pers-popup-title" id="logoutConfirmTitle">🚪 Log out</span>
+      <button type="button" class="pers-popup-close" id="logoutModalClose" aria-label="Close">✕</button>
+    </div>
+    <div class="rename-modal-body">
+      <div style="color:var(--text-2);font-size:0.88rem;line-height:1.5;">Are you sure you want to log out? You'll need to sign in again to access your synced conversations and memories.</div>
+      <div class="rename-modal-actions">
+        <button type="button" class="rename-btn-cancel" id="logoutCancelBtn">Cancel</button>
+        <button type="button" class="rename-btn-save" id="logoutConfirmBtn" style="background:linear-gradient(135deg,#ef4444,#f87171);">Log out</button>
       </div>
     </div>
   </div>
@@ -8637,6 +9066,18 @@ window.addEventListener('beforeunload', function() {
   }
 });
 
+// [ADDED — Smart TTS Auto-Stop] Never keep speaking after the user has left
+// the app. Covers backgrounding/minimizing, screen-off, and switching tabs
+// (all fire visibilitychange with document.hidden === true), as well as
+// closing the tab, refreshing, or navigating away (pagehide — more reliable
+// than beforeunload for this on mobile Safari/Chrome).
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden && typeof stopSpeaking === 'function') stopSpeaking();
+});
+window.addEventListener('pagehide', function() {
+  if (typeof stopSpeaking === 'function') stopSpeaking();
+});
+
 // ── BOOT ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
 
@@ -8699,11 +9140,19 @@ function init() {
     // handler opens '/?convId=NNN' when the app wasn't already running.
     // Consume it once and strip it from the URL so a later refresh/reload
     // doesn't re-trigger the navigation.
+    // [POLISH — Remember user intent] If auth hasn't resolved yet (or the
+    // user is signed out), the destination is remembered instead of being
+    // dropped, so the FIREBASE AUTH module can resume it right after a
+    // successful sign-in — the user never loses context.
     var _notifConvId = new URLSearchParams(window.location.search).get('convId');
     if (_notifConvId) {
-      if (typeof goPage === 'function') goPage('chat');
-      if (typeof loadConv === 'function') loadConv(Number(_notifConvId));
       window.history.replaceState({}, '', window.location.pathname);
+      if (window.currentUser) {
+        if (typeof goPage === 'function') goPage('chat');
+        if (typeof loadConv === 'function') loadConv(Number(_notifConvId));
+      } else {
+        window.__aleemPendingConvId = Number(_notifConvId);
+      }
     }
 
     // [FIX] Welcome speech must wait until speechSynthesis voices are loaded.
@@ -9357,6 +9806,13 @@ function bindAllEvents() {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
     });
     chatInput.addEventListener('input', autoResize);
+    // [ADDED — Smart TTS Auto-Stop] Fires on typing AND on paste (paste
+    // into a text input dispatches the same 'input' event) — the user
+    // composing a new message always takes priority over an old reply
+    // still being read aloud.
+    chatInput.addEventListener('input', function() {
+      if (typeof stopSpeaking === 'function') stopSpeaking();
+    });
   }
   if (micBtn) micBtn.addEventListener('click', function(e) {
     dbg('micBtn click'); toggleMic();
@@ -9770,6 +10226,11 @@ function handleDataAction(action) {
   else if (action === 'clear-all-history') { clearAllHistory(); }
 }
 function goPage(name) {
+  // [ADDED — Smart TTS Auto-Stop] goPage() is the single chokepoint for all
+  // sidebar navigation (New Chat, History, Dashboard, Workflows, Settings,
+  // Profile, etc.) as well as loadConv()'s conversation switch — stopping
+  // here covers every "user navigated away" case in one place.
+  if (typeof stopSpeaking === 'function') stopSpeaking();
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
 
@@ -10828,6 +11289,9 @@ function stopTypingAnimation() {
 // exactly as generated. Never deletes anything already on screen.
 function stopGeneration() {
   if (!S.busy && !S._genAbort) return;
+  // [ADDED — Smart TTS Auto-Stop] Pressing Stop Generation is an explicit
+  // "stop everything" signal — any TTS reading an older reply should stop too.
+  if (typeof stopSpeaking === 'function') stopSpeaking();
   S._stopRequested = true;
 
   if (S._genAbort) { try { S._genAbort.abort(); } catch (e) {} }
@@ -11995,6 +12459,9 @@ function initImageUpload() {
     fileInput.addEventListener('change', function(e) {
       var files = e.target.files;
       if (!files || !files.length) return;
+      // [ADDED — Smart TTS Auto-Stop] Attaching a file means the user is
+      // actively composing a new message.
+      if (typeof stopSpeaking === 'function') stopSpeaking();
 
       var file = files[0];
       // Reset value immediately so same file can be picked again (iOS Safari fix)
@@ -12630,6 +13097,11 @@ async function fetchViaProxy(model, imgs) {
 // single automatic retry after a Groq quota/rate-limit failover. Guards
 // against bouncing back and forth between providers (requirement 5).
 async function callGemini(imgsData, isFailoverRetry) {
+  // [ADDED — Smart TTS Auto-Stop] callGemini() is the single chokepoint for
+  // every AI request (send, regenerate, workflow auto-trigger, failover
+  // retry) — the user's new request always takes priority over an old
+  // reply still being read aloud.
+  if (typeof stopSpeaking === 'function') stopSpeaking();
   // imgsData: array of { dataUrl, mimeType } or [] / undefined
   // Hydrate any URL-only images (Cloudinary) into base64 in memory first.
   var imgs = await hydrateImgsForVision(imgsData || []);
@@ -13468,21 +13940,47 @@ function regenLast(msgId) {
   callGemini([]);
 }
 
+// [ADDED — Smart TTS Auto-Stop] Tracks whichever message avatar is
+// currently showing the "speaking" glow, plus the polling interval that
+// watches for it to finish. Kept global (not local to speakEl) so that
+// tapping a second message's speaker button while the first is still
+// talking can immediately clear the first avatar's glow, instead of
+// waiting on a stale interval that was watching the global
+// speechSynthesis.speaking flag (which flips back to true right away
+// once the new utterance starts, so the old interval would otherwise
+// never fire).
+var _speakElAvatar = null;
+var _speakElCheckInterval = null;
+
 function speakEl(id) {
   var el = document.getElementById(id);
   if (!el) return;
   var msgEl = el.closest('.msg');
   var avImg = msgEl ? msgEl.querySelector('.msg-av-logo') : null;
+
+  // A different message was mid-speech — stop watching it and clear its
+  // glow right now rather than leaving it glowing indefinitely.
+  if (_speakElCheckInterval) {
+    clearInterval(_speakElCheckInterval);
+    _speakElCheckInterval = null;
+  }
+  if (_speakElAvatar && _speakElAvatar !== avImg) {
+    _speakElAvatar.classList.remove('av-speaking');
+  }
+
   if (avImg) {
     avImg.classList.add('av-speaking');
   }
+  _speakElAvatar = avImg || null;
   speakText(el.innerText.slice(0, 500));
   // Remove speaking glow when TTS ends
   if (avImg && 'speechSynthesis' in window) {
-    var check = setInterval(function() {
+    _speakElCheckInterval = setInterval(function() {
       if (!window.speechSynthesis.speaking) {
         avImg.classList.remove('av-speaking');
-        clearInterval(check);
+        clearInterval(_speakElCheckInterval);
+        _speakElCheckInterval = null;
+        if (_speakElAvatar === avImg) _speakElAvatar = null;
       }
     }, 300);
   }
@@ -13497,6 +13995,9 @@ function speakEl(id) {
 // from via autoSaveConversation()/persist().
 function editMessage(msgId) {
   if (S.busy) { toast('⏳ Please wait for the current response to finish'); return; }
+  // [ADDED — Smart TTS Auto-Stop] Editing a prompt is a clear signal the
+  // user's attention has moved away from anything currently being read aloud.
+  if (typeof stopSpeaking === 'function') stopSpeaking();
   var msgEl = document.getElementById(msgId);
   if (!msgEl) return;
 
@@ -14302,6 +14803,34 @@ function populateVoiceSelect() {
 // Cleared before each new call so overlapping speech is impossible.
 var _speakTextTimer = null;
 
+// [ADDED — Smart TTS Auto-Stop] Single, centralized stop point for the
+// read-aloud TTS (speakText/speakEl). Called from every place the user's
+// attention/context changes (navigation, new message, edit, stop
+// generation, voice input, typing/paste, attaching files, opening
+// Canvas/App Builder, and app-lifecycle events like backgrounding or
+// closing the tab) so speech never keeps playing after the user has
+// moved on. Idempotent and safe to call even when nothing is speaking.
+// Does NOT touch Voice Chat Mode's own vc.speaking/vcStopSpeaking system
+// (vcStop/vcStopSpeaking), which already manages its own interruption
+// logic independently — this only owns the passive "read message aloud"
+// TTS path.
+function stopSpeaking() {
+  if ('speechSynthesis' in window) {
+    clearTimeout(_speakTextTimer);
+    _speakTextTimer = null;
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+    }
+  }
+  // Clear any leftover "speaking" glow on message avatars (speakEl's
+  // polling interval would eventually clear this too, but doing it here
+  // immediately avoids a stale glow lingering for up to 300ms).
+  document.querySelectorAll('.av-speaking').forEach(function(el) {
+    el.classList.remove('av-speaking');
+  });
+}
+window.stopSpeaking = stopSpeaking;
+
 function speakText(t) {
   if (!S.voiceOn || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
@@ -14448,6 +14977,9 @@ function updateIncognitoUI() {
 
 function toggleMic() { S.micOn ? stopMic() : startMic(); }
 function startMic() {
+  // [ADDED — Smart TTS Auto-Stop] Starting voice input means the user wants
+  // to talk now — any TTS currently reading a reply should stop immediately.
+  if (typeof stopSpeaking === 'function') stopSpeaking();
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { toast('⚠️ Voice input not supported in this browser'); return; }
   S.mic = new SR();
@@ -18025,13 +18557,80 @@ if ('serviceWorker' in navigator) {
 
   function showAuthGate() {
     var gate = document.getElementById('authGate');
-    if (gate) gate.style.display = 'flex';
+    if (gate) {
+      gate.classList.remove('hiding');
+      gate.style.display = 'flex';
+      // Force a reflow so the opacity/transform transition actually plays
+      // instead of snapping straight to visible (avoids the abrupt flash
+      // between the splash fading out and the auth card appearing).
+      void gate.offsetWidth;
+      gate.classList.add('show');
+    }
+    syncAuthOfflineState();
   }
+
+  // [ADDED] Reflects navigator.onLine on the auth card — replaces the
+  // sign-in controls with a "you're offline" message + Retry instead of
+  // letting a sign-in attempt fail with a generic network error.
+  function syncAuthOfflineState() {
+    var card = document.querySelector('.auth-card');
+    var box  = document.getElementById('authOfflineBox');
+    var isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+    if (card) card.classList.toggle('offline', isOffline);
+    if (box)  box.classList.toggle('show', isOffline);
+  }
+  window.addEventListener('online',  syncAuthOfflineState);
+  window.addEventListener('offline', syncAuthOfflineState);
+  document.addEventListener('DOMContentLoaded', function() {
+    var retryBtn = document.getElementById('authOfflineRetryBtn');
+    if (retryBtn) retryBtn.addEventListener('click', function() {
+      syncAuthOfflineState();
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        retryBtn.textContent = 'Still offline…';
+        setTimeout(function() { retryBtn.textContent = 'Retry'; }, 1200);
+      }
+    });
+  });
 
   function hideAuthGate() {
     var gate = document.getElementById('authGate');
-    if (gate) gate.style.display = 'none';
+    // Cross-fade straight into the app instead of an abrupt display:none
+    // cut — removes the "extra loading screen" feeling while touching
+    // nothing about how/when auth resolves.
     showApp();
+    if (gate) {
+      gate.classList.remove('show');
+      gate.classList.add('hiding');
+      setTimeout(function() {
+        gate.style.display = 'none';
+        gate.classList.remove('hiding');
+      }, 320);
+    }
+  }
+
+  // [ADDED] Welcome-back + skeleton interstitial, shown only on this
+  // persisted-session reveal path (a returning user's page load) — not on
+  // interactive sign-in, which already has its own success feedback.
+  function showWelcomeBackThenApp(user) {
+    var wb = document.getElementById('welcomeBackOverlay');
+    var skel = document.getElementById('appSkeleton');
+    var wbTitle = document.getElementById('wbTitle');
+    if (wbTitle) {
+      var first = (user && user.displayName) ? user.displayName.split(' ')[0] : '';
+      wbTitle.textContent = first ? ('Welcome back, ' + first) : 'Welcome back';
+    }
+    showApp(); // real content renders underneath immediately, as before
+    if (skel) { skel.style.display = 'flex'; skel.classList.add('show'); }
+    if (wb) { wb.classList.add('show'); }
+    var holdMs = 400 + Math.floor(Math.random() * 300); // 400–700ms
+    setTimeout(function() {
+      if (wb) { wb.classList.add('hiding'); }
+      if (skel) { skel.classList.add('hiding'); }
+      setTimeout(function() {
+        if (wb)   { wb.classList.remove('show', 'hiding'); wb.style.display = 'none'; }
+        if (skel) { skel.classList.remove('show', 'hiding'); skel.style.display = 'none'; }
+      }, 350);
+    }, holdMs);
   }
 
   // Reveal the correct screen (app or login) and only then hide the splash.
@@ -18043,7 +18642,7 @@ if ('serviceWorker' in navigator) {
     revealed = true;
 
     if (currentUser) {
-      showApp();
+      showWelcomeBackThenApp(currentUser);
     } else {
       showAuthGate();
     }
@@ -18132,6 +18731,11 @@ if ('serviceWorker' in navigator) {
       window.__aleemSetConvSyncDB(user ? firestoreDB : null, user ? user.uid : null);
     }
 
+    // [POLISH — Remember user intent] Resume a deep-linked conversation
+    // (e.g. opened from a notification while signed out) now that sign-in
+    // has succeeded, instead of silently dropping the destination.
+    if (user) resumePendingDestination();
+
     if (!revealed) {
       reveal();
       return;
@@ -18148,6 +18752,21 @@ if ('serviceWorker' in navigator) {
     }
   });
 
+  // [POLISH — Remember user intent] Resumes a pending deep-link destination
+  // (stashed on window.__aleemPendingConvId by the main app script when a
+  // notification/shared-conversation link opened while signed out) once the
+  // user has successfully authenticated. A short delay gives the just-wired
+  // Firestore conversation sync a moment to catch up before we open it.
+  function resumePendingDestination() {
+    if (!window.__aleemPendingConvId) return;
+    var cid = window.__aleemPendingConvId;
+    window.__aleemPendingConvId = null;
+    setTimeout(function() {
+      if (typeof goPage === 'function') goPage('chat');
+      if (typeof loadConv === 'function') loadConv(cid);
+    }, 700);
+  }
+
   // Safety net: if Firebase auth state hasn't resolved within 6s (e.g. offline),
   // don't trap the user on the splash forever — treat as signed-out.
   setTimeout(function() {
@@ -18163,16 +18782,115 @@ if ('serviceWorker' in navigator) {
     var continueWithGoogleBtn = document.getElementById('continueWithGoogleBtn');
     var logoutBtn = document.getElementById('logoutBtn');
 
+    // [POLISH] Loading-state helpers for the Google button(s). Swaps the
+    // label span for a spinner + "Signing you in…" without touching the
+    // icon/markup otherwise, and disables the button so a double-tap can't
+    // fire two concurrent sign-in attempts.
+    var _signInInProgress = false;
+    function setGoogleButtonsLoading(loading) {
+      [continueWithGoogleBtn, googleLoginBtn].forEach(function(btn) {
+        if (!btn) return;
+        var label = btn.querySelector('.auth-btn-label');
+        if (loading) {
+          if (label && btn.dataset.origLabel === undefined) btn.dataset.origLabel = label.textContent;
+          if (label) label.textContent = 'Signing you in…';
+          if (!btn.querySelector('.auth-spinner')) {
+            var spinner = document.createElement('span');
+            spinner.className = 'auth-spinner';
+            btn.insertBefore(spinner, btn.firstChild);
+          }
+          btn.classList.add('loading');
+          btn.disabled = true;
+          btn.setAttribute('aria-busy', 'true');
+        } else {
+          var existingSpinner = btn.querySelector('.auth-spinner');
+          if (existingSpinner) existingSpinner.remove();
+          if (label && btn.dataset.origLabel !== undefined) label.textContent = btn.dataset.origLabel;
+          btn.classList.remove('loading');
+          btn.disabled = false;
+          btn.removeAttribute('aria-busy');
+        }
+      });
+    }
+
+    // [POLISH] Elegant inline error banner on the auth card (falls back to
+    // the existing toast() when the card isn't on screen, e.g. errors from
+    // the Settings-page Google button).
+    function showAuthError(message) {
+      var box = document.getElementById('authErrorMsg');
+      if (box) {
+        box.textContent = message;
+        box.classList.add('show');
+      }
+      if (typeof toast === 'function') toast('⚠️ ' + message);
+    }
+    function clearAuthError() {
+      var box = document.getElementById('authErrorMsg');
+      if (box) { box.classList.remove('show'); box.textContent = ''; }
+    }
+
+    // [POLISH] Maps Firebase/GIS error codes to clear, elegant copy instead
+    // of raw SDK error text — covers cancelled login, network failure,
+    // generic auth failure, popup closed, and timeout.
+    function friendlyAuthError(error) {
+      var code = (error && (error.code || error.type)) || '';
+      var msg  = (error && error.message) || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' ||
+          code === 'popup_closed' || code === 'user_logged_out') {
+        return 'Sign-in was cancelled.';
+      }
+      if (code === 'auth/network-request-failed' || /network/i.test(msg)) {
+        return 'Network error — check your connection and try again.';
+      }
+      if (code === 'popup_failed_to_open') {
+        return 'The sign-in popup was blocked. Please try again.';
+      }
+      if (code === 'auth/timeout' || /timeout/i.test(msg)) {
+        return 'Sign-in timed out. Please try again.';
+      }
+      return 'Sign-in failed. Please try again.';
+    }
+
     function doGoogleSignIn() {
+      // Prevent double taps from firing overlapping sign-in attempts.
+      if (_signInInProgress) return;
+      // [ADDED] Don't even attempt sign-in while offline — show the clear
+      // offline state instead of a generic network-error message.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        syncAuthOfflineState();
+        return;
+      }
+      _signInInProgress = true;
+      clearAuthError();
+      setGoogleButtonsLoading(true);
+
       var onSuccess = function(result) {
         var user = result && result.user ? result.user : result;
         updateProfileUI(user);
-        hideAuthGate();
+        _signInInProgress = false;
+        setGoogleButtonsLoading(false);
         if (typeof toast === 'function') toast('✅ Signed in as ' + (user.displayName || 'Google user'));
+        // Subtle, non-intrusive success confirmation before handing off to
+        // the app — no popup, just a brief glow on the card itself.
+        var card = document.querySelector('.auth-card');
+        if (card) {
+          card.classList.add('success');
+          setTimeout(function() { card.classList.remove('success'); }, 500);
+        }
+        setTimeout(hideAuthGate, 220);
+        maybeShowOnboarding(result, user);
       };
       var onErr = function(error) {
         console.error('Firebase Google sign-in error:', error);
-        if (typeof toast === 'function') toast('⚠️ Sign-in failed: ' + ((error && error.message) || 'please try again'));
+        _signInInProgress = false;
+        setGoogleButtonsLoading(false);
+        // A user-cancelled popup isn't really an "error" worth alarming
+        // about — skip the banner for that case, everything else gets one.
+        var code = (error && (error.code || error.type)) || '';
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' || code === 'popup_closed') {
+          return;
+        }
+        showAuthError(friendlyAuthError(error));
       };
 
       // Preferred: Google Identity Services — opens the account chooser
@@ -18196,31 +18914,155 @@ if ('serviceWorker' in navigator) {
         });
     }
 
+    // [ADDED] First-time onboarding — shown once, only when Firebase reports
+    // this sign-in created a brand-new account. A localStorage flag (keyed
+    // per uid) is kept as a belt-and-suspenders guard so a returning user
+    // can never see it twice even across isNewUser edge cases.
+    function maybeShowOnboarding(result, user) {
+      var isNew = !!(result && result.additionalUserInfo && result.additionalUserInfo.isNewUser);
+      if (!isNew || !user) return;
+      var flagKey = 'aleem_onboarded_' + user.uid;
+      try { if (localStorage.getItem(flagKey)) return; } catch (e) {}
+      setTimeout(function() {
+        var overlay = document.getElementById('onboardingOverlay');
+        if (overlay) overlay.classList.add('show');
+      }, 500);
+      try { localStorage.setItem(flagKey, '1'); } catch (e) {}
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+      var obDone = document.getElementById('onboardingDoneBtn');
+      var obNotif = document.getElementById('onboardingNotifToggle');
+      if (obDone) obDone.addEventListener('click', function() {
+        var overlay = document.getElementById('onboardingOverlay');
+        if (overlay) overlay.classList.remove('show');
+        if (obNotif && obNotif.checked && window.Notification && Notification.requestPermission) {
+          try { Notification.requestPermission(); } catch (e) {}
+        }
+      });
+    });
+
     // Resolve any pending redirect-based sign-in (Android WebView/PWA flow)
     getRedirectResult(auth)
       .then(function(result) {
         if (result && result.user) {
           updateProfileUI(result.user);
-          hideAuthGate();
           if (typeof toast === 'function') toast('✅ Signed in as ' + (result.user.displayName || 'Google user'));
+          setTimeout(hideAuthGate, 220);
+          maybeShowOnboarding(result, result.user);
         }
       })
       .catch(function(error) {
         console.error('Firebase redirect sign-in error:', error);
+        showAuthError(friendlyAuthError(error));
       });
 
     if (googleLoginBtn) googleLoginBtn.addEventListener('click', doGoogleSignIn);
     if (continueWithGoogleBtn) continueWithGoogleBtn.addEventListener('click', doGoogleSignIn);
 
-    if (logoutBtn) logoutBtn.addEventListener('click', function() {
+    // [ADDED] Email sign-in UI. Firebase Email/Password (or Email Link)
+    // sign-in is not yet enabled for this project, so this only validates
+    // the input and clearly tells the user what backend configuration is
+    // still needed — it never touches or removes Google Sign-In.
+    var authEmailForm = document.getElementById('authEmailForm');
+    var _emailSubmitInProgress = false;
+    if (authEmailForm) authEmailForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (_emailSubmitInProgress) return;
+      var input = document.getElementById('authEmailInput');
+      var email = input ? input.value.trim() : '';
+      if (!email) return;
+      var emailBtn = document.getElementById('authEmailContinueBtn');
+      var label = emailBtn ? emailBtn.querySelector('.auth-btn-label') : null;
+      _emailSubmitInProgress = true;
+      if (emailBtn) {
+        if (label) { emailBtn.dataset.origLabel = label.textContent; label.textContent = 'Checking…'; }
+        emailBtn.insertBefore(Object.assign(document.createElement('span'), { className: 'auth-spinner' }), emailBtn.firstChild);
+        emailBtn.classList.add('loading');
+        emailBtn.disabled = true;
+        emailBtn.setAttribute('aria-busy', 'true');
+      }
+      setTimeout(function() {
+        _emailSubmitInProgress = false;
+        if (emailBtn) {
+          var spinner = emailBtn.querySelector('.auth-spinner');
+          if (spinner) spinner.remove();
+          if (label && emailBtn.dataset.origLabel !== undefined) label.textContent = emailBtn.dataset.origLabel;
+          emailBtn.classList.remove('loading');
+          emailBtn.disabled = false;
+          emailBtn.removeAttribute('aria-busy');
+        }
+        if (typeof toast === 'function') {
+          toast('📧 Email sign-in isn\'t enabled yet — enable Email/Password or Email Link in Firebase Console to activate it. Please continue with Google for now.');
+        }
+      }, 500);
+    });
+
+    // [ADDED] Shared sign-out call, used by both the settings-page Logout
+    // button and the topbar profile menu's Logout item, now gated behind
+    // a confirmation dialog (see openLogoutConfirm/closeLogoutConfirm below).
+    function performSignOut() {
+      // [ADDED] "Signing you out…" → checkmark, before the existing
+      // onAuthStateChanged-driven auth-gate reveal underneath.
+      var overlay = document.getElementById('signOutOverlay');
+      var spinner = document.getElementById('soSpinner');
+      var check   = document.getElementById('soCheck');
+      var title   = document.getElementById('soTitle');
+      if (overlay) { overlay.classList.remove('hiding'); overlay.classList.add('show'); }
+      if (spinner) spinner.style.display = '';
+      if (check)   check.style.display = 'none';
+      if (title)   title.textContent = 'Signing you out…';
+
       signOut(auth)
         .then(function() {
           if (typeof toast === 'function') toast('👋 Logged out');
+          if (spinner) spinner.style.display = 'none';
+          if (check)   check.style.display = 'flex';
+          if (title)   title.textContent = 'Logged out successfully';
+          setTimeout(function() {
+            if (overlay) {
+              overlay.classList.add('hiding');
+              setTimeout(function() { overlay.classList.remove('show', 'hiding'); }, 320);
+            }
+          }, 550);
         })
         .catch(function(error) {
           console.error('Firebase sign-out error:', error);
           if (typeof toast === 'function') toast('⚠️ Logout failed: ' + (error.message || 'please try again'));
+          if (overlay) { overlay.classList.remove('show'); }
         });
+    }
+
+    function openLogoutConfirm() {
+      var overlay = document.getElementById('logoutConfirmOverlay');
+      if (overlay) overlay.classList.add('show');
+    }
+    function closeLogoutConfirm() {
+      var overlay = document.getElementById('logoutConfirmOverlay');
+      if (overlay) overlay.classList.remove('show');
+    }
+
+    var logoutConfirmOverlay = document.getElementById('logoutConfirmOverlay');
+    var logoutCancelBtn      = document.getElementById('logoutCancelBtn');
+    var logoutConfirmBtn     = document.getElementById('logoutConfirmBtn');
+    var logoutModalClose     = document.getElementById('logoutModalClose');
+
+    if (logoutCancelBtn)  logoutCancelBtn.addEventListener('click', closeLogoutConfirm);
+    if (logoutModalClose) logoutModalClose.addEventListener('click', closeLogoutConfirm);
+    if (logoutConfirmBtn) logoutConfirmBtn.addEventListener('click', function() {
+      closeLogoutConfirm();
+      performSignOut();
+    });
+    if (logoutConfirmOverlay) logoutConfirmOverlay.addEventListener('click', function(e) {
+      if (e.target === logoutConfirmOverlay) closeLogoutConfirm();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Escape') return;
+      var ov = document.getElementById('logoutConfirmOverlay');
+      if (ov && ov.classList.contains('show')) closeLogoutConfirm();
+    });
+
+    if (logoutBtn) logoutBtn.addEventListener('click', function() {
+      openLogoutConfirm();
     });
 
     // ── Topbar profile dropdown ───────────────────────────────────
@@ -18301,14 +19143,7 @@ if ('serviceWorker' in navigator) {
 
     if (pdLogout) pdLogout.addEventListener('click', function() {
       if (profileDropdown) profileDropdown.style.display = 'none';
-      signOut(auth)
-        .then(function() {
-          if (typeof toast === 'function') toast('👋 Logged out');
-        })
-        .catch(function(error) {
-          console.error('Firebase sign-out error:', error);
-          if (typeof toast === 'function') toast('⚠️ Logout failed: ' + (error.message || 'please try again'));
-        });
+      openLogoutConfirm();
     });
   });
 </script>
@@ -22614,6 +23449,9 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
   }
 
   function openPanel() {
+    // [ADDED — Smart TTS Auto-Stop] Opening Canvas shifts the user's
+    // attention away from the chat/reply being read aloud.
+    if (typeof stopSpeaking === 'function') stopSpeaking();
     var panel = $('aiCanvasPanel');
     panel.classList.add('open');
     panel.setAttribute('aria-hidden', 'false');
@@ -23104,6 +23942,9 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
   }
 
   function openPanel() {
+    // [ADDED — Smart TTS Auto-Stop] Opening App Builder shifts the user's
+    // attention away from the chat/reply being read aloud.
+    if (typeof stopSpeaking === 'function') stopSpeaking();
     var panel = $('aiAppBuilderPanel');
     panel.classList.add('open');
     panel.setAttribute('aria-hidden', 'false');
