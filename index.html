@@ -1458,6 +1458,60 @@
     .overflow-dropdown { min-width: 200px; }
   }
 
+  /* [POLISH] Overflow (⋮) menu readability pass — CSS-only contrast boost.
+     Scoped strictly to ".overflow-dropdown .pd-item" / ".pd-sep" so the
+     profile dropdown (which shares the same .pd-item / .pd-sep classes)
+     is left completely untouched. No HTML/JS/structure changes. */
+  .overflow-dropdown .pd-item {
+    color: var(--text-1);
+    opacity: 0.95;
+    transition: background 0.18s cubic-bezier(0.4,0,0.2,1),
+                color 0.18s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.18s cubic-bezier(0.4,0,0.2,1),
+                box-shadow 0.18s cubic-bezier(0.4,0,0.2,1);
+  }
+  .overflow-dropdown .pd-item:hover {
+    background: rgba(56,189,248,0.14);
+    color: var(--text-1);
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.22), 0 0 10px rgba(56,189,248,0.16);
+  }
+  .overflow-dropdown .pd-item:active {
+    background: rgba(56,189,248,0.20);
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.30), 0 0 12px rgba(56,189,248,0.22);
+  }
+  .overflow-dropdown .pd-item:disabled,
+  .overflow-dropdown .pd-item.disabled {
+    opacity: 0.62;
+  }
+  .overflow-dropdown .pd-item:disabled:hover,
+  .overflow-dropdown .pd-item.disabled:hover,
+  .overflow-dropdown .pd-item:disabled:active,
+  .overflow-dropdown .pd-item.disabled:active {
+    background: none;
+    box-shadow: none;
+    opacity: 0.62;
+  }
+  .overflow-dropdown .pd-item.danger {
+    color: #ff6b6b;
+    opacity: 0.97;
+  }
+  .overflow-dropdown .pd-item.danger:hover {
+    background: rgba(239,68,68,0.14);
+    color: #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.28), 0 0 10px rgba(239,68,68,0.18);
+  }
+  .overflow-dropdown .pd-item.danger:active {
+    background: rgba(239,68,68,0.20);
+    color: #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.36), 0 0 12px rgba(239,68,68,0.24);
+  }
+  .overflow-dropdown .pd-sep {
+    background: var(--border-hi);
+    opacity: 0.6;
+  }
+
   /* ================================================================
      PAGES
   ================================================================ */
@@ -2211,6 +2265,16 @@
   }
   .send-btn:hover { transform: translateY(-1px) scale(1.06); box-shadow: 0 0 0 1px rgba(56,189,248,0.55), 0 5px 18px var(--glow1); }
   .send-btn:active { transform: translateY(0) scale(0.94); }
+  /* [ADDED — Stop Generation] Send button morphs into a Stop button while
+     S.busy is true. Purely visual — swapped via .stop-mode class + innerHTML
+     in setSendBtnState(); click handling itself is routed in the existing
+     #sendBtn listener (stopGeneration() vs handleSend()). */
+  .send-btn.stop-mode {
+    background: linear-gradient(135deg,#f87171,#fb923c);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.35) inset, 0 0 0 1px rgba(248,113,113,0.5), 0 4px 14px rgba(248,113,113,0.28);
+    font-size: 0.8rem;
+  }
+  .send-btn.stop-mode:hover { box-shadow: 0 0 0 1px rgba(248,113,113,0.65), 0 5px 18px rgba(248,113,113,0.32); }
 
   /* ── [ADDED] SUBTLE COMPACT STATUS LINE ──
      Replaces the old "Enter to send · Shift+Enter…" debug-style hint.
@@ -7117,6 +7181,268 @@
 </div><!-- /app -->
 
 <!-- ================================================================
+     ICON INFRASTRUCTURE  (Phase 0 — preparation only)
+     ------------------------------------------------------------
+     This block prepares the app for a future one-time migration
+     from emoji icons to a real icon library. Nothing here is called
+     by any existing page, component, or event listener yet — no
+     emoji have been replaced, no HTML/CSS elsewhere has changed, and
+     the app renders identically to before this block existed.
+
+     The helper is deliberately renderer-agnostic: icon() and
+     icon.html() only ever deal in semantic names (icon('share'),
+     icon('history')) and know nothing about which icon library is
+     actually in use. That knowledge is isolated to two places —
+     ICON_REGISTRY (semantic name → library-specific icon name) and
+     _iconRenderer (library-specific icon name → element/string).
+     Lucide is the currently planned library and is wired up as the
+     default renderer, but swapping libraries later means writing one
+     new renderer, not rewriting call sites across the app.
+
+     Once the real migration happens, replacing an emoji anywhere
+     in the app becomes a one-line change:
+
+         '🔗 Share'          →   el.appendChild(icon('share'))
+         '<span>🔗</span>'  →   '<span>' + icon.html('share') + '</span>'
+
+     icon(name) returns a real DOM element (no innerHTML involved) —
+     safer, and easy to attach listeners to or otherwise manipulate.
+     icon.html(name) returns the equivalent HTML string, kept for
+     backward compatibility with the many call sites in this codebase
+     that build markup via string concatenation rather than DOM APIs.
+     Both read from the same registry/config/renderer, so there is
+     exactly one source of truth either way.
+
+     See the "ICON INFRASTRUCTURE" section of the project's icon
+     audit/migration doc for the full API reference, registry
+     structure, naming convention, and step-by-step migration plan.
+================================================================ -->
+<script>
+'use strict';
+
+// ---- 1. Shared constants ---------------------------------------------
+// Every size/spacing/stroke value used by icons anywhere in the app is
+// controlled from this single object. Nothing reads these yet.
+// Frozen so nothing elsewhere in the app can accidentally mutate a
+// shared value at runtime (e.g. `ICON_CONFIG.sizes.nav = 99` silently
+// fails instead of corrupting every nav icon).
+var ICON_CONFIG = Object.freeze({
+  strokeWidth: 1.75,   // Lucide default is 2; 1.75 reads lighter against the glass UI
+  spacing: 8,           // px gap between an icon and its adjacent label, app-wide
+  sizes: Object.freeze({
+    default: 18,        // fallback size when no context is given
+    nav:     20,        // sidebar / primary navigation items
+    action:  16,        // message-action row, inline toolbar buttons
+    inline:  14          // filter chips, small inline tags/badges
+  })
+});
+
+// ---- 2. Icon registry ---------------------------------------------------
+// Maps a semantic, meaning-based key (what the icon MEANS in ALEEM AI)
+// to the actual icon-library-specific name (what the icon library calls
+// it — currently Lucide's names, since Lucide is the planned library).
+// UI code should only ever reference the semantic key on the left —
+// never a library-specific name directly. This indirection is what lets
+// the underlying icon, icon library, or even icon set change later
+// without touching a single call site elsewhere in the app.
+//
+// NOTE: this registry is not exhaustive yet — it covers the icons named
+// in the initial icon audit as a starting scaffold. Additional semantic
+// names can be added here as they're identified during the real migration,
+// without changing the helper itself.
+var ICON_REGISTRY = Object.freeze({
+  // Navigation
+  newChat:     'square-pen',
+  chat:        'message-square',
+  dashboard:   'layout-dashboard',
+  knowledge:   'book-open',
+  search:      'search',
+  history:     'history',
+  memory:      'brain',
+  workflow:    'workflow',
+  voice:       'mic',
+  analytics:   'bar-chart-3',
+  premium:     'crown',
+  profile:     'user',
+  about:       'info',
+  settings:    'settings',
+  incognito:   'glasses',
+
+  // Actions
+  share:       'share-2',
+  rename:      'pencil',
+  edit:        'pencil',
+  delete:      'trash-2',
+  archive:     'archive',
+  pin:         'pin',
+  unpin:       'pin-off',
+  copy:        'copy',
+  download:    'download',
+  upload:      'upload',
+  save:        'save',
+  close:       'x',
+  add:         'plus',
+  regenerate:  'refresh-cw',
+  branch:      'git-branch',
+  bookmark:    'bookmark-plus',
+  like:        'thumbs-up',
+  dislike:     'thumbs-down',
+  speak:       'volume-2',
+  mute:        'volume-x',
+  canvas:      'file-text',
+  appBuilder:  'blocks',
+  undo:        'undo-2',
+  redo:        'redo-2',
+  preview:     'eye',
+  logIn:       'log-in',
+  logOut:      'log-out',
+  home:        'home',
+  folder:      'folder',
+  folderOpen:  'folder-open',
+  image:       'image',
+  send:        'send-horizontal',
+  model:       'bot',
+  personality: 'drama',
+  fastMode:    'zap',
+  success:     'check-circle-2',
+  warning:     'alert-triangle',
+  error:       'x-circle',
+  info:        'info',
+  target:      'target',
+  favorite:    'star',
+  calendar:    'calendar',
+  clock:       'clock',
+  globe:       'globe',
+  languages:   'languages'
+});
+
+// ---- 3. Renderer abstraction --------------------------------------------
+// icon()/icon.html() below never reference "Lucide" directly. All
+// library-specific rendering (how a resolved icon name becomes a DOM
+// element or an HTML string) is delegated to a small, swappable
+// "icon renderer" object. This is what keeps the helper renderer-
+// agnostic: swapping Lucide for Material Symbols (or anything else)
+// later means writing one new renderer and calling setIconRenderer(),
+// not touching icon(), icon.html(), or any call site in the app.
+var _iconRenderer = {
+  // Default renderer: implements Lucide's `data-lucide` + lucide.createIcons()
+  // convention. This is the ONLY place in the whole infrastructure that
+  // knows Lucide's markup convention exists.
+  toElement: function (libraryIconName, size, strokeWidth, className) {
+    var el = document.createElement('i');
+    el.setAttribute('data-lucide', libraryIconName);
+    el.className = 'app-icon' + className;
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.setAttribute('data-stroke-width', strokeWidth);
+    el.setAttribute('aria-hidden', 'true');
+    return el;
+  },
+  toHTML: function (libraryIconName, size, strokeWidth, className) {
+    return '<i data-lucide="' + libraryIconName + '"' +
+      ' class="app-icon' + className + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;"' +
+      ' data-stroke-width="' + strokeWidth + '"' +
+      ' aria-hidden="true"></i>';
+  }
+};
+
+// Swap the active rendering strategy (e.g. to move off Lucide later)
+// without changing icon(), icon.html(), or any of their call sites.
+// Any replacement renderer must implement toElement(...) and toHTML(...)
+// with the same signature as the default above.
+function setIconRenderer(renderer) {
+  if (!renderer || typeof renderer.toElement !== 'function' || typeof renderer.toHTML !== 'function') {
+    console.warn('[icon] setIconRenderer() ignored: renderer must implement toElement(...) and toHTML(...).');
+    return;
+  }
+  _iconRenderer = renderer;
+}
+
+// ---- 4. Icon helper ---------------------------------------------------
+// icon(name, opts?) → a real DOM <i> element. Once the icon library is
+// wired up (lucide.createIcons(), or an equivalent call for whatever
+// renderer is active), every element this helper produces will be
+// swapped for a real inline SVG in place — no markup changes needed
+// at that point.
+//
+// Returning a real element (rather than an HTML string) means call
+// sites never need innerHTML to insert an icon, can attach event
+// listeners directly to it, and can read/modify it like any other DOM
+// node. This is the default because it's the safer option — but
+// icon.html(name, opts) below produces the equivalent HTML string for
+// the many places in this codebase that build markup via string
+// concatenation instead of DOM APIs, kept for backward compatibility
+// with those existing rendering paths.
+//
+// Neither icon() nor icon.html() know what icon library is in use —
+// that knowledge lives only in ICON_REGISTRY (semantic name → library-
+// specific icon name) and in _iconRenderer (library-specific name →
+// element/string). The rest of the app only ever sees semantic names:
+// icon('share'), icon('history'), icon('delete'), etc.
+//
+// This function is not called anywhere in the app yet. It exists so
+// that each future icon replacement is a one-line change: swap an
+// emoji literal for icon('semanticName') (element) or
+// icon.html('semanticName') (string) and nothing else.
+//
+//   const el = icon('share');            // → DOM element
+//   button.appendChild(el);
+//
+//   icon.html('delete', { size: 16 })    // → HTML string, 16px
+//   icon.nav('history')                  // → DOM element, nav size (20px)
+//   icon.action('copy')                  // → DOM element, action size (16px)
+//   icon.inline('pin')                   // → DOM element, inline size (14px)
+
+// Shared resolver — looks up the library-specific icon name + computes
+// size/stroke/class for a semantic icon name. Used internally by both
+// icon() and icon.html() so there is exactly one place that reads
+// ICON_REGISTRY/ICON_CONFIG. If the semantic name isn't registered, this
+// logs a clear development warning and falls back to a safe generic
+// icon rather than throwing or rendering nothing.
+function _resolveIconAttrs(name, opts) {
+  opts = opts || {};
+  var libraryIconName = ICON_REGISTRY[name];
+  if (!libraryIconName) {
+    console.warn('[icon] Unknown semantic icon name: "' + name + '". Add it to ICON_REGISTRY before using it. Falling back to a generic placeholder icon.');
+    libraryIconName = 'circle-help';
+  }
+  return {
+    libraryIconName: libraryIconName,
+    size: opts.size || ICON_CONFIG.sizes.default,
+    strokeWidth: opts.strokeWidth || ICON_CONFIG.strokeWidth,
+    className: opts.className ? (' ' + opts.className) : ''
+  };
+}
+
+function icon(name, opts) {
+  var a = _resolveIconAttrs(name, opts);
+  return _iconRenderer.toElement(a.libraryIconName, a.size, a.strokeWidth, a.className);
+}
+
+// String variant of icon(), for template-literal / string-concatenation
+// call sites, and for backward compatibility with existing rendering
+// paths that expect an HTML string rather than a DOM node. Produces
+// markup identical to what icon(name, opts) would otherwise render as
+// a live element.
+icon.html = function (name, opts) {
+  var a = _resolveIconAttrs(name, opts);
+  return _iconRenderer.toHTML(a.libraryIconName, a.size, a.strokeWidth, a.className);
+};
+
+// Expose the renderer swap on the icon namespace too, purely as a
+// convenience alongside icon.nav / icon.action / icon.inline below.
+icon.setRenderer = setIconRenderer;
+
+// Size-preset convenience wrappers — optional sugar over icon(name, {size}).
+// Each returns a DOM element, matching icon()'s default. String-based
+// equivalents are available as icon.html(name, { size: ICON_CONFIG.sizes.X }).
+icon.nav    = function (name) { return icon(name, { size: ICON_CONFIG.sizes.nav }); };
+icon.action = function (name) { return icon(name, { size: ICON_CONFIG.sizes.action }); };
+icon.inline = function (name) { return icon(name, { size: ICON_CONFIG.sizes.inline }); };
+</script>
+
+<!-- ================================================================
      JAVASCRIPT
 ================================================================ -->
 <script>
@@ -8360,6 +8686,15 @@ function init() {
     initSettings();
     initImageUpload();
 
+    // [ADDED — Resume After Interruption] Checked once the splash is gone so
+    // the banner never gets covered/dismissed by the splash-out animation.
+    // See findInterruptedConversation() for why this check is safe to base
+    // purely on already-persisted history (survives a full app/process kill).
+    if (!S.incognito) {
+      var _interruptedConv = findInterruptedConversation();
+      if (_interruptedConv) showResumeBanner(_interruptedConv);
+    }
+
     // [FIX] Welcome speech must wait until speechSynthesis voices are loaded.
     // On Android Chrome/WebView voices load asynchronously; calling speakText()
     // before getVoices() returns a non-empty list means pickVoiceForLang() can
@@ -8993,7 +9328,17 @@ function bindAllEvents() {
   var micBtn    = document.getElementById('micBtn');
   if (sendBtn) sendBtn.addEventListener('click', function(e) {
     e.stopPropagation();
+    // [ADDED — Stop Generation] While a response is generating, the same
+    // button acts as Stop instead of Send (see setSendBtnState()).
+    if (S.busy || S._genAbort) { dbg('sendBtn click -> stopGeneration'); stopGeneration(); return; }
     dbg('sendBtn click');
+    // [ADDED — Background Notifications] Ask for Notification permission
+    // from inside this real user-gesture click (best chance of the browser
+    // honoring it without a gesture-requirement warning). No-ops silently
+    // if already granted/denied or unsupported.
+    if ('Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch(e) {}
+    }
     handleSend();
   });
   if (chatInput) {
@@ -10379,6 +10724,303 @@ function searchCat(prompt) {
 }
 
 // ── CHAT ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// [ADDED] STOP GENERATION + BACKGROUND COMPLETION NOTIFICATION
+// ══════════════════════════════════════════════════════════════════
+// State is intentionally kept on S so it survives exactly as long as the
+// rest of the chat state does, and so nothing here needs a new global.
+//   S._genAbort     — AbortController for the in-flight network request(s)
+//                      of the current turn (shared across model fallback/
+//                      retry attempts within the same turn).
+//   S._genConvId    — numeric conversation id (matches history[].id) that
+//                      this turn's reply belongs to, captured once at the
+//                      start of the turn — used so a background-completion
+//                      notification can jump back to the right conversation.
+//   S._stopRequested— true the instant the user presses Stop; every retry/
+//                      fallback loop checks this and bails out immediately
+//                      instead of continuing to the next provider/attempt.
+//   S._activeTypId  — id of the current "ALEEM AI is thinking…" bubble, so
+//                      Stop can remove it even before any reply has arrived.
+//   S._typingCtl    — active fake-typing-reveal controller (see typeMessage),
+//                      so Stop can freeze it at exactly what's on screen.
+
+// Turns the Send button into a Stop button (and back). Called by
+// beginGeneration()/endGeneration() — no other call site needs to touch
+// button UI directly, so every existing S.busy=false path keeps working
+// unmodified as long as it's reached via callGemini/callGroqDirect, which
+// are now only ever entered through beginGeneration()/endGeneration() in
+// handleSend().
+function setSendBtnState(generating) {
+  var btn = document.getElementById('sendBtn');
+  if (!btn) return;
+  if (generating) {
+    btn.classList.add('stop-mode');
+    btn.innerHTML = '■';
+    btn.title = 'Stop generating';
+    btn.setAttribute('aria-label', 'Stop generating');
+  } else {
+    btn.classList.remove('stop-mode');
+    btn.innerHTML = '➤';
+    btn.title = 'Send';
+    btn.setAttribute('aria-label', 'Send');
+  }
+}
+
+// Call once, right before kicking off a turn's callGemini()/callGroqDirect().
+// Safe to be "re-entered" by internal fallbacks (callGroqVisionFallback,
+// failoverToProvider, the automatic Groq-after-Gemini fallback, etc.) —
+// those never call beginGeneration() themselves, they just keep running
+// under the same controller, so one Stop press cancels the whole chain
+// including mid-failover (edge case: "Stop during provider failover").
+function beginGeneration() {
+  S._genAbort      = new AbortController();
+  S._genConvId     = S._liveId || (S._activeConvId ? Number(S._activeConvId) : null);
+  S._stopRequested = false;
+  S._notifiedThisGen = false;
+  setSendBtnState(true);
+  return S._genAbort.signal;
+}
+
+// Call once the whole turn (including any fallbacks) has truly finished,
+// successfully or not. Always run via try/finally in handleSend() so it
+// fires even on an unexpected exception — the Send button can never get
+// stuck showing Stop.
+function endGeneration() {
+  S._genAbort   = null;
+  S._activeTypId = null;
+  setSendBtnState(false);
+}
+
+// Freezes the fake-typing reveal (typeMessage) at exactly what's currently
+// displayed, so pressing Stop mid-reveal never deletes partial output.
+// Returns { bubId, text } if a reveal was in progress, else null.
+function stopTypingAnimation() {
+  var ctl = S._typingCtl;
+  if (!ctl) return null;
+  if (ctl.timer) clearTimeout(ctl.timer);
+  ctl.stopped = true;
+  S._typingCtl = null;
+  var bub = document.getElementById(ctl.bubId);
+  if (bub) {
+    bub.classList.remove('typing-active');
+    bub.innerHTML = fmtMsg(ctl.displayed);
+    var area = document.getElementById('chatMessages');
+    if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
+  }
+  return { bubId: ctl.bubId, text: ctl.displayed };
+}
+
+// Real, production-quality Stop: aborts the in-flight fetch (cancels the
+// actual network request, not just the UI), removes the "thinking…"
+// indicator if the reply hasn't arrived yet, and freezes/truncates any
+// in-progress reveal so the partial assistant message stays visible
+// exactly as generated. Never deletes anything already on screen.
+function stopGeneration() {
+  if (!S.busy && !S._genAbort) return;
+  S._stopRequested = true;
+
+  if (S._genAbort) { try { S._genAbort.abort(); } catch (e) {} }
+
+  // Reply hadn't arrived yet — just clear the "thinking…" bubble.
+  if (S._activeTypId) { rmEl(S._activeTypId); S._activeTypId = null; }
+
+  // Reply had arrived and was mid fake-typing reveal — freeze it in place
+  // and truncate the stored message so conversation context (and any later
+  // "Continue") reflects exactly what the user actually saw, never more.
+  var frozen = stopTypingAnimation();
+  if (frozen) {
+    for (var i = S.messages.length - 1; i >= 0; i--) {
+      if (S.messages[i].role === 'ai') { S.messages[i].text = frozen.text; break; }
+    }
+  }
+
+  S.busy = false;
+  endGeneration();
+  setConnStatus('online', 'Online');
+  autoSaveConversation();
+  toast('⏹ Generation stopped');
+}
+
+// Best-effort "response ready" notification for when generation finished
+// while the tab was hidden/backgrounded (app minimized, screen off, user
+// switched apps). See the end-of-task summary for the platform limitations
+// this is subject to (no server-side push, so it only fires if this JS
+// context is still alive when the reply comes back).
+function notifyGenerationComplete(convId) {
+  if (!document.hidden) return;               // user is actively viewing — no notification needed
+  if (S._notifiedThisGen) return;              // never notify twice for the same turn
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  S._notifiedThisGen = true;
+  try {
+    var n = new Notification('ALEEM AI', {
+      body: 'Your response is ready.',
+      tag:  'aleem-response-' + (convId || 'live'),
+      renotify: false
+    });
+    n.onclick = function() {
+      try { window.focus(); } catch (e) {}
+      // Only navigate if we're not already looking at that conversation
+      // (e.g. it stayed the active tab the whole time — nothing to do).
+      if (convId != null && String(S._activeConvId) !== String(convId)) {
+        if (typeof goPage === 'function') goPage('chat');
+        if (typeof loadConv === 'function') loadConv(convId);
+      }
+      n.close();
+    };
+  } catch (e) { /* Notifications blocked/unsupported — fail silently */ }
+}
+
+// [ADDED — Resume After Interruption] If the app process gets killed mid-reply
+// (Android backgrounds the app and reclaims its memory, browser tab crashes,
+// etc.), the in-memory Stop/AbortController state (S._genAbort, S.busy, …) is
+// gone the moment the process dies — there is no "we were mid-request" flag
+// left to check on the next boot. What DOES survive is localStorage: handleSend()
+// already calls autoSaveConversation() right after the user's message is added,
+// before the AI call even starts, so the persisted conversation always ends with
+// a user turn that has no AI reply yet if — and only if — that turn never
+// finished. That fact alone is a reliable, storage-durable signal of an
+// interrupted reply, so no extra "pending generation" flag needs to be invented.
+//
+// Only the single most-recently-updated conversation is ever considered (never
+// older history), so this can't resurface for long-past sessions the user
+// already moved on from.
+
+// Returns the most-recently-updated conversation whose last message is from
+// the user (i.e. no AI reply followed it), or null if nothing qualifies.
+function findInterruptedConversation() {
+  if (!S.history || !S.history.length) return null;
+  var dismissedId = ls('aleem_resume_dismissed_id');
+  var latest = null;
+  for (var i = 0; i < S.history.length; i++) {
+    var c = S.history[i];
+    if (!latest || (c.updatedAt || c.id || 0) > (latest.updatedAt || latest.id || 0)) latest = c;
+  }
+  if (!latest || !latest.messages || !latest.messages.length) return null;
+  if (dismissedId && String(latest.id) === String(dismissedId)) return null;
+  var lastMsg = latest.messages[latest.messages.length - 1];
+  return (lastMsg && lastMsg.role === 'user') ? latest : null;
+}
+
+// Small floating banner — appended directly to <body> (not a page element)
+// so it's visible no matter which page the app happens to open to.
+// Non-intrusive: only a "Continue generating" or "✕" dismiss, never
+// auto-fires a request on its own so the user always stays in control of
+// when a new call is made. Shows a truncated preview of the interrupted
+// prompt so it's clear which conversation (and which answer) would resume,
+// which matters once there's more than one conversation in history.
+function showResumeBanner(conv) {
+  if (document.getElementById('resumeGenBanner')) return; // already showing
+  var lastMsg = conv.messages[conv.messages.length - 1];
+  var rawPreview = (lastMsg && lastMsg.text) ? lastMsg.text.trim() : '';
+  var preview = rawPreview.length > 80 ? rawPreview.slice(0, 80).trim() + '…' : rawPreview;
+
+  var bar = document.createElement('div');
+  bar.id = 'resumeGenBanner';
+  bar.style.cssText =
+    'position:fixed; left:12px; right:12px; bottom:calc(84px + env(safe-area-inset-bottom,0px));' +
+    'z-index:5000; background:var(--bg-card); border:1px solid var(--border-hi);' +
+    'backdrop-filter:blur(12px); border-radius:var(--r-md); padding:12px 14px;' +
+    'display:flex; flex-direction:column; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.35);' +
+    'font-family:var(--font-body); color:var(--text-1); animation:fadeInUp 0.35s ease;';
+
+  var headerHtml =
+    '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+      '<span style="font-size:16px; line-height:1.3;">⚠️</span>' +
+      '<div style="flex:1; min-width:0;">' +
+        '<div style="font-size:13.5px; font-weight:600; line-height:1.3;">Response interrupted</div>' +
+        (preview
+          ? '<div style="font-size:12.5px; color:var(--text-2); line-height:1.35; margin-top:2px; font-style:italic; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">"' + escHtml(preview) + '"</div>'
+          : '') +
+      '</div>' +
+      '<button id="resumeGenDismissBtn" aria-label="Dismiss" style="background:transparent; border:none; color:var(--text-3); font-size:18px; line-height:1; cursor:pointer; padding:2px 4px; flex-shrink:0;">✕</button>' +
+    '</div>';
+
+  var actionsHtml =
+    '<div style="display:flex; justify-content:flex-end;">' +
+      '<button id="resumeGenBtn" style="background:var(--a1); color:#00131f; border:none; border-radius:99px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">Continue generating</button>' +
+    '</div>';
+
+  bar.innerHTML = headerHtml + actionsHtml;
+  document.body.appendChild(bar);
+
+  document.getElementById('resumeGenBtn').addEventListener('click', function() {
+    resumeInterruptedGeneration(conv.id);
+  });
+  document.getElementById('resumeGenDismissBtn').addEventListener('click', function() {
+    dismissResumeBanner(conv.id);
+  });
+}
+
+function dismissResumeBanner(convId) {
+  if (convId != null) { try { lss('aleem_resume_dismissed_id', String(convId)); } catch (e) {} }
+  var bar = document.getElementById('resumeGenBanner');
+  if (bar) bar.remove();
+}
+
+// Reloads the interrupted conversation as the LIVE session — unlike loadConv()
+// (which always starts a fresh, non-live session and would fork a brand-new
+// history entry the moment a new reply is saved) — this keeps c._live = true
+// and reuses c.id as S._liveId, so autoSaveConversation() updates this SAME
+// entry once the resumed reply lands, exactly as if the reply had never been
+// interrupted in the first place. Then re-runs the normal reply pipeline
+// (same call used by handleSend()/regenLast()) for the unanswered turn.
+function resumeInterruptedGeneration(id) {
+  var bar = document.getElementById('resumeGenBanner');
+  if (bar) bar.remove();
+  if (S.busy) return; // guard against a stray double-tap
+
+  var c = S.history.find(function (x) { return x.id === id; });
+  if (!c || !c.messages || !c.messages.length) return;
+  var lastMsg = c.messages[c.messages.length - 1];
+  if (!lastMsg || lastMsg.role !== 'user') return; // already answered elsewhere — nothing to resume
+
+  if (typeof resetAgentHeaderState === 'function') resetAgentHeaderState();
+
+  S.history.forEach(function (h) { delete h._live; });
+  c._live = true;
+  S._activeConvId = String(c.id);
+  S._liveId = c.id;
+
+  S.messages = [];
+  var area = document.getElementById('chatMessages');
+  if (area) area.innerHTML = '';
+  c.messages.forEach(function (m) {
+    // Same image-format resolution as loadConv() (Cloudinary url vs legacy base64).
+    var imgArg = null;
+    if (m.imgs && Array.isArray(m.imgs) && m.imgs.length) {
+      var validImgs = m.imgs.filter(function (img) {
+        if (!img) return false;
+        if (img.url && typeof img.url === 'string' && img.url.startsWith('http')) return true;
+        return typeof img.dataUrl === 'string' && img.dataUrl.startsWith('data:') &&
+               img.dataUrl.indexOf(',') !== -1 && img.dataUrl.split(',')[1].length > 0;
+      });
+      if (validImgs.length) imgArg = validImgs;
+    } else if (m.img && typeof m.img.dataUrl === 'string' && m.img.dataUrl.startsWith('data:') &&
+               m.img.dataUrl.indexOf(',') !== -1 && m.img.dataUrl.split(',')[1].length > 0) {
+      imgArg = [m.img];
+    }
+    addMsg(m.role, m.text, false, imgArg, m.mid || null, m.time || null, m.ts || 0);
+  });
+  S.messages = c.messages.slice();
+  hideWelcome();
+  goPage('chat');
+  setTimeout(restoreMsgFeedbackUI, 50);
+  toast('▶️ Continuing generation…');
+
+  beginGeneration();
+  (async function () {
+    try {
+      if (S.model === 'groq') {
+        await callGroqDirect();
+      } else {
+        await callGemini([]);
+      }
+    } finally {
+      endGeneration();
+    }
+  })();
+}
+
 async function handleSend() {
   var inp  = document.getElementById('chatInput');
   var text = inp.value.trim();
@@ -10437,10 +11079,19 @@ async function handleSend() {
     var _wfIntentHandled = await window.__aleemTryWorkflowIntent(effectiveText);
     if (_wfIntentHandled) return;
   }
-  if (S.model === 'groq') {
-    await callGroqDirect();
-  } else {
-    await callGemini(imgs);
+  // [ADDED — Stop Generation] beginGeneration() creates the AbortController
+  // used by every fetch below and flips the Send button into Stop. The
+  // try/finally guarantees endGeneration() always runs — Send button can
+  // never get stuck as Stop even if something throws unexpectedly.
+  beginGeneration();
+  try {
+    if (S.model === 'groq') {
+      await callGroqDirect();
+    } else {
+      await callGemini(imgs);
+    }
+  } finally {
+    endGeneration();
   }
 }
 
@@ -11480,13 +12131,18 @@ function typeMessage(bubId, rawText, onDone) {
   var bub = document.getElementById(bubId);
   if (!bub) { if (onDone) onDone(); return; }
 
-  // Skip animation if disabled or text very short
-  if (!S.typingAnim || rawText.length < 30) {
+  // [ADDED — Stop Generation] Skip animation if disabled, text very short,
+  // OR the tab is hidden/backgrounded — there's no one watching the reveal
+  // while backgrounded, and skipping it lets the background-completion
+  // notification (Feature 2) fire immediately instead of waiting out the
+  // cosmetic delay.
+  if (!S.typingAnim || rawText.length < 30 || document.hidden) {
     bub.innerHTML = fmtMsg(rawText);
     var area = document.getElementById('chatMessages');
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
     var _abHandled = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
     if (!_abHandled && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+    S._typingCtl = null;
     if (onDone) onDone();
     return;
   }
@@ -11520,23 +12176,34 @@ function typeMessage(bubId, rawText, onDone) {
   var ci = 0;
   var area = document.getElementById('chatMessages');
 
+  // [ADDED — Stop Generation] Registered on S so stopGeneration() (which
+  // has no access to this closure) can clearTimeout the pending tick and
+  // freeze `displayed` exactly where it stands. Cleared on every normal
+  // exit path (completion, no-animation branch above) so a stale
+  // controller never lingers past its own typeMessage() call.
+  var ctl = { bubId: bubId, displayed: '', timer: null, stopped: false };
+  S._typingCtl = ctl;
+
   function tick() {
+    if (ctl.stopped) return; // stopTypingAnimation() already finalized the bubble
     if (ci >= chunks.length) {
       bub.classList.remove('typing-active');
       bub.innerHTML = fmtMsg(rawText);
       if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
       var _abHandled2 = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
       if (!_abHandled2 && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+      S._typingCtl = null;
       if (onDone) onDone();
       return;
     }
     displayed += chunks[ci++];
+    ctl.displayed = displayed;
     bub.textContent = displayed;
     bub.appendChild(cursor);
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
     var lastChar = displayed.trimEnd().slice(-1);
     var delay = /[.!?]/.test(lastChar) ? baseInterval * 2.2 : baseInterval;
-    setTimeout(tick, delay);
+    ctl.timer = setTimeout(tick, delay);
   }
 
   tick();
@@ -11920,10 +12587,15 @@ function updateTypingStatus(typId, text) {
 function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
 
 async function fetchViaProxy(model, imgs) {
+  // [ADDED — Stop Generation] Real cancellation: pass the current turn's
+  // AbortController signal (set by beginGeneration() in handleSend) so
+  // pressing Stop actually tears down this in-flight request instead of
+  // just hiding it in the UI while it keeps running server-side.
   var res  = await fetch(NETLIFY_FN, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ model: model, geminiBody: buildGeminiBody(imgs) })
+    body:    JSON.stringify({ model: model, geminiBody: buildGeminiBody(imgs) }),
+    signal:  S._genAbort ? S._genAbort.signal : undefined
   });
   var data = await res.json();
   return { res: res, data: data };
@@ -11945,6 +12617,7 @@ async function callGemini(imgsData, isFailoverRetry) {
   restoreSelectedModelDisplay();
 
   var typId = addTyping('ALEEM AI is thinking…');
+  S._activeTypId = typId; // [ADDED — Stop Generation]
 
   var preferred   = S.model || 'gemini-2.5-flash-lite';
   var modelQueue  = [preferred].concat(FALLBACK_MODELS.filter(function(m){ return m !== preferred; }));
@@ -12047,6 +12720,7 @@ async function callGemini(imgsData, isFailoverRetry) {
           typeMessage(bubId, reply, function() {
             autoSaveConversation();
             S.busy = false;
+            notifyGenerationComplete(S._genConvId); // [ADDED — Background Notification]
           });
           return;
         }
@@ -12085,6 +12759,12 @@ async function callGemini(imgsData, isFailoverRetry) {
         }
 
       } catch (netErr) {
+        // [ADDED — Stop Generation] The user pressed Stop, which aborts the
+        // fetch — treat this as "stop cleanly", never as a retryable
+        // network error. stopGeneration() already cleaned up the UI/state,
+        // so just exit the whole function without touching anything else.
+        if (netErr.name === 'AbortError' || S._stopRequested) return;
+
         lastErr = { type:'network', label:'Network Error', text: netErr.message };
         if (attempt < MAX_RETRIES) {
           var netDelay = RETRY_BASE_MS * attempt;
@@ -12093,8 +12773,10 @@ async function callGemini(imgsData, isFailoverRetry) {
         }
       }
     }
+    if (S._stopRequested) return; // [ADDED — Stop Generation] don't advance to next model
   }
 
+  if (S._stopRequested) return; // [ADDED — Stop Generation]
   rmEl(typId);
 
   // [ADDED] Final automatic fallback: if every Gemini model failed
@@ -12110,6 +12792,7 @@ async function callGemini(imgsData, isFailoverRetry) {
     if (imgs && imgs.length) {
       var visionHandled = await callGroqVisionFallback(imgs);
       if (visionHandled) return;
+      if (S._stopRequested) return; // [ADDED — Stop Generation]
     }
     // [ADDED] Guard against bouncing back and forth (requirement 5): if this
     // call is already the single automatic retry after a Groq→Gemini
@@ -12151,6 +12834,7 @@ async function callGroqDirect(isFailoverRetry) {
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
   var typId = addTyping('ALEEM AI is thinking…');
+  S._activeTypId = typId; // [ADDED — Stop Generation]
 
   var msgs = S.messages.slice(-20);
   var groqMessages = [];
@@ -12173,7 +12857,8 @@ async function callGroqDirect(isFailoverRetry) {
     var res = await fetch(NETLIFY_FN, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model: 'groq', groqMessages: groqMessages })
+      body:    JSON.stringify({ model: 'groq', groqMessages: groqMessages }),
+      signal:  S._genAbort ? S._genAbort.signal : undefined
     });
     var data = await res.json();
 
@@ -12198,6 +12883,7 @@ async function callGroqDirect(isFailoverRetry) {
       typeMessage(bubId, reply, function() {
         autoSaveConversation();
         S.busy = false;
+        notifyGenerationComplete(S._genConvId); // [ADDED — Background Notification]
       });
     } else {
       // [ADDED] Groq quota/rate-limit failover — if this is a rate-limit or
@@ -12221,6 +12907,8 @@ async function callGroqDirect(isFailoverRetry) {
       S.busy = false;
     }
   } catch(netErr) {
+    // [ADDED — Stop Generation] See matching comment in callGemini's catch.
+    if (netErr.name === 'AbortError' || S._stopRequested) return;
     rmEl(typId);
     addMsg('ai', '❌ **Network Error:** ' + netErr.message);
     setConnStatus('error', 'Error');
@@ -12246,6 +12934,7 @@ async function callGroqVisionFallback(imgs) {
   S.busy = true;
   setConnStatus('busy', 'Thinking…');
   var typId = addTyping('ALEEM AI is thinking…');
+  S._activeTypId = typId; // [ADDED — Stop Generation]
 
   // Build chat-style messages identical in spirit to callGroqDirect(),
   // but the final user message becomes multimodal content blocks
@@ -12295,7 +12984,8 @@ async function callGroqVisionFallback(imgs) {
         model: 'groq-vision',
         groqModel: GROQ_VISION_MODEL,
         groqMessages: groqMessages
-      })
+      }),
+      signal: S._genAbort ? S._genAbort.signal : undefined
     });
     var data = await res.json();
 
@@ -12325,6 +13015,7 @@ async function callGroqVisionFallback(imgs) {
       typeMessage(bubId, reply, function() {
         autoSaveConversation();
         S.busy = false;
+        notifyGenerationComplete(S._genConvId); // [ADDED — Background Notification]
       });
       return true;
     }
@@ -12337,6 +13028,11 @@ async function callGroqVisionFallback(imgs) {
     return false;
 
   } catch (netErr) {
+    // [ADDED — Stop Generation] On abort, return false quietly is wrong here
+    // (false triggers the caller's text-only Groq fallback) — instead throw
+    // recognition up via the shared stop flag, and the caller (callGemini)
+    // already checks S._stopRequested right after this call and returns.
+    if (netErr.name === 'AbortError' || S._stopRequested) { rmEl(typId); return false; }
     console.warn('[ALEEM-GROQ-VISION-FALLBACK] Network error, falling back to text-only Groq:', netErr.message);
     rmEl(typId);
     return false;
@@ -12522,6 +13218,13 @@ function autoSaveConversation() {
 }
 
 function clearChat() {
+  // [ADDED — Stop Generation / New Chat Behavior] If a response is still
+  // generating for the conversation being left, stop it for real (aborts
+  // the fetch) and let its partial output save into THAT conversation's
+  // history before we wipe S.messages below — the new chat then starts
+  // completely fresh, exactly like ChatGPT/Claude, never resuming into it.
+  if (S.busy) { try { stopGeneration(); } catch (e) {} }
+
   // Seal the current live entry so the next conversation starts fresh
   var live = S.history.find(function(c){ return c._live; });
   if (live) { delete live._live; persist(); }
@@ -14850,6 +15553,12 @@ document.addEventListener('click', function(e) {
 function loadConv(id) {
   var c = S.history.find(function(x){ return x.id === id; });
   if (!c) return;
+  // [ADDED — Stop Generation / Conversation Switching] Never let a reply
+  // still generating for the conversation being left silently keep going
+  // and land in whatever conversation happens to be S._activeConvId by the
+  // time it resolves. Stop it for real (saves its partial output into the
+  // ORIGINAL conversation's history first), then load the requested one.
+  if (S.busy) { try { stopGeneration(); } catch (e) {} }
   // Reset agent header so it can re-appear if user sends a new message in this loaded conv.
   if (typeof resetAgentHeaderState === 'function') resetAgentHeaderState();
   // Seal any live session so this loaded chat doesn't get merged with it
@@ -15093,7 +15802,13 @@ function initParticles() {
 // ── UTILITIES ─────────────────────────────────────────────────────
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function setText(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
-function rmEl(id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); }
+function rmEl(id) {
+  var e = document.getElementById(id);
+  if (e && e.parentNode) e.parentNode.removeChild(e);
+  // [ADDED — Stop Generation] Keep S._activeTypId in sync whenever the
+  // "thinking…" indicator it points to is removed through the normal flow.
+  if (S._activeTypId === id) S._activeTypId = null;
+}
 </script>
 <script>
 // ════════════════════════════════════════════════════════════════════
