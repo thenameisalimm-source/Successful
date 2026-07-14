@@ -8695,6 +8695,17 @@ function init() {
       if (_interruptedConv) showResumeBanner(_interruptedConv);
     }
 
+    // [ADDED — Android fix] Cold-start deep link: sw.js's notificationclick
+    // handler opens '/?convId=NNN' when the app wasn't already running.
+    // Consume it once and strip it from the URL so a later refresh/reload
+    // doesn't re-trigger the navigation.
+    var _notifConvId = new URLSearchParams(window.location.search).get('convId');
+    if (_notifConvId) {
+      if (typeof goPage === 'function') goPage('chat');
+      if (typeof loadConv === 'function') loadConv(Number(_notifConvId));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // [FIX] Welcome speech must wait until speechSynthesis voices are loaded.
     // On Android Chrome/WebView voices load asynchronously; calling speakText()
     // before getVoices() returns a non-empty list means pickVoiceForLang() can
@@ -10850,24 +10861,38 @@ function notifyGenerationComplete(convId) {
   if (!document.hidden) return;               // user is actively viewing — no notification needed
   if (S._notifiedThisGen) return;              // never notify twice for the same turn
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!('serviceWorker' in navigator)) return; // [CHANGED — Android fix] showNotification() needs the SW
   S._notifiedThisGen = true;
-  try {
-    var n = new Notification('ALEEM AI', {
+  // [CHANGED — Android fix] `new Notification()` is silently unsupported on
+  // Android — it must be shown through the existing service worker
+  // registration instead (same permission check, same dedupe tag as before).
+  // Tap handling now lives in sw.js's 'notificationclick' listener: it posts
+  // the convId back to this page (see the 'message' listener below) if the
+  // app is already open, or deep-links to '/?convId=...' on a cold start
+  // (handled in init(), next to the existing Resume-After-Interruption check).
+  navigator.serviceWorker.ready.then(function(reg) {
+    reg.showNotification('ALEEM AI', {
       body: 'Your response is ready.',
       tag:  'aleem-response-' + (convId || 'live'),
-      renotify: false
+      renotify: false,
+      data: { convId: convId }
     });
-    n.onclick = function() {
-      try { window.focus(); } catch (e) {}
-      // Only navigate if we're not already looking at that conversation
-      // (e.g. it stayed the active tab the whole time — nothing to do).
-      if (convId != null && String(S._activeConvId) !== String(convId)) {
-        if (typeof goPage === 'function') goPage('chat');
-        if (typeof loadConv === 'function') loadConv(convId);
-      }
-      n.close();
-    };
-  } catch (e) { /* Notifications blocked/unsupported — fail silently */ }
+  }).catch(function() { /* Notifications blocked/unsupported — fail silently */ });
+}
+
+// [ADDED — Android fix] Notification tapped while the app is still open:
+// sw.js focuses this client and posts the target conversation id here, so we
+// jump to it exactly like the old n.onclick used to.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', function(event) {
+    var msg = event.data;
+    if (!msg || msg.type !== 'ALEEM_NOTIFICATION_CLICK') return;
+    var convId = msg.convId;
+    if (convId != null && String(S._activeConvId) !== String(convId)) {
+      if (typeof goPage === 'function') goPage('chat');
+      if (typeof loadConv === 'function') loadConv(convId);
+    }
+  });
 }
 
 // [ADDED — Resume After Interruption] If the app process gets killed mid-reply
