@@ -38,6 +38,35 @@ self.addEventListener('message', function(event) {
   }
 });
 
+// ── NOTIFICATION CLICK: focus/open ALEEM AI and hand back the convo id ────
+// [ADDED — Android completion notification] Notifications are shown via
+// self.registration.showNotification() (see index.html), so the click event
+// arrives here, not as a page-side onclick. If a window is already open we
+// just focus it and postMessage the conversation id for the page to handle
+// (see the 'message' listener added in index.html). If nothing is open, we
+// deep-link to '/?convId=...' and index.html's boot code picks that up.
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var convId = event.notification.data && event.notification.data.convId;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if ('focus' in client) {
+          client.focus();
+          client.postMessage({ type: 'ALEEM_NOTIFICATION_CLICK', convId: convId });
+          return;
+        }
+      }
+      if (self.clients.openWindow) {
+        var url = (convId != null) ? ('/?convId=' + encodeURIComponent(convId)) : '/';
+        return self.clients.openWindow(url);
+      }
+    })
+  );
+});
+
 // ── INSTALL: precache shell assets ────────────────────────────────
 // Note: intentionally NOT calling self.skipWaiting() here.
 // The new SW waits in the 'installed' state until the page posts
