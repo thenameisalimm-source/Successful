@@ -180,7 +180,10 @@
   .splash-glow-ring {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    opacity: 0; animation: fadeInUp 0.7s cubic-bezier(0.4,0,0.2,1) 0.3s forwards;
+    /* [ADJUSTED — premium startup timing] Wordmark now leads the sequence
+       and finishes quickly (~350ms) so the greeting can follow a fraction
+       of a second later instead of after a long, disconnected pause. */
+    opacity: 0; animation: fadeInUp 0.35s cubic-bezier(0.4,0,0.2,1) forwards;
   }
 
   /* ALEEM AI logo text — splash brand mark, matching the demo's .brand
@@ -223,7 +226,18 @@
     text-align: center;
     max-width: 92vw;
     margin-top: 34px;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.5s forwards;
+    /* [ADJUSTED — premium startup timing] No longer animates on a fixed
+       page-load delay: the greeting text is injected by JS at a variable
+       time (auth/name resolution), so a fixed CSS delay either fired on
+       an empty box (text then popping in late with no animation) or ran
+       out of sync with the wordmark. The .reveal-in class below is added
+       by JS at the moment the text is actually set, so the fade always
+       plays against real content, timed a fraction of a second after the
+       wordmark begins (see revealSplashGreeting()). */
+    opacity: 0;
+  }
+  .splash-title.reveal-in {
+    animation: fadeInUp 0.65s cubic-bezier(0.4,0,0.2,1) forwards;
   }
 
   /* [FIX — splash typography] The signed-in user's first name inside the
@@ -249,12 +263,22 @@
     font-weight: 400;
     color: #94a3b8;
     text-align: center;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.68s forwards;
+    /* [ADJUSTED — premium startup timing] Fires off the greeting's own
+       reveal (see revealSplashGreeting()) instead of a fixed page-load
+       delay, so it always fades in shortly after the greeting regardless
+       of how long name/auth resolution took. */
+    opacity: 0;
+  }
+  .splash-status-txt.reveal-in {
+    animation: fadeInUp 0.6s ease forwards;
   }
   .splash-dots {
     display: flex; align-items: center; justify-content: center; gap: 9px;
     margin-top: 22px;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.82s forwards;
+    opacity: 0;
+  }
+  .splash-dots.reveal-in {
+    animation: fadeInUp 0.6s ease forwards;
   }
   .splash-dot {
     width: 8px; height: 8px; border-radius: 50%;
@@ -1472,6 +1496,9 @@
     padding: 14px 10px;
     display: flex; flex-direction: column; gap: 2px;
     -webkit-overflow-scrolling: touch;
+    /* FIX: contain the sidebar's own scroll so it can never chain into
+       whatever is behind it, regardless of page content length. */
+    overscroll-behavior: contain;
     /* FIX: removed position:relative z-index:1 — not needed and created an
        extra stacking context inside the sidebar that confused Android's
        hit-testing, making nav buttons miss taps. */
@@ -1850,17 +1877,46 @@
     display: none;
     animation: pgIn 0.28s ease;
   }
-  .page.active { display: block; }
+  /*
+   * ROOT-CAUSE FIX (sidebar scroll architecture):
+   * Previously only #page-chat capped its own height to the viewport
+   * (calc(100vh - 57px)) and scrolled internally via .chat-messages;
+   * every other .page (History, Memories, Dashboard, etc.) was plain
+   * display:block with no height limit, so its natural content height
+   * pushed .main taller than the viewport and made html/body themselves
+   * the scrolling element ("the whole page scrolls"). Because .sidebar
+   * is position:fixed, it never visually moved — but with the document
+   * now scrollable, wheel/touch input anywhere (including over the
+   * sidebar, once its own short nav list stopped needing to scroll)
+   * chained straight through to that document scroll, producing the
+   * "sidebar scrolling becomes the page scrolling" / dead-space symptom.
+   *
+   * Fix: give EVERY page the same viewport-capped, self-scrolling box
+   * that #page-chat already used, so html/body never grow past 100vh
+   * on any page, no matter how much content (10 items or 10,000) a
+   * page holds. This does not change any spacing/layout/visuals —
+   * content that used to make the whole document scroll now scrolls
+   * inside the same box instead.
+   */
+  .page.active {
+    display: block;
+    height: calc(100vh - 57px); /* 57px = topbar height, same constant already used by #page-chat/#page-memories */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain; /* stop this page's scroll from chaining into anything behind it */
+  }
   #page-chat.active {
-    display: flex; flex-direction: column; height: calc(100vh - 57px);
+    display: flex; flex-direction: column;
     /* Anchor page-chat at z-index:0 so its animated children (welcome logo)
        never escape above fixed overlays sitting at z-index:9500. */
     position: relative; z-index: 0; isolation: isolate;
+    /* page-chat scrolls internally via .chat-messages, not the page box itself */
+    overflow: hidden;
   }
-  /* Memories page: flex-column so footer always sticks to bottom */
+  /* Memories page: flex-column so footer always sticks to bottom.
+     Height/overflow/overscroll now come from the shared .page.active rule above. */
   #page-memories.active {
     display: flex; flex-direction: column;
-    min-height: calc(100vh - 57px); /* 57px = topbar height */
   }
   #page-memories .pg-body {
     flex: 1; /* push footer down */
@@ -9745,15 +9801,17 @@ function bindAllEvents() {
   });
 
   // [ADDED] Show/hide the History FAB once the user scrolls down (item 3).
-  // The .page elements scroll with the document (except #page-chat), so a
-  // window scroll listener covers it; we only ever show it on the History
-  // page and only on mobile widths (enforced in CSS via the 768px media
-  // query, matching the existing mobile breakpoint used across the app).
-  window.addEventListener('scroll', function() {
+  // FIX: .page elements are now their own independent scroll containers
+  // (see .page.active CSS) rather than scrolling with the document, so we
+  // must listen on #page-history's own scrollTop instead of window.scrollY;
+  // we only ever show it on the History page and only on mobile widths
+  // (enforced in CSS via the 768px media query, matching the existing
+  // mobile breakpoint used across the app).
+  var histPageEl = document.getElementById('page-history');
+  if (histPageEl) histPageEl.addEventListener('scroll', function() {
     if (!fabNewChat) return;
-    var histPage = document.getElementById('page-history');
-    var onHistory = histPage && histPage.classList.contains('active');
-    var scrolled  = window.scrollY > 120;
+    var onHistory = histPageEl.classList.contains('active');
+    var scrolled  = histPageEl.scrollTop > 120;
     fabNewChat.classList.toggle('show', !!(onHistory && scrolled));
   }, { passive: true });
 
@@ -9793,7 +9851,11 @@ function bindAllEvents() {
     });
     histListEl.addEventListener('scroll', hideHistPreview, { passive: true });
   }
-  window.addEventListener('scroll', hideHistPreview, { passive: true });
+  // FIX: #page-history is now its own scroll container (see .page.active
+  // CSS), so dismiss the preview popover on ITS scroll too — the old
+  // window-scroll listener alone no longer fires while browsing History.
+  var histPageForPreview = document.getElementById('page-history');
+  if (histPageForPreview) histPageForPreview.addEventListener('scroll', hideHistPreview, { passive: true });
 
   // ── Chat input ────────────────────────────────────────────────────
   var sendBtn   = document.getElementById('sendBtn');
@@ -10248,7 +10310,13 @@ function goPage(name) {
   document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
 
   var pg = document.getElementById('page-' + name);
-  if (pg) pg.classList.add('active');
+  if (pg) {
+    pg.classList.add('active');
+    // FIX: each .page is now its own scroll container (see .page.active
+    // CSS), so switching pages must reset ITS scrollTop — window.scrollTo
+    // no longer applies since the document itself no longer scrolls.
+    pg.scrollTop = 0;
+  }
 
   var btn = document.querySelector('.nav-btn[data-page="' + name + '"]');
   if (btn) btn.classList.add('active');
@@ -18660,6 +18728,52 @@ if ('serviceWorker' in navigator) {
   // providerData (Google sign-in populates this reliably), then derive a
   // name from the email local-part as a last resort — only a genuinely
   // nameless account falls back to the plain greeting.
+  // [ADDED — premium startup timing] Reference point for "the wordmark
+  // begins" — the wordmark's own CSS entrance starts at page load, so this
+  // timestamp lets us time the greeting's reveal relative to it even
+  // though the greeting's text is injected later by JS (auth/name
+  // resolution), rather than on a fixed page-load CSS delay.
+  var __splashSequenceStart = (window.performance && performance.now) ? performance.now() : Date.now();
+  // Greeting should begin ~200-300ms after the wordmark starts, not
+  // whenever auth/name resolution happens to finish.
+  var SPLASH_GREETING_DELAY_MS = 260;
+
+  // Fades the greeting in exactly when its text is actually rendered
+  // (rather than relying on a fixed page-load CSS delay that could fire on
+  // an empty box, or an instant no-animation pop-in whenever JS finally
+  // set the text). Also kicks off the "Preparing your workspace…" reveal
+  // shortly after, so that always follows the greeting rather than a
+  // fixed, independent page-load delay.
+  // [ADDED — premium startup timing] onFullyVisible (optional) fires once
+  // the greeting's fade-in animation has actually finished playing — not
+  // when its text was merely written to the DOM — so callers that need to
+  // measure a hold time "from when the greeting is fully visible" (see the
+  // returning-user hold timer below) anchor to the right moment.
+  function revealSplashGreeting(onFullyVisible) {
+    var el = document.getElementById('splashTitle');
+    if (!el || el.classList.contains('reveal-in')) {
+      if (typeof onFullyVisible === 'function') onFullyVisible();
+      return;
+    }
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    var wait = Math.max(0, SPLASH_GREETING_DELAY_MS - (now - __splashSequenceStart));
+    setTimeout(function() {
+      el.classList.add('reveal-in');
+      revealSplashStatusGroup();
+      if (typeof onFullyVisible === 'function') {
+        // 650ms matches .splash-title.reveal-in's animation-duration above.
+        setTimeout(onFullyVisible, 650);
+      }
+    }, wait);
+  }
+
+  function revealSplashStatusGroup() {
+    var statusTxt = document.getElementById('splashStatusTxt');
+    var dotsEl = document.querySelector('.splash-dots');
+    setTimeout(function() { if (statusTxt) statusTxt.classList.add('reveal-in'); }, 180);
+    setTimeout(function() { if (dotsEl) dotsEl.classList.add('reveal-in'); }, 320);
+  }
+
   function deriveFirstName(u) {
     var rawName = (u && u.displayName) ? u.displayName
       : (u && u.providerData && u.providerData[0] && u.providerData[0].displayName) ? u.providerData[0].displayName
@@ -18708,7 +18822,7 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  function showWelcomeBackThenApp(user, resolvedName) {
+  function showWelcomeBackThenApp(user, resolvedName, onGreetingVisible) {
     // [UNIFIED — single premium startup screen] Personalize the same
     // title element the splash already shows (no separate block to
     // swap to) — the layout stays identical to a fresh sign-in launch.
@@ -18718,6 +18832,9 @@ if ('serviceWorker' in navigator) {
     var splashTitle = document.getElementById('splashTitle');
     if (splashTitle) {
       renderGreeting(splashTitle, resolvedName);
+      revealSplashGreeting(onGreetingVisible);
+    } else if (typeof onGreetingVisible === 'function') {
+      onGreetingVisible();
     }
     // [ADDED — Welcome-state footer removal] The "Built by…" credit is
     // part of the generic first-launch splash only; it shouldn't coexist
@@ -18820,10 +18937,13 @@ if ('serviceWorker' in navigator) {
       // the splash title is the final "Welcome back, {name}" (or, only if
       // truly unresolvable, plain "Welcome") — never both in sequence.
       (greetingNamePromise || resolveGreetingName(currentUser)).then(function(name) {
-        showWelcomeBackThenApp(currentUser, name);
-        // Hold measured from the moment the greeting is actually rendered,
-        // not from page load/navigation start or Firebase init.
-        setTimeout(hideSplashNow, RETURNING_USER_MIN_HOLD_MS);
+        showWelcomeBackThenApp(currentUser, name, function() {
+          // Hold measured from the moment the greeting is fully visible
+          // (its fade-in has finished), not from page load/navigation
+          // start, Firebase init, or merely when its text was written to
+          // the DOM.
+          setTimeout(hideSplashNow, RETURNING_USER_MIN_HOLD_MS);
+        });
       });
     } else {
       // Signed-out: unchanged — still waits for the full fixed splash
@@ -18934,7 +19054,10 @@ if ('serviceWorker' in navigator) {
         // markup), so write the plain "Welcome" it always showed here,
         // immediately — same text, same timing as before, just via JS.
         var splashTitleEl = document.getElementById('splashTitle');
-        if (splashTitleEl) { splashTitleEl.textContent = 'Welcome'; }
+        if (splashTitleEl) {
+          splashTitleEl.textContent = 'Welcome';
+          revealSplashGreeting();
+        }
       }
       // Every path (fresh sign-in's next launch, restored session, app
       // restart, process recreation, cold/warm launch) funnels through
