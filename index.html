@@ -18554,9 +18554,14 @@ if ('serviceWorker' in navigator) {
   let currentUser = undefined;
   // Expose on window so the main app script can read it for avatar rendering
   Object.defineProperty(window, 'currentUser', { get: function() { return currentUser; } });
-  let splashTimerDone = false;
-  let splashHideFn = null;
-  let splashEl = null;
+  // [UNIFIED — single startup reveal pipeline] These are the only inputs
+  // to reveal() below. Every path into startup (fresh Google sign-in's
+  // next launch, a restored Firebase session, app restart, process
+  // recreation, cold launch, warm launch) sets these same flags and calls
+  // the same reveal() — there is no second/parallel reveal implementation
+  // anymore, so no path can race ahead of or shorten another.
+  let splashTimerDone = false;                 // fixed ~2.4s splash minimum (signed-out/login path only — unchanged)
+  let coreReady = !!window.__aleemCoreReady;    // real app content ready to render underneath the splash
   let revealed = false;
 
   function showApp() {
@@ -18743,97 +18748,83 @@ if ('serviceWorker' in navigator) {
     };
   }
 
+  // [UNIFIED — single startup reveal pipeline] One function, one gate, one
+  // minimum-hold timer, one welcome-message call, one splash-hide call.
+  // Every path into the returning-user startup (fresh Google sign-in's
+  // next launch, a restored Firebase session, app restart, process
+  // recreation, cold launch, warm launch) reaches this same function via
+  // the same two triggers below (__aleemOnCoreReady / onAuthStateChanged),
+  // so none of them can bypass or shorten the returning-user splash.
+  //
+  // [FIX — state-dependent "extremely fast" splash] The previous design
+  // had a second, parallel reveal path (tryFastReveal) whose minimum-hold
+  // timer measured "time remaining until 1000ms since navigation start"
+  // rather than "time since the welcome message actually rendered". That
+  // meant the effective hold time depended entirely on how long Firebase
+  // happened to take to resolve the session on that particular launch —
+  // fine when resolution was fast, but whenever resolution took longer
+  // than ~1000ms (session resolution time varies launch to launch, e.g.
+  // after a fresh sign-in vs. a long-persisted one) the remaining hold
+  // collapsed to 0 and the greeting flashed and vanished in the same
+  // tick. Anchoring the hold to the moment reveal() actually fires — not
+  // to navigation start — makes the hold time constant on every path.
+  var RETURNING_USER_MIN_HOLD_MS = 1000;
+
+  function hideSplashNow() {
+    var sp = window.__aleemSplashEl || document.getElementById('splash');
+    var doHide = window.__aleemHideSplash || function() {
+      if (sp) { sp.classList.add('gone'); sp.style.display = 'none'; }
+    };
+    if (sp) {
+      sp.classList.add('out');
+      sp.addEventListener('animationend', doHide, { once: true });
+      setTimeout(doHide, 700);
+    } else {
+      doHide();
+    }
+  }
+
   // Reveal the correct screen (app or login) and only then hide the splash.
-  // This guarantees the splash stays visible until Firebase auth state is known,
-  // so unauthenticated users never glimpse the app UI.
+  // This guarantees the splash stays visible until Firebase auth state is
+  // known, so unauthenticated users never glimpse the app UI, and that a
+  // returning, authenticated user always sees the same welcome-back reveal
+  // held for the same minimum duration, no matter how their session was
+  // resolved.
   function reveal() {
     if (revealed) { return; }
-    if (!splashTimerDone || currentUser === undefined) { return; }
-    revealed = true;
+    if (currentUser === undefined) { return; } // auth state not yet known — every path waits here alike
 
     if (currentUser) {
+      // Returning/authenticated user: still requires the real app content
+      // to be ready (coreReady) so it's there underneath the fade — but
+      // does NOT wait out the fixed login-screen timer, since there's
+      // nothing else for an authenticated user to wait on.
+      if (!coreReady) { return; }
+      revealed = true;
       showWelcomeBackThenApp(currentUser);
+      setTimeout(hideSplashNow, RETURNING_USER_MIN_HOLD_MS);
     } else {
+      // Signed-out: unchanged — still waits for the full fixed splash
+      // timer so the login screen's entrance keeps feeling intentional.
+      if (!splashTimerDone) { return; }
+      revealed = true;
       showAuthGate();
-    }
-
-    if (splashEl) {
-      splashEl.classList.add('out');
-      splashEl.addEventListener('animationend', splashHideFn, { once: true });
-      setTimeout(splashHideFn, 700);
+      hideSplashNow();
     }
   }
 
-  // Called by the main app once the minimum splash display time has elapsed
-  window.__aleemSplashTimerDone = function(hideSplashFn, sp) {
+  // Called by the main app once the fixed minimum splash display time has
+  // elapsed (signed-out/login path only).
+  window.__aleemSplashTimerDone = function() {
     splashTimerDone = true;
-    splashHideFn = hideSplashFn;
-    splashEl = sp;
     reveal();
   };
-
-  // ================================================================
-  // [ADDED — Returning-user startup polish] Adaptive splash duration.
-  //
-  // The splash above is deliberately held for a fixed ~2.4s so the login
-  // screen's entrance always feels intentional — that timing is untouched.
-  // But an already-authenticated user reopening the app doesn't need to
-  // sit through that same fixed wait: their session resolves from Firebase's
-  // local persistence almost immediately, so once the real app content is
-  // ready (see __aleemCoreReady in init()) there's nothing left to wait for.
-  //
-  // This path only ever runs when currentUser is truthy (a persisted,
-  // already-signed-in session) — the logged-out/login-screen reveal below
-  // is completely unaffected and still waits for splashTimerDone exactly
-  // as before.
-  // ================================================================
-  var coreReady = !!window.__aleemCoreReady;
-  var fastRevealed = false;
-  // [FIX — splash disappearing too fast / greeting unreadable] This was
-  // 450ms, which is well under the time init() itself (loadStorage,
-  // renderHistory, particles, bindAllEvents, etc.) typically takes to run.
-  // Since `elapsed` below is measured from navigation start, coreReady
-  // frequently flipped true *after* 450ms had already passed — so
-  // `remaining` came out to 0 and the "Welcome back, {name}" splash
-  // swapped in and started fading out in the same tick. It wasn't that
-  // the personalized greeting failed to render — it rendered and vanished
-  // too fast to perceive, which read as "it just shows Welcome". Raised
-  // to a real minimum hold in the requested ~900–1200ms range. The
-  // `remaining` calc below still adapts naturally: if init() legitimately
-  // takes longer than this floor, no extra time is added on top.
-  var FAST_REVEAL_MIN_HOLD_MS = 1000;
-
-  function tryFastReveal() {
-    if (fastRevealed || revealed) return;
-    if (!coreReady || currentUser === undefined || !currentUser) return;
-    fastRevealed = true;
-    revealed = true; // the normal reveal() (fired by the 2.4s timer) becomes a no-op
-
-    var elapsed = (window.performance && performance.now) ? performance.now() : FAST_REVEAL_MIN_HOLD_MS;
-    var remaining = Math.max(0, FAST_REVEAL_MIN_HOLD_MS - elapsed);
-
-    setTimeout(function() {
-      showWelcomeBackThenApp(currentUser);
-
-      var sp = window.__aleemSplashEl || document.getElementById('splash');
-      var doHide = window.__aleemHideSplash || function() {
-        if (sp) { sp.classList.add('gone'); sp.style.display = 'none'; }
-      };
-      if (sp) {
-        sp.classList.add('out');
-        sp.addEventListener('animationend', doHide, { once: true });
-        setTimeout(doHide, 700);
-      } else {
-        doHide();
-      }
-    }, remaining);
-  }
 
   // Fires once init()'s synchronous setup has actually finished (real app
   // content ready to display) — see window.__aleemCoreReady in init().
   window.__aleemOnCoreReady = function() {
     coreReady = true;
-    tryFastReveal();
+    reveal();
   };
 
   function updateProfileUI(user) {
@@ -18911,10 +18902,10 @@ if ('serviceWorker' in navigator) {
     if (user) resumePendingDestination();
 
     if (!revealed) {
-      // Try the adaptive fast path first (only actually does anything when
-      // `user` is truthy and core app content is already ready) — falls
-      // through to the normal, unchanged reveal() otherwise.
-      tryFastReveal();
+      // Every path (fresh sign-in's next launch, restored session, app
+      // restart, process recreation, cold/warm launch) funnels through
+      // this same reveal() — it internally knows whether coreReady and/or
+      // splashTimerDone are the relevant gate for this auth state.
       reveal();
       return;
     }
