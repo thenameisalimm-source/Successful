@@ -8,20 +8,19 @@
   <meta name="theme-color" content="#0a84ff">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 
   <style>
   /* ================================================================
      CSS VARIABLES
   ================================================================ */
   :root {
-    --font-logo:    'Syne', sans-serif;
-    /* [ADDED — Wordmark typography refresh] Used only by the splash's
-       "ALEEM AI" wordmark + tagline (and the returning-user screen's small
-       echo of it). Deliberately a separate variable from --font-logo so
-       the login screen, profile page, settings, etc. — which all still
-       use --font-logo — are completely unaffected. */
-    --font-wordmark: 'Outfit', 'Syne', sans-serif;
+    /* [REFRESH — Premium wordmark unification] --font-logo now simply
+       mirrors --font-wordmark so every "ALEEM AI" brand mark in the app
+       (splash, login, sidebar, profile, settings) shares one clean
+       premium display face instead of the old blockier Syne cut. */
+    --font-logo:    var(--font-wordmark);
+    --font-wordmark: 'Space Grotesk', 'Manrope', 'Outfit', sans-serif;
     --font-display: 'Poppins', sans-serif;
     --font-body:    'Inter', sans-serif;
     --font-mono:    'JetBrains Mono', monospace;
@@ -137,7 +136,15 @@
   ================================================================ */
   #splash {
     position: fixed; inset: 0; z-index: 9999;
-    background: radial-gradient(ellipse at 50% 40%, #0c1530 0%, #050811 65%);
+    /* [REFRESH] Splash-only backdrop — a richer, multi-glow indigo/violet
+       mesh so the very first frame reads as distinct and premium, while
+       the login screen and rest of the app keep their own existing
+       backgrounds untouched. */
+    background:
+      radial-gradient(circle at 22% 18%, rgba(56,189,248,0.20) 0%, transparent 42%),
+      radial-gradient(circle at 80% 78%, rgba(129,140,248,0.25) 0%, transparent 48%),
+      radial-gradient(circle at 82% 12%, rgba(192,132,252,0.13) 0%, transparent 40%),
+      radial-gradient(ellipse at 50% 45%, #0b1230 0%, #04050c 72%);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 0;
@@ -148,7 +155,9 @@
   #splash.gone { display: none !important; pointer-events: none !important; visibility: hidden !important; }
   @keyframes splashFade { to { opacity: 0; transform: scale(1.04); } }
 
-  /* Background ambient orbs */
+  /* Background ambient orbs — rise in once, then drift continuously for
+     a quietly "alive" backdrop (splash screen only; nothing elsewhere in
+     the app is affected). */
   .splash-orb {
     position: absolute; border-radius: 50%; pointer-events: none;
     filter: blur(72px); opacity: 0;
@@ -173,6 +182,12 @@
     animation-delay: 0.4s;
   }
   @keyframes orbRise { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+  .splash-orb-1 { animation-name: orbRise, orbFloat1; animation-duration: 1.2s, 11s; animation-timing-function: ease, ease-in-out; animation-delay: 0.1s, 1.2s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
+  .splash-orb-2 { animation-name: orbRise, orbFloat2; animation-duration: 1.2s, 13s; animation-timing-function: ease, ease-in-out; animation-delay: 0.25s, 1.4s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
+  .splash-orb-3 { animation-name: orbRise, orbFloat3; animation-duration: 1.2s, 9.5s; animation-timing-function: ease, ease-in-out; animation-delay: 0.4s, 1.6s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
+  @keyframes orbFloat1 { 0% { translate: 0 0; } 50% { translate: 6vw 5vh; } 100% { translate: -4vw 3vh; } }
+  @keyframes orbFloat2 { 0% { translate: 0 0; } 50% { translate: -5vw -6vh; } 100% { translate: 4vw -3vh; } }
+  @keyframes orbFloat3 { 0% { translate: 0 0; } 50% { translate: 5vw -4vh; } 100% { translate: -3vw 5vh; } }
 
   /* Floating particles canvas inside splash */
   #splashParticles {
@@ -180,7 +195,11 @@
     opacity: 0; animation: fadeInEl 1s ease 0.5s forwards;
   }
 
-  /* Logo glow halo */
+  /* Logo glow halo
+     [GLOW BOOST] Bigger + brighter than before (opacity and size upped,
+     wider blur) so the soft radial glow behind the wordmark/headline
+     reads as strongly as the demo's, without changing the page-level
+     background mesh or adding any new visual elements. */
   .splash-glow-ring {
     position: relative;
     display: flex; align-items: center; justify-content: center;
@@ -190,93 +209,117 @@
   .splash-glow-ring::before {
     content: '';
     position: absolute;
-    width: clamp(180px, 50vw, 320px); height: clamp(80px, 22vw, 140px);
-    background: radial-gradient(ellipse, rgba(56,189,248,0.28) 0%, rgba(129,140,248,0.16) 45%, transparent 70%);
-    filter: blur(28px);
+    width: clamp(220px, 58vw, 380px); height: clamp(100px, 26vw, 170px);
+    background: radial-gradient(ellipse, rgba(56,189,248,0.42) 0%, rgba(129,140,248,0.26) 45%, transparent 72%);
+    filter: blur(32px);
     border-radius: 50%;
     animation: haloPulse 3s ease infinite alternate;
   }
   @keyframes haloPulse {
-    from { opacity: 0.7; transform: scaleX(1) scaleY(1); }
-    to   { opacity: 1;   transform: scaleX(1.12) scaleY(1.18); }
+    from { opacity: 0.85; transform: scaleX(1) scaleY(1); }
+    to   { opacity: 1;    transform: scaleX(1.16) scaleY(1.22); }
   }
 
-  /* ALEEM AI logo text
-     [REFRESH — Wordmark typography] Swapped to --font-wordmark (Outfit) and
-     opened up the letter-spacing / eased the weight slightly so the mark
-     reads as clean and premium instead of compressed and heavy. Font-size,
-     position, and the gradient colors are all untouched. */
+  /* ALEEM AI logo text — splash brand mark
+     [REFRESH 2] A smaller, refined top-of-screen mark (wide tracking,
+     uppercase) instead of one giant neon wordmark filling the screen —
+     reads as a quiet premium AI brand mark, with the "Welcome back"
+     headline below doing the visual heavy lifting. Gradient swapped from
+     a saturated 4-stop cyan/purple mix to a soft ice-blue → periwinkle
+     wash for a calmer, more premium feel. */
   .splash-logo {
     font-family: var(--font-wordmark);
-    font-size: clamp(44px, 12vw, 88px);
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    font-size: clamp(1.1rem, 5vw, 1.6rem);
+    font-weight: 600;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
     line-height: 1;
-    background: linear-gradient(110deg, #38bdf8 0%, #67e8f9 30%, #818cf8 65%, #c084fc 100%);
+    background: linear-gradient(120deg, #eaf2ff 0%, #b9d7ff 40%, #aab8fb 75%, #c3b6f7 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     background-size: 200% auto;
-    animation: logoShimmer 4s linear infinite;
+    animation: logoShimmer 5s linear infinite;
     position: relative; z-index: 1;
     white-space: nowrap;
     max-width: 100%;
+    filter: drop-shadow(0 1px 14px rgba(147,180,255,0.28));
   }
   @keyframes logoShimmer {
     0%   { background-position: 0% center; }
     100% { background-position: 200% center; }
   }
 
-  /* Tagline
-     [REFRESH — Tagline typography] Same wording/position, moved to the new
-     premium wordmark font at a refined weight/tracking for readability. */
-  .splash-sub {
+  /* [UNIFIED — single premium startup screen] Title text — the one line
+     of copy under the wordmark. Doubles as the default tagline
+     ("Your Personal Knowledge Assistant") and, for a returning signed-in
+     user, gets its text swapped at runtime to "Welcome back, {name}" —
+     same element, same size, same position, so there is only ever one
+     startup layout regardless of auth state. Sized as a real hero
+     headline that fills the screen, not a small caption. */
+  .splash-title {
+    /* [FONT UNIFY] Now shares --font-wordmark with .splash-logo above it
+       (was --font-display/Poppins) so the whole startup screen — wordmark
+       + "Welcome back" headline — reads as one consistent premium brand
+       font instead of two different display faces stacked together.
+       [SIZE/WEIGHT BOOST] Heavier weight (800, matching the demo) and a
+       larger clamp floor/ceiling so the headline reads as the clear
+       visual anchor of the screen, with the demo's tighter, scaling
+       letter-spacing (-0.02em) and line-height (1.15). */
     font-family: var(--font-wordmark);
-    font-size: clamp(0.62rem, 2.8vw, 0.82rem);
-    font-weight: 500;
-    color: #8ab4d4;
-    letter-spacing: clamp(2.5px, 0.9vw, 4.5px);
-    text-transform: uppercase;
+    font-size: clamp(2.8rem, 13vw, 4.2rem);
+    font-weight: 800;
+    color: #f5faff;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
     text-align: center;
-    max-width: 90vw;
-    margin-top: 14px;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.6s forwards;
+    max-width: 92vw;
+    margin-top: 34px;
+    opacity: 0; animation: fadeInUp 0.7s ease 0.5s forwards;
   }
 
-  /* Built-by line */
-  .splash-by {
+  /* Status line + dots — the single loading indicator used on every
+     launch (was previously duplicated as a progress-bar version and a
+     separate dots version). */
+  .splash-status-group {
+    display: flex; flex-direction: column; align-items: center;
+    margin-top: 22px; position: relative; z-index: 1;
+  }
+  .splash-status-txt {
     font-family: var(--font-body);
-    font-size: clamp(0.72rem, 2.4vw, 0.82rem);
+    font-size: clamp(1rem, 4vw, 1.2rem);
+    font-weight: 400;
+    color: #94a3b8;
+    letter-spacing: 0.1px;
+    text-align: center;
+    opacity: 0; animation: fadeInUp 0.7s ease 0.68s forwards;
+  }
+  .splash-dots {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    margin-top: 22px;
+    opacity: 0; animation: fadeInUp 0.7s ease 0.82s forwards;
+  }
+  .splash-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--a1), var(--a2));
+    animation: wbDotPulse 1.3s ease-in-out infinite;
+  }
+  .splash-dot:nth-child(2) { animation-delay: 0.15s; }
+  .splash-dot:nth-child(3) { animation-delay: 0.3s; }
+
+  /* Built-by credit — a quiet, constant footer line (same on every
+     launch), pinned near the bottom so it never competes with the
+     title/status area above. */
+  .splash-by {
+    position: absolute; left: 0; right: 0; bottom: clamp(28px, 6vh, 48px);
+    font-family: var(--font-body);
+    font-size: clamp(0.7rem, 2.2vw, 0.78rem);
     color: #3a5a7a;
     letter-spacing: 0.5px;
-    margin-top: 8px;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.75s forwards;
+    text-align: center;
+    opacity: 0; animation: fadeInUp 0.7s ease 0.95s forwards;
   }
 
-  /* Progress bar */
-  .splash-bar-wrap {
-    margin-top: 36px;
-    opacity: 0; animation: fadeInUp 0.7s ease 0.9s forwards;
-  }
-  .splash-bar {
-    width: clamp(180px, 52vw, 260px);
-    height: 3px;
-    background: rgba(255,255,255,0.07);
-    border-radius: 99px;
-    overflow: hidden;
-    position: relative;
-  }
-  .splash-fill {
-    height: 100%;
-    width: 0;
-    border-radius: 99px;
-    background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #38bdf8);
-    background-size: 300% auto;
-    animation: splashLoad 2.3s cubic-bezier(0.4,0,0.2,1) forwards,
-               barShimmer 1.5s linear 0.5s infinite;
-  }
-  @keyframes splashLoad  { from { width: 0; } to { width: 100%; } }
-  @keyframes barShimmer  { 0% { background-position: 0% center; } 100% { background-position: 300% center; } }
-
-  /* Loading label */
+  /* Loading label (legacy — kept only in case any other markup still
+     references it; no longer used by the splash itself). */
   .splash-loading-txt {
     font-family: var(--font-body);
     font-size: 0.65rem;
@@ -316,112 +359,13 @@
   .auth-card.success { animation: authCardSuccess 0.5s ease; }
 
   /* ================================================================
-     [ADDED] Welcome-back overlay + app skeleton — shown only on the
-     persisted-session reveal path (returning user reloading the page),
-     briefly, before the real (already-rendered) app fades in. Purely
-     cosmetic; touches nothing about how/when auth or data actually load.
-
-     [REDESIGN — Returning-user startup screen v2] Rebuilt to read as a
-     flagship AI product's resume screen (ChatGPT / Claude / Perplexity /
-     Apple register): layered cinematic lighting + vignette, a handful of
-     quiet drifting particles, a refined wordmark presentation, and a
-     minimal three-dot "resuming" pulse in place of the previous generic
-     checkmark + progress bar. Still intentionally quieter/shorter than
-     the first-load splash. Login/auth screens are untouched by this
-     section — only #welcomeBackOverlay and its children are affected.
+     [UNIFIED — single premium startup screen] There is now exactly one
+     startup layout (see .splash-title / .splash-status-group above),
+     used both for a fresh sign-in and for a returning user's session —
+     only the title text is swapped at runtime, so the app never shows
+     two different-looking startup screens back to back.
+     Login/auth screens are completely untouched by this.
   ================================================================ */
-  #welcomeBackOverlay {
-    position: fixed; inset: 0; z-index: 9998;
-    display: none; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; gap: 0;
-    background:
-      radial-gradient(ellipse 60% 45% at 50% 18%, rgba(56,189,248,0.10) 0%, transparent 60%),
-      radial-gradient(ellipse at 50% 38%, #0d1730 0%, #050811 62%);
-    opacity: 0; transition: opacity 0.55s cubic-bezier(0.16,1,0.3,1);
-    overflow: hidden;
-  }
-  #welcomeBackOverlay.show { display: flex; opacity: 1; }
-  #welcomeBackOverlay.hiding { opacity: 0; transition: opacity 0.3s cubic-bezier(0.4,0,1,1); }
-
-  /* Cinematic vignette — deepens the corners so the center (wordmark)
-     reads as the single light source in the frame. */
-  #welcomeBackOverlay::after {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(ellipse at 50% 45%, transparent 40%, rgba(0,0,0,0.35) 100%);
-  }
-
-  /* Soft ambient glow behind the mark. */
-  .wb-glow {
-    position: absolute; left: 50%; top: 42%;
-    width: clamp(260px, 65vw, 460px); height: clamp(260px, 65vw, 460px);
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(129,140,248,0.08) 45%, transparent 72%);
-    filter: blur(48px);
-    pointer-events: none;
-    animation: wbGlowDrift 7s ease-in-out infinite alternate;
-  }
-  @keyframes wbGlowDrift {
-    from { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
-    to   { opacity: 1;   transform: translate(-50%, -50%) scale(1.1); }
-  }
-
-  /* Quiet drifting points of light — a handful of soft, slow-moving
-     particles, far more restrained than the splash's canvas field.
-     Purely decorative, never more than a few pixels wide. */
-  .wb-particle {
-    position: absolute; border-radius: 50%; pointer-events: none;
-    background: radial-gradient(circle, rgba(129,203,255,0.6) 0%, transparent 70%);
-    animation: wbParticleFloat linear infinite, wbParticleFade ease-in-out infinite;
-  }
-  @keyframes wbParticleFloat { from { transform: translateY(0); } to { transform: translateY(-40px); } }
-  @keyframes wbParticleFade  { 0%, 100% { opacity: 0; } 50% { opacity: var(--wb-p-op, 0.5); } }
-
-  /* Small gradient wordmark — echoes the splash's premium typography at a
-     fraction of the scale, so the "resume" beat still feels like ALEEM AI. */
-  .wb-mark {
-    font-family: var(--font-wordmark);
-    font-size: 1rem;
-    font-weight: 600;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    background: linear-gradient(110deg, #38bdf8 0%, #67e8f9 30%, #818cf8 65%, #c084fc 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    opacity: 0; animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards;
-    margin-bottom: 26px;
-    position: relative; z-index: 1;
-  }
-
-  .wb-title {
-    font-family: var(--font-display);
-    font-size: 1.4rem; font-weight: 600; letter-spacing: -0.3px;
-    color: #fff;
-    opacity: 0; animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s forwards;
-    position: relative; z-index: 1;
-  }
-  .wb-sub {
-    font-family: var(--font-body);
-    font-size: 0.86rem; font-weight: 400;
-    color: var(--text-2); letter-spacing: 0.1px;
-    margin-top: 8px;
-    opacity: 0; animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.18s forwards;
-    position: relative; z-index: 1;
-  }
-
-  /* Minimal three-dot "resuming" pulse — the same quiet visual language
-     flagship AI assistants use for a brief thinking/loading beat, in
-     place of the previous checkmark badge + progress bar. */
-  .wb-dots {
-    display: flex; align-items: center; justify-content: center; gap: 7px;
-    margin-top: 30px; position: relative; z-index: 1;
-    opacity: 0; animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.26s forwards;
-  }
-  .wb-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--a1), var(--a2));
-    animation: wbDotPulse 1.3s ease-in-out infinite;
-  }
-  .wb-dot:nth-child(2) { animation-delay: 0.15s; }
-  .wb-dot:nth-child(3) { animation-delay: 0.3s; }
   @keyframes wbDotPulse {
     0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
     40%           { opacity: 1;    transform: scale(1); }
@@ -540,18 +484,18 @@
   .auth-logo {
     font-family: var(--font-logo);
     font-size: clamp(30px, 9vw, 42px);
-    font-weight: 800;
-    letter-spacing: -1.5px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
     line-height: 1;
-    background: linear-gradient(110deg, #38bdf8 0%, #67e8f9 30%, #818cf8 65%, #c084fc 100%);
+    background: linear-gradient(120deg, #eaf2ff 0%, #b9d7ff 40%, #aab8fb 75%, #c3b6f7 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     background-size: 200% auto;
-    animation: logoShimmer 4s linear infinite;
+    animation: logoShimmer 5s linear infinite;
     position: relative; z-index: 1;
     white-space: nowrap;
   }
   .auth-tagline {
-    font-family: var(--font-body);
+    font-family: var(--font-wordmark);
     font-size: 0.72rem;
     color: var(--text-2);
     letter-spacing: 2px;
@@ -1380,7 +1324,19 @@
     position: relative; z-index: 1;
     min-height: 100vh;
   }
-  #app.ready { display: flex; }
+  /* [ADDED — Splash → app cross-fade] Mirrors the splash's own fade-out:
+     the app shell rises in with a matched opacity + translateY transition
+     instead of snapping straight to visible the instant the splash clears. */
+  #app.ready {
+    display: flex;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  #app.ready.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
 
   /* ================================================================
      SIDEBAR OVERLAY (mobile backdrop)
@@ -1529,7 +1485,7 @@
   .brand-name {
     position: relative;
     font-family: var(--font-logo);
-    font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px;
+    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.2px;
     background: linear-gradient(135deg, #38bdf8, #818cf8);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
@@ -3798,7 +3754,7 @@
   }
   .profile-hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% -15%, rgba(56,189,248,0.12), transparent 65%); }
   .profile-logo {
-    font-family: var(--font-logo); font-size: 2.8rem; font-weight: 800; letter-spacing: -1.5px;
+    font-family: var(--font-logo); font-size: 2.8rem; font-weight: 700; letter-spacing: -0.3px;
     background: linear-gradient(135deg, #38bdf8, #818cf8, #34d399);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     margin-bottom: 6px; position: relative;
@@ -4377,7 +4333,7 @@
     text-align: center;
   }
   .settings-about-logo {
-    font-family: var(--font-logo); font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px;
+    font-family: var(--font-logo); font-size: 1.6rem; font-weight: 700; letter-spacing: -0.2px;
     background: linear-gradient(135deg, #38bdf8, #818cf8, #34d399);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     margin-bottom: 4px;
@@ -4639,7 +4595,7 @@
 
   /* --- Large display headings — clamp + wrap --- */
   .splash-logo {
-    font-size: clamp(2rem, 10vw, 5.75rem);
+    font-size: clamp(1.1rem, 5vw, 1.6rem);
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-width: 100%;
@@ -4822,7 +4778,14 @@
 
   @media (max-width: 390px) {
     .splash-logo {
-      font-size: clamp(2rem, 11vw, 3.5rem);
+      font-size: clamp(1rem, 5vw, 1.4rem);
+      letter-spacing: 0.3em;
+    }
+    .splash-title {
+      font-size: clamp(2.4rem, 12.5vw, 3.4rem);
+    }
+    .splash-status-txt {
+      font-size: clamp(0.92rem, 4vw, 1.12rem);
     }
     .about-hero h2 {
       font-size: clamp(1.1rem, 8vw, 1.6rem);
@@ -4850,8 +4813,14 @@
 
   @media (max-width: 360px) {
     .splash-logo {
-      font-size: clamp(1.8rem, 11vw, 3rem);
-      letter-spacing: -0.3px;
+      font-size: clamp(0.95rem, 5vw, 1.3rem);
+      letter-spacing: 0.28em;
+    }
+    .splash-title {
+      font-size: clamp(2.2rem, 12.5vw, 3.1rem);
+    }
+    .splash-status-txt {
+      font-size: clamp(0.88rem, 4vw, 1.05rem);
     }
     .about-hero h2 {
       font-size: clamp(1rem, 8.5vw, 1.5rem);
@@ -4876,8 +4845,14 @@
 
   @media (max-width: 320px) {
     .splash-logo {
-      font-size: clamp(1.6rem, 12vw, 2.4rem);
-      letter-spacing: -0.3px;
+      font-size: clamp(0.9rem, 5vw, 1.2rem);
+      letter-spacing: 0.25em;
+    }
+    .splash-title {
+      font-size: clamp(2rem, 12.5vw, 2.8rem);
+    }
+    .splash-status-txt {
+      font-size: clamp(0.85rem, 4vw, 1rem);
     }
     .about-hero {
       padding: 22px 10px;
@@ -5889,17 +5864,23 @@
     <div class="splash-logo">ALEEM AI</div>
   </div>
 
-  <!-- Tagline -->
-  <div class="splash-sub">Your Personal Knowledge Assistant</div>
+  <!-- [UNIFIED — single premium startup screen] One consistent title +
+       status + dots layout used for every launch (first-time and
+       returning users alike) instead of switching between two different
+       designs. Only the title text below is personalized at runtime
+       ("Welcome back, {name}") for a returning, already-signed-in user —
+       the layout, sizing, and animation stay identical either way. -->
+  <div class="splash-title" id="splashTitle">Welcome</div>
 
-  <!-- Built by -->
-  <div class="splash-by">Built by Aleem Sudamaniya</div>
-
-  <!-- Loading bar -->
-  <div class="splash-bar-wrap">
-    <div class="splash-bar"><div class="splash-fill"></div></div>
-    <div class="splash-loading-txt">Initialising</div>
+  <div class="splash-status-group">
+    <div class="splash-status-txt" id="splashStatusTxt">Preparing your workspace…</div>
+    <div class="splash-dots"><span class="splash-dot"></span><span class="splash-dot"></span><span class="splash-dot"></span></div>
   </div>
+
+  <!-- Built by — hidden specifically during the personalized "Welcome
+       back" returning-user state via JS (see showWelcomeBackThenApp),
+       but still shows during the generic first-launch splash. -->
+  <div class="splash-by" id="splashBy">Built by Aleem Sudamaniya</div>
 </div>
 
 <!-- AUTH GATE (Login Screen) — premium first-launch / sign-in screen.
@@ -5947,23 +5928,6 @@
 
     <div class="auth-footnote">By continuing you agree to ALEEM AI's Terms &amp; Privacy Policy.</div>
   </div>
-</div>
-
-<!-- [ADDED] Welcome-back overlay — shown briefly for a returning (already
-     signed-in) user on page load, instead of jumping straight into the app.
-     [REDESIGN v2] Cinematic layered lighting + a few quiet drifting
-     particles + refined wordmark + a minimal three-dot resume pulse.
-     Login/auth screens are untouched. -->
-<div id="welcomeBackOverlay">
-  <div class="wb-glow"></div>
-  <div class="wb-particle" style="left:23%; top:28%; width:3px; height:3px; --wb-p-op:0.5; animation-duration:7s,3.2s;"></div>
-  <div class="wb-particle" style="left:77%; top:24%; width:4px; height:4px; --wb-p-op:0.4; animation-duration:9s,4s; animation-delay:1.1s,0.4s;"></div>
-  <div class="wb-particle" style="left:31%; top:68%; width:3px; height:3px; --wb-p-op:0.35; animation-duration:8s,3.6s; animation-delay:2s,1s;"></div>
-  <div class="wb-particle" style="left:71%; top:72%; width:2px; height:2px; --wb-p-op:0.45; animation-duration:6.5s,3s; animation-delay:0.6s,1.6s;"></div>
-  <div class="wb-mark">ALEEM AI</div>
-  <div class="wb-title" id="wbTitle">Welcome back</div>
-  <div class="wb-sub" id="wbSub">Preparing your workspace…</div>
-  <div class="wb-dots"><span class="wb-dot"></span><span class="wb-dot"></span><span class="wb-dot"></span></div>
 </div>
 
 <!-- [ADDED] App skeleton — sits above the (already-rendered) real app for a
@@ -18670,6 +18634,12 @@ if ('serviceWorker' in navigator) {
     if (app) {
       app.classList.add('ready');
       app.style.display = '';
+      // Force a reflow so the opacity/transform transition actually plays
+      // instead of snapping straight to visible — same trick used by
+      // showAuthGate() below, so the splash's fade-out and the app's
+      // fade+rise-in feel like one continuous motion.
+      void app.offsetWidth;
+      app.classList.add('show');
     } else {
     }
   }
@@ -18731,22 +18701,27 @@ if ('serviceWorker' in navigator) {
   // persisted-session reveal path (a returning user's page load) — not on
   // interactive sign-in, which already has its own success feedback.
   function showWelcomeBackThenApp(user) {
-    var wb = document.getElementById('welcomeBackOverlay');
     var skel = document.getElementById('appSkeleton');
-    var wbTitle = document.getElementById('wbTitle');
-    if (wbTitle) {
+    // [UNIFIED — single premium startup screen] Personalize the same
+    // title element the splash already shows (no separate block to
+    // swap to) — the layout stays identical to a fresh sign-in launch.
+    var splashTitle = document.getElementById('splashTitle');
+    if (splashTitle) {
       var first = (user && user.displayName) ? user.displayName.split(' ')[0] : '';
-      wbTitle.textContent = first ? ('Welcome back, ' + first) : 'Welcome back';
+      splashTitle.textContent = first ? ('Welcome back, ' + first) : 'Welcome back';
     }
+    // [ADDED — Welcome-state footer removal] The "Built by…" credit is
+    // part of the generic first-launch splash only; it shouldn't coexist
+    // with the personalized "Welcome back" greeting.
+    var splashBy = document.getElementById('splashBy');
+    if (splashBy) { splashBy.style.display = 'none'; }
+
     showApp(); // real content renders underneath immediately, as before
     if (skel) { skel.style.display = 'flex'; skel.classList.add('show'); }
-    if (wb) { wb.classList.add('show'); }
     var holdMs = 400 + Math.floor(Math.random() * 300); // 400–700ms
     setTimeout(function() {
-      if (wb) { wb.classList.add('hiding'); }
       if (skel) { skel.classList.add('hiding'); }
       setTimeout(function() {
-        if (wb)   { wb.classList.remove('show', 'hiding'); wb.style.display = 'none'; }
         if (skel) { skel.classList.remove('show', 'hiding'); skel.style.display = 'none'; }
       }, 350);
     }, holdMs);
@@ -18922,7 +18897,7 @@ if ('serviceWorker' in navigator) {
     } else {
       showAuthGate();
       var app = document.getElementById('app');
-      if (app) app.classList.remove('ready');
+      if (app) app.classList.remove('ready', 'show');
       if (app) app.style.display = 'none';
     }
   });
