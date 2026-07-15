@@ -18658,20 +18658,48 @@ if ('serviceWorker' in navigator) {
       // derive a name from the email local-part as a last resort —
       // only a genuinely nameless account falls back to the plain
       // greeting now.
-      var rawName = (user && user.displayName) ? user.displayName
-        : (user && user.providerData && user.providerData[0] && user.providerData[0].displayName) ? user.providerData[0].displayName
-        : (user && user.email) ? user.email.split('@')[0]
-        : '';
-      var first = rawName ? rawName.trim().split(/\s+/)[0] : '';
-      if (first) {
-        splashTitle.textContent = '';
-        splashTitle.appendChild(document.createTextNode('Welcome back, '));
-        var nameSpan = document.createElement('span');
-        nameSpan.className = 'user-name';
-        nameSpan.textContent = first;
-        splashTitle.appendChild(nameSpan);
-      } else {
-        splashTitle.textContent = 'Welcome';
+      // [FIX — greeting rendered before identity was confirmed] Previously
+      // this read whatever fields happened to be on `user` at the instant
+      // showWelcomeBackThenApp() was invoked and rendered immediately —
+      // there was no check that Firebase had actually finished resolving
+      // this user's identity yet, so a still-hydrating object silently
+      // produced plain "Welcome" and that result was then locked in for
+      // good (the caller marks `revealed = true` right away and never
+      // revisits it). Factored the name derivation out so it can be
+      // re-run once real data is confirmed, instead of only ever reading
+      // one static snapshot.
+      function deriveFirstName(u) {
+        var rawName = (u && u.displayName) ? u.displayName
+          : (u && u.providerData && u.providerData[0] && u.providerData[0].displayName) ? u.providerData[0].displayName
+          : (u && u.email) ? u.email.split('@')[0]
+          : '';
+        return rawName ? rawName.trim().split(/\s+/)[0] : '';
+      }
+      function renderGreeting(name) {
+        if (name) {
+          splashTitle.textContent = '';
+          splashTitle.appendChild(document.createTextNode('Welcome back, '));
+          var nameSpan = document.createElement('span');
+          nameSpan.className = 'user-name';
+          nameSpan.textContent = name;
+          splashTitle.appendChild(nameSpan);
+        } else {
+          splashTitle.textContent = 'Welcome';
+        }
+      }
+      var first = deriveFirstName(user);
+      renderGreeting(first);
+      // If nothing resolved yet, force a real confirmation of this user's
+      // current data (rather than guessing) and correct the greeting the
+      // moment Firebase actually reports it — this is the one case the
+      // static snapshot above can miss.
+      if (!first && user && typeof user.reload === 'function') {
+        user.reload().then(function() {
+          var confirmed = deriveFirstName(user);
+          if (confirmed) renderGreeting(confirmed);
+        }).catch(function() {
+          // Reload failed (e.g. offline) — leave the plain "Welcome" shown.
+        });
       }
     }
     // [ADDED — Welcome-state footer removal] The "Built by…" credit is
@@ -18761,7 +18789,19 @@ if ('serviceWorker' in navigator) {
   // ================================================================
   var coreReady = !!window.__aleemCoreReady;
   var fastRevealed = false;
-  var FAST_REVEAL_MIN_HOLD_MS = 450; // keeps the brand moment from feeling like a flash
+  // [FIX — splash disappearing too fast / greeting unreadable] This was
+  // 450ms, which is well under the time init() itself (loadStorage,
+  // renderHistory, particles, bindAllEvents, etc.) typically takes to run.
+  // Since `elapsed` below is measured from navigation start, coreReady
+  // frequently flipped true *after* 450ms had already passed — so
+  // `remaining` came out to 0 and the "Welcome back, {name}" splash
+  // swapped in and started fading out in the same tick. It wasn't that
+  // the personalized greeting failed to render — it rendered and vanished
+  // too fast to perceive, which read as "it just shows Welcome". Raised
+  // to a real minimum hold in the requested ~900–1200ms range. The
+  // `remaining` calc below still adapts naturally: if init() legitimately
+  // takes longer than this floor, no extra time is added on top.
+  var FAST_REVEAL_MIN_HOLD_MS = 1000;
 
   function tryFastReveal() {
     if (fastRevealed || revealed) return;
