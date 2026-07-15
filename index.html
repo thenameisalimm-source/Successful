@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#0a84ff">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@700;800&family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
 
   <style>
   /* ================================================================
@@ -21,6 +21,10 @@
        premium display face instead of the old blockier Syne cut. */
     --font-logo:    var(--font-wordmark);
     --font-wordmark: 'Space Grotesk', 'Manrope', 'Outfit', sans-serif;
+    /* [FIX — splash typography] Dedicated premium display face for the
+       welcome/splash screen only, matching the demo's Plus Jakarta Sans
+       (the rest of the app's branding keeps --font-wordmark untouched). */
+    --font-splash:  'Plus Jakarta Sans', 'Manrope', 'Outfit', sans-serif;
     --font-display: 'Poppins', sans-serif;
     --font-body:    'Inter', sans-serif;
     --font-mono:    'JetBrains Mono', monospace;
@@ -136,99 +140,54 @@
   ================================================================ */
   #splash {
     position: fixed; inset: 0; z-index: 9999;
-    /* [REFRESH] Splash-only backdrop — a richer, multi-glow indigo/violet
-       mesh so the very first frame reads as distinct and premium, while
-       the login screen and rest of the app keep their own existing
-       backgrounds untouched. */
+    /* [FIX — match demo] Background mesh gradient values now mirror the
+       demo's splash-screen.html exactly (opacities were previously
+       boosted above the demo's reference values). */
     background:
-      radial-gradient(circle at 22% 18%, rgba(56,189,248,0.20) 0%, transparent 42%),
-      radial-gradient(circle at 80% 78%, rgba(129,140,248,0.25) 0%, transparent 48%),
-      radial-gradient(circle at 82% 12%, rgba(192,132,252,0.13) 0%, transparent 40%),
+      radial-gradient(circle at 22% 18%, rgba(56,189,248,0.16) 0%, transparent 42%),
+      radial-gradient(circle at 80% 78%, rgba(129,140,248,0.20) 0%, transparent 48%),
+      radial-gradient(circle at 82% 12%, rgba(192,132,252,0.10) 0%, transparent 40%),
       radial-gradient(ellipse at 50% 45%, #0b1230 0%, #04050c 72%);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: 0;
-    padding: 24px 20px;
+    padding: 24px;
     overflow: hidden;
   }
   #splash.out  { animation: splashFade 0.6s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events: none !important; visibility: hidden !important; }
   #splash.gone { display: none !important; pointer-events: none !important; visibility: hidden !important; }
   @keyframes splashFade { to { opacity: 0; transform: scale(1.04); } }
 
-  /* Background ambient orbs — rise in once, then drift continuously for
-     a quietly "alive" backdrop (splash screen only; nothing elsewhere in
-     the app is affected). */
+  /* [FIX — match demo] The demo splash has no floating ambient orbs, only
+     the flat gradient mesh background above. Hidden (not deleted) so the
+     markup/JS wiring is untouched. */
   .splash-orb {
-    position: absolute; border-radius: 50%; pointer-events: none;
-    filter: blur(72px); opacity: 0;
-    animation: orbRise 1.2s ease forwards;
+    display: none;
   }
-  .splash-orb-1 {
-    width: clamp(220px, 55vw, 420px); height: clamp(220px, 55vw, 420px);
-    background: radial-gradient(circle, rgba(56,189,248,0.22) 0%, transparent 70%);
-    top: -10%; left: -10%;
-    animation-delay: 0.1s;
-  }
-  .splash-orb-2 {
-    width: clamp(180px, 45vw, 360px); height: clamp(180px, 45vw, 360px);
-    background: radial-gradient(circle, rgba(129,140,248,0.20) 0%, transparent 70%);
-    bottom: 5%; right: -8%;
-    animation-delay: 0.25s;
-  }
-  .splash-orb-3 {
-    width: clamp(140px, 35vw, 280px); height: clamp(140px, 35vw, 280px);
-    background: radial-gradient(circle, rgba(52,211,153,0.12) 0%, transparent 70%);
-    bottom: 20%; left: 10%;
-    animation-delay: 0.4s;
-  }
-  @keyframes orbRise { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
-  .splash-orb-1 { animation-name: orbRise, orbFloat1; animation-duration: 1.2s, 11s; animation-timing-function: ease, ease-in-out; animation-delay: 0.1s, 1.2s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
-  .splash-orb-2 { animation-name: orbRise, orbFloat2; animation-duration: 1.2s, 13s; animation-timing-function: ease, ease-in-out; animation-delay: 0.25s, 1.4s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
-  .splash-orb-3 { animation-name: orbRise, orbFloat3; animation-duration: 1.2s, 9.5s; animation-timing-function: ease, ease-in-out; animation-delay: 0.4s, 1.6s; animation-iteration-count: 1, infinite; animation-direction: normal, alternate; animation-fill-mode: forwards, none; }
-  @keyframes orbFloat1 { 0% { translate: 0 0; } 50% { translate: 6vw 5vh; } 100% { translate: -4vw 3vh; } }
-  @keyframes orbFloat2 { 0% { translate: 0 0; } 50% { translate: -5vw -6vh; } 100% { translate: 4vw -3vh; } }
-  @keyframes orbFloat3 { 0% { translate: 0 0; } 50% { translate: 5vw -4vh; } 100% { translate: -3vw 5vh; } }
 
-  /* Floating particles canvas inside splash */
+  /* [FIX — match demo] The demo splash has no particle effect. Hidden
+     (not deleted) so the JS wiring / rAF loop is untouched. */
   #splashParticles {
-    position: absolute; inset: 0; pointer-events: none;
-    opacity: 0; animation: fadeInEl 1s ease 0.5s forwards;
+    display: none;
   }
 
-  /* Logo glow halo
-     [GLOW BOOST] Bigger + brighter than before (opacity and size upped,
-     wider blur) so the soft radial glow behind the wordmark/headline
-     reads as strongly as the demo's, without changing the page-level
-     background mesh or adding any new visual elements. */
+  /* [FIX — match demo] The demo has no separate glow-halo blob behind the
+     wordmark — its glow comes entirely from the drop-shadow filter on
+     .splash-logo below. Wrapper kept for layout (it centers the logo) but
+     the pulsing halo pseudo-element is removed to match the demo, and the
+     wrapper carries no extra spacing of its own (matches the demo's plain
+     .brand div, which has no margin either). */
   .splash-glow-ring {
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    margin-bottom: 6px;
     opacity: 0; animation: fadeInUp 0.7s cubic-bezier(0.4,0,0.2,1) 0.3s forwards;
   }
-  .splash-glow-ring::before {
-    content: '';
-    position: absolute;
-    width: clamp(220px, 58vw, 380px); height: clamp(100px, 26vw, 170px);
-    background: radial-gradient(ellipse, rgba(56,189,248,0.42) 0%, rgba(129,140,248,0.26) 45%, transparent 72%);
-    filter: blur(32px);
-    border-radius: 50%;
-    animation: haloPulse 3s ease infinite alternate;
-  }
-  @keyframes haloPulse {
-    from { opacity: 0.85; transform: scaleX(1) scaleY(1); }
-    to   { opacity: 1;    transform: scaleX(1.16) scaleY(1.22); }
-  }
 
-  /* ALEEM AI logo text — splash brand mark
-     [REFRESH 2] A smaller, refined top-of-screen mark (wide tracking,
-     uppercase) instead of one giant neon wordmark filling the screen —
-     reads as a quiet premium AI brand mark, with the "Welcome back"
-     headline below doing the visual heavy lifting. Gradient swapped from
-     a saturated 4-stop cyan/purple mix to a soft ice-blue → periwinkle
-     wash for a calmer, more premium feel. */
+  /* ALEEM AI logo text — splash brand mark, matching the demo's .brand
+     exactly: static soft ice-blue → periwinkle gradient text with a
+     subtle drop-shadow glow (no shimmer animation, no halo blob). */
   .splash-logo {
-    font-family: var(--font-wordmark);
+    font-family: var(--font-splash);
     font-size: clamp(1.1rem, 5vw, 1.6rem);
     font-weight: 600;
     letter-spacing: 0.35em;
@@ -236,16 +195,10 @@
     line-height: 1;
     background: linear-gradient(120deg, #eaf2ff 0%, #b9d7ff 40%, #aab8fb 75%, #c3b6f7 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    background-size: 200% auto;
-    animation: logoShimmer 5s linear infinite;
     position: relative; z-index: 1;
     white-space: nowrap;
     max-width: 100%;
     filter: drop-shadow(0 1px 14px rgba(147,180,255,0.28));
-  }
-  @keyframes logoShimmer {
-    0%   { background-position: 0% center; }
-    100% { background-position: 200% center; }
   }
 
   /* [UNIFIED — single premium startup screen] Title text — the one line
@@ -256,24 +209,31 @@
      startup layout regardless of auth state. Sized as a real hero
      headline that fills the screen, not a small caption. */
   .splash-title {
-    /* [FONT UNIFY] Now shares --font-wordmark with .splash-logo above it
-       (was --font-display/Poppins) so the whole startup screen — wordmark
-       + "Welcome back" headline — reads as one consistent premium brand
-       font instead of two different display faces stacked together.
-       [SIZE/WEIGHT BOOST] Heavier weight (800, matching the demo) and a
-       larger clamp floor/ceiling so the headline reads as the clear
-       visual anchor of the screen, with the demo's tighter, scaling
-       letter-spacing (-0.02em) and line-height (1.15). */
-    font-family: var(--font-wordmark);
-    font-size: clamp(2.8rem, 13vw, 4.2rem);
+    /* [FIX — splash typography] Uses --font-splash (Plus Jakarta Sans,
+       matching the demo) instead of --font-wordmark, so the headline reads
+       as the premium display face from the demo rather than the app's
+       general brand font. Size, weight, color, letter-spacing and
+       line-height now match the demo's .heading exactly. */
+    font-family: var(--font-splash);
+    font-size: clamp(2rem, 9vw, 3.4rem);
     font-weight: 800;
-    color: #f5faff;
+    color: #ffffff;
     letter-spacing: -0.02em;
     line-height: 1.15;
     text-align: center;
     max-width: 92vw;
     margin-top: 34px;
     opacity: 0; animation: fadeInUp 0.7s ease 0.5s forwards;
+  }
+
+  /* [FIX — splash typography] The signed-in user's first name inside the
+     "Welcome back, {name}" headline, matching the demo's soft blue→indigo
+     gradient accent on the name (rest of the headline stays plain white). */
+  .splash-title .user-name {
+    background: linear-gradient(90deg, #7dd3fc 0%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   /* Status line + dots — the single loading indicator used on every
@@ -288,7 +248,6 @@
     font-size: clamp(1rem, 4vw, 1.2rem);
     font-weight: 400;
     color: #94a3b8;
-    letter-spacing: 0.1px;
     text-align: center;
     opacity: 0; animation: fadeInUp 0.7s ease 0.68s forwards;
   }
@@ -307,13 +266,14 @@
 
   /* Built-by credit — a quiet, constant footer line (same on every
      launch), pinned near the bottom so it never competes with the
-     title/status area above. */
+     title/status area above. Position, size and letter-spacing now match
+     the demo's .footer exactly. */
   .splash-by {
-    position: absolute; left: 0; right: 0; bottom: clamp(28px, 6vh, 48px);
+    position: absolute; left: 0; right: 0; bottom: clamp(24px, 6vh, 44px);
     font-family: var(--font-body);
-    font-size: clamp(0.7rem, 2.2vw, 0.78rem);
+    font-size: 0.78rem;
     color: #3a5a7a;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.05em;
     text-align: center;
     opacity: 0; animation: fadeInUp 0.7s ease 0.95s forwards;
   }
@@ -4777,16 +4737,6 @@
   }
 
   @media (max-width: 390px) {
-    .splash-logo {
-      font-size: clamp(1rem, 5vw, 1.4rem);
-      letter-spacing: 0.3em;
-    }
-    .splash-title {
-      font-size: clamp(2.4rem, 12.5vw, 3.4rem);
-    }
-    .splash-status-txt {
-      font-size: clamp(0.92rem, 4vw, 1.12rem);
-    }
     .about-hero h2 {
       font-size: clamp(1.1rem, 8vw, 1.6rem);
     }
@@ -4812,16 +4762,6 @@
   }
 
   @media (max-width: 360px) {
-    .splash-logo {
-      font-size: clamp(0.95rem, 5vw, 1.3rem);
-      letter-spacing: 0.28em;
-    }
-    .splash-title {
-      font-size: clamp(2.2rem, 12.5vw, 3.1rem);
-    }
-    .splash-status-txt {
-      font-size: clamp(0.88rem, 4vw, 1.05rem);
-    }
     .about-hero h2 {
       font-size: clamp(1rem, 8.5vw, 1.5rem);
     }
@@ -4844,16 +4784,6 @@
   }
 
   @media (max-width: 320px) {
-    .splash-logo {
-      font-size: clamp(0.9rem, 5vw, 1.2rem);
-      letter-spacing: 0.25em;
-    }
-    .splash-title {
-      font-size: clamp(2rem, 12.5vw, 2.8rem);
-    }
-    .splash-status-txt {
-      font-size: clamp(0.85rem, 4vw, 1rem);
-    }
     .about-hero {
       padding: 22px 10px;
     }
@@ -18697,18 +18627,52 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  // [ADDED] Welcome-back + skeleton interstitial, shown only on this
-  // persisted-session reveal path (a returning user's page load) — not on
-  // interactive sign-in, which already has its own success feedback.
+  // [ADDED] Welcome-back interstitial, shown only on this persisted-session
+  // reveal path (a returning user's page load) — not on interactive
+  // sign-in, which already has its own success feedback.
+  //
+  // [FIX — dynamic name] Always shows the signed-in user's first name
+  // ("Welcome back, {first name}"), styled with the same gradient accent
+  // as the demo. Falls back to plain "Welcome" when there's no display
+  // name to show, instead of a nameless "Welcome back".
+  //
+  // [FIX — second loading screen] The app skeleton used to be shown
+  // unconditionally for 400–700ms on every single launch, which is exactly
+  // the extra "Splash → Welcome → Skeleton → App" screen that shouldn't be
+  // there. The welcome screen (this splash) now stays up until the app is
+  // actually ready, and the skeleton is only ever used as a fallback if
+  // init is genuinely still not ready ~1s after the welcome screen would
+  // normally have handed off — see maybeShowSkeletonFallback() below.
   function showWelcomeBackThenApp(user) {
-    var skel = document.getElementById('appSkeleton');
     // [UNIFIED — single premium startup screen] Personalize the same
     // title element the splash already shows (no separate block to
     // swap to) — the layout stays identical to a fresh sign-in launch.
     var splashTitle = document.getElementById('splashTitle');
     if (splashTitle) {
-      var first = (user && user.displayName) ? user.displayName.split(' ')[0] : '';
-      splashTitle.textContent = first ? ('Welcome back, ' + first) : 'Welcome back';
+      // [FIX — dynamic name not appearing] On a restored/cached session,
+      // the `user` object handed to onAuthStateChanged sometimes has
+      // user.displayName not yet hydrated (it lands a beat later on
+      // providerData), which was silently falling through to plain
+      // "Welcome". Try displayName first, then the same field on
+      // providerData (Google sign-in populates this reliably), then
+      // derive a name from the email local-part as a last resort —
+      // only a genuinely nameless account falls back to the plain
+      // greeting now.
+      var rawName = (user && user.displayName) ? user.displayName
+        : (user && user.providerData && user.providerData[0] && user.providerData[0].displayName) ? user.providerData[0].displayName
+        : (user && user.email) ? user.email.split('@')[0]
+        : '';
+      var first = rawName ? rawName.trim().split(/\s+/)[0] : '';
+      if (first) {
+        splashTitle.textContent = '';
+        splashTitle.appendChild(document.createTextNode('Welcome back, '));
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'user-name';
+        nameSpan.textContent = first;
+        splashTitle.appendChild(nameSpan);
+      } else {
+        splashTitle.textContent = 'Welcome';
+      }
     }
     // [ADDED — Welcome-state footer removal] The "Built by…" credit is
     // part of the generic first-launch splash only; it shouldn't coexist
@@ -18717,14 +18681,38 @@ if ('serviceWorker' in navigator) {
     if (splashBy) { splashBy.style.display = 'none'; }
 
     showApp(); // real content renders underneath immediately, as before
-    if (skel) { skel.style.display = 'flex'; skel.classList.add('show'); }
-    var holdMs = 400 + Math.floor(Math.random() * 300); // 400–700ms
-    setTimeout(function() {
-      if (skel) { skel.classList.add('hiding'); }
-      setTimeout(function() {
-        if (skel) { skel.classList.remove('show', 'hiding'); skel.style.display = 'none'; }
-      }, 350);
-    }, holdMs);
+    maybeShowSkeletonFallback();
+  }
+
+  // [FIX — second loading screen] Only shows the app skeleton if init is
+  // genuinely still not ready ~1s after the welcome screen would normally
+  // have handed off to the app. If the app is already ready (the common
+  // case), this is a no-op and no skeleton ever appears.
+  function maybeShowSkeletonFallback() {
+    var skel = document.getElementById('appSkeleton');
+    if (!skel || window.__aleemCoreReady) { return; }
+
+    var shown = false;
+    var fallbackTimer = setTimeout(function() {
+      if (window.__aleemCoreReady) { return; } // became ready just in time
+      shown = true;
+      skel.style.display = 'flex';
+      skel.classList.add('show');
+    }, 1000);
+
+    var prevOnCoreReady = window.__aleemOnCoreReady;
+    window.__aleemOnCoreReady = function() {
+      if (typeof prevOnCoreReady === 'function') { prevOnCoreReady(); }
+      clearTimeout(fallbackTimer);
+      if (shown) {
+        skel.classList.add('hiding');
+        setTimeout(function() {
+          skel.classList.remove('show', 'hiding');
+          skel.style.display = 'none';
+        }, 350);
+      }
+      window.__aleemOnCoreReady = prevOnCoreReady;
+    };
   }
 
   // Reveal the correct screen (app or login) and only then hide the splash.
