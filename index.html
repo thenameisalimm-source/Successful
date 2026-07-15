@@ -5800,7 +5800,7 @@
        designs. Only the title text below is personalized at runtime
        ("Welcome back, {name}") for a returning, already-signed-in user —
        the layout, sizing, and animation stay identical either way. -->
-  <div class="splash-title" id="splashTitle">Welcome</div>
+  <div class="splash-title" id="splashTitle"></div>
 
   <div class="splash-status-group">
     <div class="splash-status-txt" id="splashStatusTxt">Preparing your workspace…</div>
@@ -18563,6 +18563,11 @@ if ('serviceWorker' in navigator) {
   let splashTimerDone = false;                 // fixed ~2.4s splash minimum (signed-out/login path only — unchanged)
   let coreReady = !!window.__aleemCoreReady;    // real app content ready to render underneath the splash
   let revealed = false;
+  // [FIX — visible greeting swap] Holds the in-flight name-resolution
+  // promise for a returning/authenticated user, kicked off the moment the
+  // user is known (see onAuthStateChanged) rather than only once coreReady
+  // — so it's usually already settled by the time reveal() needs it.
+  let greetingNamePromise = null;
 
   function showApp() {
     var app = document.getElementById('app');
@@ -18648,64 +18653,71 @@ if ('serviceWorker' in navigator) {
   // actually ready, and the skeleton is only ever used as a fallback if
   // init is genuinely still not ready ~1s after the welcome screen would
   // normally have handed off — see maybeShowSkeletonFallback() below.
-  function showWelcomeBackThenApp(user) {
+  // [FIX — dynamic name not appearing] On a restored/cached session, the
+  // `user` object handed to onAuthStateChanged sometimes has
+  // user.displayName not yet hydrated (it lands a beat later on
+  // providerData). Try displayName first, then the same field on
+  // providerData (Google sign-in populates this reliably), then derive a
+  // name from the email local-part as a last resort — only a genuinely
+  // nameless account falls back to the plain greeting.
+  function deriveFirstName(u) {
+    var rawName = (u && u.displayName) ? u.displayName
+      : (u && u.providerData && u.providerData[0] && u.providerData[0].displayName) ? u.providerData[0].displayName
+      : (u && u.email) ? u.email.split('@')[0]
+      : '';
+    return rawName ? rawName.trim().split(/\s+/)[0] : '';
+  }
+
+  // [FIX — double-render of the greeting] This used to render immediately
+  // with whatever was available (often producing plain "Welcome"), then
+  // silently correct itself in place once a reload() confirmed the real
+  // name — a visible "Welcome" → "Welcome back, {name}" swap on exactly
+  // the sessions where displayName hadn't hydrated yet. Name resolution
+  // (including the reload() fallback) now fully finishes here, off-screen,
+  // before showWelcomeBackThenApp ever touches the DOM, so the greeting is
+  // written once, already correct, and only falls back to plain "Welcome"
+  // if the name genuinely can't be resolved even after reload().
+  // Returns a Promise<string> (first name, or '' if unresolvable).
+  function resolveGreetingName(user) {
+    var first = deriveFirstName(user);
+    if (first) { return Promise.resolve(first); }
+    if (!user || typeof user.reload !== 'function') { return Promise.resolve(''); }
+    // Defensive timeout so a stalled/offline reload() can't hold the
+    // splash up forever — falls back to plain "Welcome" instead of hanging.
+    var timeout = new Promise(function(resolve) {
+      setTimeout(function() { resolve(''); }, 2500);
+    });
+    var reloaded = user.reload().then(function() {
+      return deriveFirstName(user);
+    }).catch(function() {
+      return ''; // Reload failed (e.g. offline) — fall back to plain "Welcome".
+    });
+    return Promise.race([reloaded, timeout]);
+  }
+
+  function renderGreeting(splashTitle, name) {
+    if (name) {
+      splashTitle.textContent = '';
+      splashTitle.appendChild(document.createTextNode('Welcome back, '));
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'user-name';
+      nameSpan.textContent = name;
+      splashTitle.appendChild(nameSpan);
+    } else {
+      splashTitle.textContent = 'Welcome';
+    }
+  }
+
+  function showWelcomeBackThenApp(user, resolvedName) {
     // [UNIFIED — single premium startup screen] Personalize the same
     // title element the splash already shows (no separate block to
     // swap to) — the layout stays identical to a fresh sign-in launch.
+    // By the time this runs, resolvedName is already final (see
+    // resolveGreetingName/reveal), so this is the one and only time the
+    // greeting is written to the DOM for a returning user.
     var splashTitle = document.getElementById('splashTitle');
     if (splashTitle) {
-      // [FIX — dynamic name not appearing] On a restored/cached session,
-      // the `user` object handed to onAuthStateChanged sometimes has
-      // user.displayName not yet hydrated (it lands a beat later on
-      // providerData), which was silently falling through to plain
-      // "Welcome". Try displayName first, then the same field on
-      // providerData (Google sign-in populates this reliably), then
-      // derive a name from the email local-part as a last resort —
-      // only a genuinely nameless account falls back to the plain
-      // greeting now.
-      // [FIX — greeting rendered before identity was confirmed] Previously
-      // this read whatever fields happened to be on `user` at the instant
-      // showWelcomeBackThenApp() was invoked and rendered immediately —
-      // there was no check that Firebase had actually finished resolving
-      // this user's identity yet, so a still-hydrating object silently
-      // produced plain "Welcome" and that result was then locked in for
-      // good (the caller marks `revealed = true` right away and never
-      // revisits it). Factored the name derivation out so it can be
-      // re-run once real data is confirmed, instead of only ever reading
-      // one static snapshot.
-      function deriveFirstName(u) {
-        var rawName = (u && u.displayName) ? u.displayName
-          : (u && u.providerData && u.providerData[0] && u.providerData[0].displayName) ? u.providerData[0].displayName
-          : (u && u.email) ? u.email.split('@')[0]
-          : '';
-        return rawName ? rawName.trim().split(/\s+/)[0] : '';
-      }
-      function renderGreeting(name) {
-        if (name) {
-          splashTitle.textContent = '';
-          splashTitle.appendChild(document.createTextNode('Welcome back, '));
-          var nameSpan = document.createElement('span');
-          nameSpan.className = 'user-name';
-          nameSpan.textContent = name;
-          splashTitle.appendChild(nameSpan);
-        } else {
-          splashTitle.textContent = 'Welcome';
-        }
-      }
-      var first = deriveFirstName(user);
-      renderGreeting(first);
-      // If nothing resolved yet, force a real confirmation of this user's
-      // current data (rather than guessing) and correct the greeting the
-      // moment Firebase actually reports it — this is the one case the
-      // static snapshot above can miss.
-      if (!first && user && typeof user.reload === 'function') {
-        user.reload().then(function() {
-          var confirmed = deriveFirstName(user);
-          if (confirmed) renderGreeting(confirmed);
-        }).catch(function() {
-          // Reload failed (e.g. offline) — leave the plain "Welcome" shown.
-        });
-      }
+      renderGreeting(splashTitle, resolvedName);
     }
     // [ADDED — Welcome-state footer removal] The "Built by…" credit is
     // part of the generic first-launch splash only; it shouldn't coexist
@@ -18768,7 +18780,7 @@ if ('serviceWorker' in navigator) {
   // collapsed to 0 and the greeting flashed and vanished in the same
   // tick. Anchoring the hold to the moment reveal() actually fires — not
   // to navigation start — makes the hold time constant on every path.
-  var RETURNING_USER_MIN_HOLD_MS = 1000;
+  var RETURNING_USER_MIN_HOLD_MS = 1500;
 
   function hideSplashNow() {
     var sp = window.__aleemSplashEl || document.getElementById('splash');
@@ -18801,8 +18813,18 @@ if ('serviceWorker' in navigator) {
       // nothing else for an authenticated user to wait on.
       if (!coreReady) { return; }
       revealed = true;
-      showWelcomeBackThenApp(currentUser);
-      setTimeout(hideSplashNow, RETURNING_USER_MIN_HOLD_MS);
+      // [FIX — visible "Welcome" → "Welcome back, {name}" swap] Greeting
+      // resolution (started as soon as the user was known — see
+      // onAuthStateChanged below, greetingNamePromise) must fully finish
+      // before anything is rendered, so the very first text painted into
+      // the splash title is the final "Welcome back, {name}" (or, only if
+      // truly unresolvable, plain "Welcome") — never both in sequence.
+      (greetingNamePromise || resolveGreetingName(currentUser)).then(function(name) {
+        showWelcomeBackThenApp(currentUser, name);
+        // Hold measured from the moment the greeting is actually rendered,
+        // not from page load/navigation start or Firebase init.
+        setTimeout(hideSplashNow, RETURNING_USER_MIN_HOLD_MS);
+      });
     } else {
       // Signed-out: unchanged — still waits for the full fixed splash
       // timer so the login screen's entrance keeps feeling intentional.
@@ -18902,6 +18924,18 @@ if ('serviceWorker' in navigator) {
     if (user) resumePendingDestination();
 
     if (!revealed) {
+      if (user) {
+        // Start resolving the greeting name right away rather than
+        // waiting for coreReady, so it's typically already settled by
+        // the time reveal() needs to render it.
+        if (!greetingNamePromise) { greetingNamePromise = resolveGreetingName(user); }
+      } else {
+        // Signed-out pre-reveal: the splash title starts empty now (see
+        // markup), so write the plain "Welcome" it always showed here,
+        // immediately — same text, same timing as before, just via JS.
+        var splashTitleEl = document.getElementById('splashTitle');
+        if (splashTitleEl) { splashTitleEl.textContent = 'Welcome'; }
+      }
       // Every path (fresh sign-in's next launch, restored session, app
       // restart, process recreation, cold/warm launch) funnels through
       // this same reveal() — it internally knows whether coreReady and/or
