@@ -3057,8 +3057,15 @@
     padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px));
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
     align-items: start;
+    contain: layout style;
+    overscroll-behavior: contain;
   }
   @media (min-width: 460px) { .pers-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .pers-grid.voice-grid-lazy .pers-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 100px 92px;
+  }
 
   .pers-card {
     position: relative; display: flex; flex-direction: column; align-items: flex-start;
@@ -3066,15 +3073,24 @@
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--r-md); padding: 14px 12px 12px;
     cursor: pointer; color: var(--text-2); font-family: var(--font-body);
-    transition: transform 0.15s ease, border-color var(--t), box-shadow var(--t);
+    transition: transform 0.15s ease, border-color var(--t);
     touch-action: manipulation;
   }
   .pers-card:hover { transform: translateY(-2px); border-color: var(--card-color, var(--border-hi)); }
   .pers-card:active { transform: translateY(0) scale(0.97); }
   .pers-card.selected {
     border-color: var(--card-color, var(--a1));
-    box-shadow: 0 0 0 1px var(--card-color, var(--a1)), 0 0 18px var(--card-glow, var(--glow1));
   }
+  .pers-card::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 1px var(--card-color, var(--a1)), 0 0 18px var(--card-glow, var(--glow1));
+    opacity: 0;
+    transition: opacity var(--t);
+    pointer-events: none;
+  }
+  .pers-card.selected::after { opacity: 1; }
   .pers-card-icon { font-size: 1.5rem; line-height: 1; }
   .pers-card-name { font-size: 0.82rem; font-weight: 600; color: var(--text-1); }
   .pers-card-desc { font-size: 0.68rem; line-height: 1.4; color: var(--text-3); }
@@ -10525,13 +10541,38 @@ function syncVoicePersonalityTrigger() {
   }
 }
 
+function _persPopupPromoteForAnim(overlay) {
+  var panel = overlay.querySelector('.pers-popup');
+  if (overlay._promoTimer) { clearTimeout(overlay._promoTimer); overlay._promoTimer = null; }
+  if (panel && panel._promoClear) { panel.removeEventListener('transitionend', panel._promoClear); panel._promoClear = null; }
+  overlay.style.willChange = 'opacity';
+  if (panel) {
+    panel.style.willChange = 'transform, opacity';
+    var cleanup = function() {
+      panel.style.willChange = '';
+      overlay.style.willChange = '';
+      panel.removeEventListener('transitionend', clear);
+      if (overlay._promoTimer) { clearTimeout(overlay._promoTimer); overlay._promoTimer = null; }
+      panel._promoClear = null;
+    };
+    var clear = function(e) {
+      if (e.target !== panel || e.propertyName !== 'transform') return;
+      cleanup();
+    };
+    panel._promoClear = clear;
+    panel.addEventListener('transitionend', clear);
+    overlay._promoTimer = setTimeout(cleanup, 350);
+  }
+}
 function openPersPopup(overlay, btn) {
   if (!overlay) return;
+  _persPopupPromoteForAnim(overlay);
   overlay.classList.add('show');
   if (btn) btn.setAttribute('aria-expanded', 'true');
 }
 function closePersPopup(overlay, btn) {
   if (!overlay) return;
+  _persPopupPromoteForAnim(overlay);
   overlay.classList.remove('show');
   if (btn) btn.setAttribute('aria-expanded', 'false');
 }
@@ -10873,6 +10914,10 @@ function buildVoiceCards() {
 
   grid.innerHTML = html || '<p style="color:var(--text-3);font-size:0.82rem;padding:16px;">No voices available yet — try again after the page fully loads.</p>';
 
+  var totalVoiceCards = maleOpts.length + femaleOpts.length + otherOpts.length + (defaultOpt ? 1 : 0);
+  grid.classList.toggle('voice-grid-lazy', totalVoiceCards > 45);
+  window._voiceSearchIndexDirty = true;
+
   // Bind preview buttons (delegated inside grid)
   grid.querySelectorAll('.vc-preview-btn').forEach(function(btn) {
     btn.addEventListener('click', function(e) {
@@ -10900,16 +10945,8 @@ function initVoiceSearch() {
   var overlay = document.getElementById('voicePopupOverlay');
   if (!input || !grid || !emptyEl || !overlay) return;
 
-  function filterVoices() {
-    var q = input.value.trim().toLowerCase();
-
-    // Show/hide clear button
-    if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
-
-    var cards = grid.querySelectorAll('.pers-card');
-    var visibleCount = 0;
-
-    // Also build a locale→label map from #voiceSelect for richer matching
+  var searchIndex = null;
+  function buildSearchIndex() {
     var sel = document.getElementById('voiceSelect');
     var labelMap = {};
     if (sel) {
@@ -10918,29 +10955,46 @@ function initVoiceSearch() {
         labelMap[opt.value] = (opt.textContent || '').toLowerCase();
       }
     }
-
-    cards.forEach(function(card) {
-      if (!q) {
-        card.style.display = '';
-        visibleCount++;
-        return;
-      }
+    var cards = grid.querySelectorAll('.pers-card');
+    var idx = [];
+    for (var i = 0; i < cards.length; i++) {
+      var card   = cards[i];
       var name   = (card.querySelector('.pers-card-name') || {}).textContent || '';
       var desc   = (card.querySelector('.pers-card-desc') || {}).textContent || '';
       var locale = (card.getAttribute('data-locale') || '').toLowerCase();
       var key    = (card.getAttribute('data-key') || '').toLowerCase();
       var label  = labelMap[card.getAttribute('data-key')] || '';
-
-      var haystack = [name, desc, locale, key, label].join(' ').toLowerCase();
-      var match = haystack.indexOf(q) !== -1;
-      card.style.display = match ? '' : 'none';
-      if (match) visibleCount++;
-    });
-
-    emptyEl.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+      idx.push({
+        card: card,
+        haystack: [name, desc, locale, key, label].join(' ').toLowerCase()
+      });
+    }
+    searchIndex = idx;
+    window._voiceSearchIndexDirty = false;
   }
 
-  input.addEventListener('input', filterVoices);
+  function filterVoices() {
+    if (!searchIndex || window._voiceSearchIndexDirty) buildSearchIndex();
+
+    var q = input.value.trim().toLowerCase();
+
+    // Show/hide clear button
+    if (clearBtn) clearBtn.style.display = q ? 'flex' : 'none';
+
+    requestAnimationFrame(function() {
+      var visibleCount = 0;
+      for (var i = 0; i < searchIndex.length; i++) {
+        var entry = searchIndex[i];
+        var match = !q || entry.haystack.indexOf(q) !== -1;
+        entry.card.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+      }
+      emptyEl.style.display = (visibleCount === 0 && q) ? 'block' : 'none';
+    });
+  }
+
+  var debouncedFilterVoices = debounce(filterVoices, 130);
+  input.addEventListener('input', debouncedFilterVoices);
 
   // Clear button — one tap clears input and re-shows all voices
   if (clearBtn) {
