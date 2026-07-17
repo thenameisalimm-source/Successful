@@ -11929,6 +11929,20 @@ function renderMarkdown(src) {
   var fenceChar  = '';
   var fenceLines = [];
 
+  // [ADDED — Response Map] Slugified, deduped heading ids so the Response
+  // Map (window.maybeUpdateResponseMap, see end of file) can scroll to a
+  // heading by id. Purely additive — does not change any rendered text.
+  var _hSlugSeen = {};
+  function _rmapSlug(text) {
+    var s = String(text || '').toLowerCase()
+      .replace(/[*_`~]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section';
+    var n = _hSlugSeen[s];
+    _hSlugSeen[s] = (n == null ? 1 : n + 1);
+    return n == null ? s : (s + '-' + n);
+  }
+
   function flushFence() {
     var idx = codeBlocks.length;
     // Remove trailing empty line that often precedes the closing fence
@@ -12007,18 +12021,21 @@ function renderMarkdown(src) {
     var hm = line.match(/^(#{1,6})\s+(.+)$/);
     if (hm) {
       var lvl = hm[1].length;
-      output.push('<h' + lvl + '>' + applyInline(hm[2].trim()) + '</h' + lvl + '>');
+      var hid = _rmapSlug(hm[2].trim());
+      output.push('<h' + lvl + ' id="' + hid + '">' + applyInline(hm[2].trim()) + '</h' + lvl + '>');
       i++; continue;
     }
 
     // Setext headings
     if (i + 1 < lines.length) {
       if (/^=+\s*$/.test(lines[i+1])) {
-        output.push('<h1>' + applyInline(line.trim()) + '</h1>');
+        var hid1 = _rmapSlug(line.trim());
+        output.push('<h1 id="' + hid1 + '">' + applyInline(line.trim()) + '</h1>');
         i += 2; continue;
       }
       if (/^-{2,}\s*$/.test(lines[i+1])) {
-        output.push('<h2>' + applyInline(line.trim()) + '</h2>');
+        var hid2 = _rmapSlug(line.trim());
+        output.push('<h2 id="' + hid2 + '">' + applyInline(line.trim()) + '</h2>');
         i += 2; continue;
       }
     }
@@ -12769,6 +12786,8 @@ function typeMessage(bubId, rawText, onDone) {
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
     var _abHandled = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
     if (!_abHandled && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+    // [ADDED — Response Map] Same guarded-call pattern as Canvas/App Builder above.
+    if (typeof window.maybeUpdateResponseMap === 'function') window.maybeUpdateResponseMap(bubId, rawText, true);
     S._typingCtl = null;
     if (onDone) onDone();
     return;
@@ -12819,6 +12838,8 @@ function typeMessage(bubId, rawText, onDone) {
       if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
       var _abHandled2 = (typeof window.maybeAutoAppBuilder === 'function') && window.maybeAutoAppBuilder(bubId, rawText);
       if (!_abHandled2 && typeof window.maybeAutoCanvas === 'function') window.maybeAutoCanvas(bubId, rawText);
+      // [ADDED — Response Map] Final pass — parses the complete text once.
+      if (typeof window.maybeUpdateResponseMap === 'function') window.maybeUpdateResponseMap(bubId, rawText, true);
       S._typingCtl = null;
       if (onDone) onDone();
       return;
@@ -12828,6 +12849,9 @@ function typeMessage(bubId, rawText, onDone) {
     bub.textContent = displayed;
     bub.appendChild(cursor);
     if (area && S.autoScroll !== false) area.scrollTop = area.scrollHeight;
+    // [ADDED — Response Map] Incremental pass, reusing this existing tick —
+    // no extra timer. Cheap regex scan over plain text only.
+    if (typeof window.maybeUpdateResponseMap === 'function') window.maybeUpdateResponseMap(bubId, displayed, false);
     var lastChar = displayed.trimEnd().slice(-1);
     var delay = /[.!?]/.test(lastChar) ? baseInterval * 2.2 : baseInterval;
     ctl.timer = setTimeout(tick, delay);
@@ -26104,5 +26128,339 @@ console.log('[RSYNC] Cloud Sync Phase 3 loaded — real-time listeners (conversa
 // ── [END AI WORKFLOWS] ───────────────────────────────────────────────
 </script>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     LIVE RESPONSE MAP — premium feature, fully self-contained.
+     Renders a visual outline of an AI response's STRUCTURE (headings /
+     lists / bold section titles) as it types out. This is NOT chain of
+     thought: it only ever reads the same text already shown in the chat
+     bubble, never any hidden reasoning. Own CSS namespace (rmap-*), own
+     DOM, own state (module-scoped, keyed by bubble id) — shares nothing
+     mutable with chat state, AI Canvas, or App Builder. Public entry
+     point: window.maybeUpdateResponseMap(bubId, text, isFinal).
+     ══════════════════════════════════════════════════════════════════ -->
+<style>
+.rmap-wrap {
+  --rmap-glass: rgba(255,255,255,0.06);
+  --rmap-border: rgba(255,255,255,0.14);
+  --rmap-accent: #8b5cf6;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 12px 0;
+  padding: 12px 14px 14px;
+  border-radius: 16px;
+  background: var(--rmap-glass);
+  border: 1px solid var(--rmap-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  font-family: inherit;
+  opacity: 0;
+  transform: translateY(-4px);
+  animation: rmapWrapIn .35s ease forwards;
+}
+@keyframes rmapWrapIn { to { opacity: 1; transform: translateY(0); } }
+
+@media (min-width: 900px) {
+  .rmap-wrap { float: right; width: 240px; margin: 0 0 14px 18px; }
+}
+
+.rmap-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 10px; user-select: none;
+}
+.rmap-title {
+  font-size: 12.5px; font-weight: 600; letter-spacing: .02em;
+  color: rgba(255,255,255,0.78);
+  display: flex; align-items: center; gap: 6px;
+}
+.rmap-title:before { content: '✦'; color: var(--rmap-accent); font-size: 11px; }
+.rmap-toggle {
+  appearance: none; border: 1px solid var(--rmap-border);
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.7);
+  width: 24px; height: 24px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .25s ease, background .2s ease;
+}
+.rmap-toggle:hover { background: rgba(255,255,255,0.09); }
+.rmap-toggle svg { width: 12px; height: 12px; transition: transform .25s ease; }
+.rmap-wrap.rmap-collapsed .rmap-toggle svg { transform: rotate(-90deg); }
+
+.rmap-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows .28s ease;
+}
+.rmap-wrap.rmap-collapsed .rmap-body { grid-template-rows: 0fr; }
+.rmap-body-inner { overflow: hidden; min-height: 0; }
+
+.rmap-root-row { margin-bottom: 10px; }
+.rmap-root {
+  display: inline-block; max-width: 100%;
+  font-size: 13px; font-weight: 700; color: #fff;
+  padding: 7px 13px; border-radius: 11px;
+  background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(59,130,246,0.25));
+  border: 1px solid rgba(139,92,246,0.4);
+  box-shadow: 0 0 18px rgba(139,92,246,0.25);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.rmap-topics {
+  display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 4px; scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 900px) {
+  .rmap-topics { flex-direction: column; overflow-x: visible; }
+}
+.rmap-topics::-webkit-scrollbar { height: 5px; }
+.rmap-topics::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.rmap-node {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.88);
+  padding: 7px 12px; border-radius: 10px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; transform: scale(.86) translateY(4px);
+  transition: background .18s ease, border-color .18s ease, transform .15s ease;
+  will-change: transform, opacity;
+}
+.rmap-node.rmap-in { animation: rmapNodeIn .32s cubic-bezier(.2,.8,.3,1) forwards; }
+@keyframes rmapNodeIn { to { opacity: 1; transform: scale(1) translateY(0); } }
+.rmap-node:hover { background: rgba(139,92,246,0.16); border-color: rgba(139,92,246,0.4); transform: scale(1.03); }
+.rmap-node:active { transform: scale(0.97); }
+.rmap-node:before { content: '›'; color: var(--rmap-accent); font-weight: 700; }
+.rmap-node.rmap-no-target { cursor: default; opacity: .8; }
+.rmap-node.rmap-no-target:before { content: '·'; }
+
+/* Applied briefly to the real heading/section in the chat bubble on click */
+.rmap-highlight-target {
+  animation: rmapHighlight 1.4s ease;
+}
+@keyframes rmapHighlight {
+  0%   { background-color: rgba(139,92,246,0.28); border-radius: 6px; }
+  100% { background-color: transparent; }
+}
+</style>
+<script>
+(function () {
+  'use strict';
+
+  // Module-private state — keyed by bubble id. Not read or written by
+  // anything outside this IIFE, and this IIFE never touches S, Canvas
+  // state, or App Builder state.
+  var STATE = {};
+
+  // Minimum topic nodes required before the map is shown at all — mirrors
+  // the "hide on short/unstructured answers" requirement.
+  var MIN_TOPICS = 2;
+  var MAX_TOPICS = 20;
+
+  // ── slug helper — MUST reproduce renderMarkdown()'s _rmapSlug exactly
+  // (same transform, same per-parse dedup counter) so ids computed here
+  // match the ids actually written into the heading elements. ──────────
+  function makeSlugger() {
+    var seen = {};
+    return function (text) {
+      var s = String(text || '').toLowerCase()
+        .replace(/[*_`~]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'section';
+      var n = seen[s];
+      seen[s] = (n == null ? 1 : n + 1);
+      return n == null ? s : (s + '-' + n);
+    };
+  }
+
+  // ── Parse VISIBLE structure only (headings / lists / bold titles).
+  // Reads exactly the same string already shown in the chat bubble —
+  // never anything else — so this can never surface hidden reasoning. ──
+  function parseOutline(text) {
+    var lines = String(text || '').split('\n');
+    var slug = makeSlugger();
+    var headingTopics = [];
+    var fallbackTopics = [];
+    var rootLabel = '';
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // ATX heading
+      var hm = line.match(/^(#{1,6})\s+(.+)$/);
+      if (hm) {
+        var lvl = hm[1].length;
+        var t = hm[2].replace(/[*_`~]/g, '').trim();
+        var id = slug(t); // advances the shared counter even if lvl > 3
+        if (lvl <= 3 && t) headingTopics.push({ text: t, id: id });
+        continue;
+      }
+      // Setext heading (must mirror renderMarkdown's detection + slug order)
+      if (i + 1 < lines.length) {
+        if (/^=+\s*$/.test(lines[i + 1]) && line.trim()) {
+          var t1 = line.trim(); headingTopics.push({ text: t1, id: slug(t1) });
+          i++; continue;
+        }
+        if (/^-{2,}\s*$/.test(lines[i + 1]) && line.trim()) {
+          var t2 = line.trim(); headingTopics.push({ text: t2, id: slug(t2) });
+          i++; continue;
+        }
+      }
+      // Standalone bold line, e.g. **Section Title** alone on its own line
+      var bm = line.match(/^\s*\*\*([^*]{2,58})\*\*\s*$/);
+      if (bm) { fallbackTopics.push({ text: bm[1].trim(), id: null }); continue; }
+      // Top-level numbered item: "1. Something" / "1) Something"
+      var nm = line.match(/^\s{0,3}\d{1,2}[.)]\s+(.{2,60})$/);
+      if (nm) { fallbackTopics.push({ text: nm[1].replace(/\*\*/g, '').trim(), id: null }); continue; }
+      // Top-level bullet item: "- Something" / "* Something" / "+ Something"
+      var blm = line.match(/^\s{0,3}[-*+]\s+(.{2,60})$/);
+      if (blm) { fallbackTopics.push({ text: blm[1].replace(/\*\*/g, '').trim(), id: null }); continue; }
+    }
+
+    // Root label: derived from the first non-empty line, stable across
+    // ticks since earlier text never changes once typed (append-only).
+    for (var li = 0; li < lines.length; li++) {
+      var fl = lines[li].replace(/[#*_`>~]/g, '').trim();
+      if (fl) { rootLabel = fl.slice(0, 42); break; }
+    }
+    if (!rootLabel) rootLabel = 'Response';
+
+    // Headings and fallback (list/bold) candidates are returned separately —
+    // the caller locks onto ONE of these per response and never mixes them.
+    if (headingTopics.length > MAX_TOPICS) headingTopics = headingTopics.slice(0, MAX_TOPICS);
+    if (fallbackTopics.length > MAX_TOPICS) fallbackTopics = fallbackTopics.slice(0, MAX_TOPICS);
+    return { rootLabel: rootLabel, headingTopics: headingTopics, fallbackTopics: fallbackTopics };
+  }
+
+  function findBub(bubId) { return document.getElementById(bubId); }
+
+  function buildContainer(st, bubId) {
+    var bub = findBub(bubId);
+    if (!bub) return false;
+    var host = bub.closest('.msg-body') || bub.parentElement;
+    if (!host) return false;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'rmap-wrap';
+
+    var head = document.createElement('div');
+    head.className = 'rmap-head';
+    var title = document.createElement('span');
+    title.className = 'rmap-title';
+    title.textContent = 'Response Map';
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'rmap-toggle';
+    toggle.setAttribute('aria-label', 'Collapse response map');
+    toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+    toggle.addEventListener('click', function () { wrap.classList.toggle('rmap-collapsed'); });
+    head.appendChild(title);
+    head.appendChild(toggle);
+
+    var body = document.createElement('div');
+    body.className = 'rmap-body';
+    var bodyInner = document.createElement('div');
+    bodyInner.className = 'rmap-body-inner';
+
+    var rootRow = document.createElement('div');
+    rootRow.className = 'rmap-root-row';
+    var rootEl = document.createElement('div');
+    rootEl.className = 'rmap-root';
+    rootRow.appendChild(rootEl);
+
+    var topicsEl = document.createElement('div');
+    topicsEl.className = 'rmap-topics';
+
+    bodyInner.appendChild(rootRow);
+    bodyInner.appendChild(topicsEl);
+    body.appendChild(bodyInner);
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+
+    // Insert BEFORE the bubble: above the response on mobile; the
+    // desktop media query floats it to the side without any DOM change.
+    host.insertBefore(wrap, bub);
+
+    st.wrap = wrap; st.rootEl = rootEl; st.topicsEl = topicsEl;
+    return true;
+  }
+
+  // No-anchor fallback (jumping to the top of the message) is intentionally
+  // not supported — a node either has a precise anchor or is non-clickable.
+  function scrollAndHighlight(bubId, targetId) {
+    var bub = findBub(bubId);
+    var target = bub ? bub.querySelector('#' + CSS.escape(targetId)) : null;
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.classList.add('rmap-highlight-target');
+    setTimeout(function () { target.classList.remove('rmap-highlight-target'); }, 1400);
+  }
+
+  function appendNode(st, bubId, topic) {
+    var node = document.createElement('div');
+    node.className = 'rmap-node';
+    node.textContent = topic.text;
+    if (topic.id) {
+      node.addEventListener('click', function () { scrollAndHighlight(bubId, topic.id); });
+    } else {
+      // No precise anchor available — decorative only, never clickable,
+      // so it can never fall back to "jump to top of message".
+      node.classList.add('rmap-no-target');
+    }
+    st.topicsEl.appendChild(node);
+    st.nodeEls.push(node);
+    // Next frame so the browser registers the initial (opacity:0) state
+    // before the class flips — required for the transition/animation to run.
+    requestAnimationFrame(function () { node.classList.add('rmap-in'); });
+  }
+
+  // ── Public entry point, mirrored on window.maybeAutoCanvas /
+  // window.maybeAutoAppBuilder. Called from typeMessage() on every
+  // typewriter tick (isFinal=false) and once more on completion
+  // (isFinal=true). Only ever receives the same text already shown to
+  // the user — never hidden reasoning. ────────────────────────────────
+  window.maybeUpdateResponseMap = function (bubId, text, isFinal) {
+    try {
+      var parsed = parseOutline(text);
+      var st = STATE[bubId];
+      if (!st) { st = { wrap: null, rootEl: null, topicsEl: null, nodeEls: [], mode: null }; STATE[bubId] = st; }
+
+      // Lock the parsing strategy once per response — headings win the
+      // moment any appear; otherwise lock to the list/bold fallback once
+      // it has enough candidates to be a confident signal. Never mixed,
+      // and never re-decided afterward.
+      if (!st.mode) {
+        if (parsed.headingTopics.length >= 1) st.mode = 'heading';
+        else if (parsed.fallbackTopics.length >= MIN_TOPICS) st.mode = 'fallback';
+        else return; // not enough signal yet to decide
+      }
+      var topics = st.mode === 'heading' ? parsed.headingTopics : parsed.fallbackTopics;
+
+      if (!st.wrap) {
+        if (topics.length < MIN_TOPICS) return; // reveal threshold not yet met
+        if (!buildContainer(st, bubId)) return;
+      }
+
+      if (st.rootEl.textContent !== parsed.rootLabel) {
+        st.rootEl.textContent = parsed.rootLabel; // cheap label refresh, not a rebuild
+      }
+
+      // Append-only diff: update text of already-rendered nodes in place,
+      // create DOM only for genuinely new topics. Never remove/rebuild.
+      for (var i = 0; i < topics.length; i++) {
+        var topic = topics[i];
+        if (i < st.nodeEls.length) {
+          if (st.nodeEls[i].textContent !== topic.text) st.nodeEls[i].textContent = topic.text;
+        } else {
+          appendNode(st, bubId, topic);
+        }
+      }
+    } catch (e) { console.error('[RESPONSE MAP] update error', e); }
+  };
+})();
+</script>
 </body>
 </html>
